@@ -18,6 +18,11 @@ serde_json = { version = "1", features = ["preserve_order"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 # Dependencies are built without debug info: it is most of the size of target/ (tens of GB for this workspace) and
-# rarely needed. Tuma's own crates keep it.
+# rarely needed.
 [profile.dev.package."*"]
 debug = false
+
+# Tuma's own crates keep file and line numbers for backtraces, without full debug info: with incremental builds
+# across the app, CLI and tests, full debug info filled more than 10 GB.
+[profile.dev]
+debug = "line-tables-only"

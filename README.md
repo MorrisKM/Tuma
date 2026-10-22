@@ -9,12 +9,15 @@ Rust and Tauri.
 - **Easy to switch.** Imports Postman collections and environments, OpenAPI / Swagger specs, HAR recordings and cURL
   commands; exports collections back to Postman format.
 - **Keyboard-first.** Ctrl+K finds any request or command; Ctrl+Enter sends, Ctrl+S saves, Ctrl+T opens a tab.
+- **More than REST.** GraphQL (with introspection and a schema explorer), WebSocket, server-sent events and gRPC
+  (by reflection or `.proto` files), plus OAuth 2.0, JWT, Digest, AWS Signature and OAuth 1.0 auth, proxies, client
+  certificates and a cookie jar.
 - **Runs your Postman scripts.** Pre-request and test scripts (`pm.test`, `pm.expect`, `pm.sendRequest` and the rest)
   run in a sandboxed JavaScript engine, in the app, the runner and CI.
 - **Built for AI agents.** Coding agents test the API they are building through Tuma's MCP server or CLI, and save
   passing requests as tests.
 
-> **Status:** early development (milestone M5: Postman-compatible scripts and the collection runner). See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
+> **Status:** early development (milestone M6: more protocols and auth). See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
 ## The `tuma` command
 
@@ -27,6 +30,9 @@ tuma test                       # Rerun saved tests (checks and test scripts); e
 tuma run "Users API" --data users.csv --junit results.xml        # A collection run, once per row, for CI
 tuma openapi discover --server http://localhost:8000 --import   # Find and import a running API's spec
 tuma send GET /todos/7 -x schema                                  # Check the response against the spec
+tuma grpc grpc://localhost:50051 shop.v1.Shop/GetItem -d '{"id": 7}'   # gRPC, methods by reflection
+tuma ws wss://example.com/socket -m '{"type":"ping"}'                  # WebSocket: send, print what comes back
+tuma auth login "Users API"     # OAuth 2.0: get a token for a collection's auth (browser grants open a browser)
 tuma check                      # Validate the workspace files
 tuma mcp                        # MCP server for coding agents
 ```
@@ -35,6 +41,9 @@ Connect a coding agent, for example Claude Code: `claude mcp add tuma -- tuma mc
 the hosts in the selected environment; add more with `--allow-host`, or stop them saving files with `--read-only`.
 Secret values come from the OS keychain, or from `TUMA_SECRET_<NAME>` environment variables in CI, and are never
 shown to agents.
+
+Proxies, client certificates, extra CA certificates and cookies are settings of the machine (in the app's Settings,
+also used by the CLI), not of the workspace; passwords, passphrases and OAuth 2.0 tokens are kept in the OS keychain.
 
 Scripts can't read files or reach the network except with `pm.sendRequest`, which follows the same host rules as the
 request. Values they set with `pm.environment.set` and friends are kept on this machine, in Tuma's data folder, not in

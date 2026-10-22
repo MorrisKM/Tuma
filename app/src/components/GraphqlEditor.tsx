@@ -1,3 +1,4 @@
+import { autocompletion } from "@codemirror/autocomplete";
 import { graphql } from "cm6-graphql";
 import {
   buildClientSchema,
@@ -34,7 +35,7 @@ export function GraphqlEditor() {
   const gql = draft.graphql;
   const set = (patch: Partial<typeof gql>) => update({ graphql: { ...gql, ...patch } });
   // A new schema means a new language extension; the editor reconfigures without losing its text.
-  const extension = useMemo(() => graphql(schema), [schema]);
+  const extension = useMemo(() => [graphql(schema), autocompletion()], [schema]);
 
   const fetchSchema = async () => {
     setLoading(true);
@@ -78,17 +79,17 @@ export function GraphqlEditor() {
       </div>
       {error && <p className="notice error">{error}</p>}
       <div className="graphql-panes">
-        <div className="graphql-main">
-          <div className="editor-frame graphql-query">
-            <CodeEditor
-              value={gql.query}
-              onChange={(query) => set({ query })}
-              extension={extension}
-              placeholder="query { ... }"
-            />
-          </div>
-          <label className="muted small">Variables (JSON)</label>
-          <div className="editor-frame graphql-variables">
+        <div className="editor-frame graphql-query">
+          <CodeEditor
+            value={gql.query}
+            onChange={(query) => set({ query })}
+            extension={extension}
+            placeholder="query { ... }"
+          />
+        </div>
+        <div className="graphql-variables">
+          <span className="muted small">Variables (JSON)</span>
+          <div className="editor-frame">
             <CodeEditor value={gql.variables} onChange={(variables) => set({ variables })} language="json" placeholder="{}" />
           </div>
         </div>
@@ -168,7 +169,11 @@ function Explorer({ schema, onInsert }: { schema: GraphQLSchema; onInsert: (text
               {f.type.toString()}
             </button>
             {path.length === 1 && rootKind && (
-              <button className="link-button" title="Add an operation that uses this field" onClick={() => onInsert(operation(rootKind, f))}>
+              <button
+                className="link-button insert-field"
+                title="Add an operation that uses this field"
+                onClick={() => onInsert(operation(rootKind, f))}
+              >
                 + insert
               </button>
             )}

@@ -29,10 +29,10 @@ Postman resolves auth through **inherit from parent** (request, folder, collecti
 | Type                                                            | Tuma    |
 | --------------------------------------------------------------- | ------- |
 | No auth, inherit, API key (header or query), Bearer, Basic      | Yes, M1 |
-| JWT bearer (signs a token from a payload: HS, RS, ES, PS)       | Yes, M6 |
+| JWT bearer (signs a token from a payload: HS, RS, ES, PS)       | Yes, M6; ES512 not yet |
 | Digest                                                          | Yes, M6 |
-| OAuth 2.0: auth code, auth code with PKCE, implicit, password, client credentials; token refresh; token manager | Yes, M6 |
-| OAuth 1.0                                                       | Yes, M6 |
+| OAuth 2.0: auth code, auth code with PKCE, implicit, password, client credentials; token refresh; token manager | Yes, M6; browser logins need a loopback redirect URI (Postman's callback page can't reach Tuma) |
+| OAuth 1.0                                                       | Yes, M6 (HMAC and PLAINTEXT; RSA-SHA1 not yet) |
 | AWS Signature v4                                                | Yes, M6 |
 | NTLM, Hawk, Akamai EdgeGrid, ASAP (Atlassian)                   | Yes, after v1.0 |
 
@@ -44,10 +44,10 @@ confirmed). Hawk, NTLM, Akamai EdgeGrid and ASAP come from the long-standing doc
 | Protocol                                                                    | Tuma            |
 | --------------------------------------------------------------------------- | --------------- |
 | HTTP                                                                        | Yes, M1         |
-| GraphQL: schema introspection, schema explorer, query builder, autocomplete | Yes, M6         |
-| WebSocket: raw messages, saved messages, message log                        | Yes, M6         |
+| GraphQL: schema introspection, schema explorer, query builder, autocomplete | Yes, M6 (the builder inserts an operation per root field); subscriptions not yet |
+| WebSocket: raw messages, saved messages, message log                        | Yes, M6; sending binary from the app not yet |
 | Server-sent events                                                          | Yes, M6         |
-| gRPC: unary, client, server and bidirectional streaming; server reflection or `.proto` import | Yes, M6 |
+| gRPC: unary, client, server and bidirectional streaming; server reflection or `.proto` import | Yes, M6; checks and tests see a call as an HTTP-like response |
 | Socket.IO                                                                   | Yes, after v1.0 |
 | MQTT                                                                        | Yes, after v1.0 |
 | MCP client (call tools, read resources and prompts on an MCP server)        | Yes, after v1.0 |
@@ -130,7 +130,7 @@ Tuma's main selling point. Tuma still differs: no account, no cloud copy, and no
 | Feature                                                                                           | Tuma            |
 | ------------------------------------------------------------------------------------------------- | --------------- |
 | Cookie jar with a domain allowlist, cookie manager UI                                             | Yes, M6         |
-| Proxy: system, custom, auth, bypass list, env vars                                                | Yes, M6         |
+| Proxy: system, custom, auth, bypass list, env vars                                                | Yes, M6: "system" is HTTP_PROXY/HTTPS_PROXY/NO_PROXY; OS proxy settings and SOCKS not yet |
 | Client certificates (PFX, or CRT and KEY) per host; custom CA certificates                        | Yes, M6         |
 | Capture traffic: built-in proxy, Interceptor browser extension                                    | After v1.0      |
 
