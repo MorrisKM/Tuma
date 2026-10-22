@@ -32,6 +32,10 @@ checks, fix, repeat. When everything passes, send again with `save_as` to keep t
 URLs can be paths such as /users when a baseUrl variable is set: pass vars {\"baseUrl\": \"http://localhost:3000\"} \
 or set it once with set_variables. Write secrets as {{variables}}; their values never reach you.
 
+Scripts and automated tests: write Postman-style JavaScript with set_scripts (pm.test, pm.expect, pm.response.json(), \
+pm.environment.set; require() has lodash, moment, crypto-js, chai, ajv, uuid). Send the request first to see a real \
+response, then run_saved until every test passes. Scripts on a folder run for every request in it.
+
 Check forms: \"status=201\", \"status=2xx\", \"time<500\", \"header content-type~json\", \"$.id exists\", \
 \"$.id !exists\", \"$.name == \\\"Ann\\\"\", \"$.count == 3\", \"$.email =~ ^.+@\", \"$.tags ~ admin\", \
 \"$.items length 3\", \"$.id type integer\", and \"schema\" (the response matches the OpenAPI spec; import \
@@ -155,6 +159,19 @@ struct DescribeParams {
     path: String,
     /// What the request does, its parameters' meaning and its errors, in Markdown. Replaces the current text.
     description: String,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+struct ScriptsParams {
+    /// A saved request's path, or a folder's or collection's path (its scripts run for every request inside).
+    path: String,
+    /// JavaScript run before the request is sent (Postman's pm.* API). Left out: unchanged; empty: removed.
+    #[serde(default)]
+    pre_request: Option<String>,
+    /// JavaScript run after the response arrives: pm.test(...), pm.expect(...), saving values. Left out: unchanged;
+    /// empty: removed.
+    #[serde(default)]
+    test: Option<String>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -706,6 +723,46 @@ impl Server {
         })();
         match result {
             Ok(v) => ok(&v),
+            Err(e) => error(&e.to_string()),
+        }
+    }
+
+    #[tool(
+        description = "Write a saved request's (or a folder's or collection's) pre-request and test scripts, in \
+        Postman's pm.* JavaScript API. The user sees them in the app's Scripts tab. Then call run_saved to check \
+        that they pass."
+    )]
+    async fn set_scripts(&self, Parameters(p): Parameters<ScriptsParams>) -> CallToolResult {
+        if self.read_only {
+            return error("Saving is turned off: this server was started with --read-only.");
+        }
+        let workspace = match self.workspace() {
+            Ok(Some(w)) => w,
+            Ok(None) => return error("There is no workspace yet."),
+            Err(e) => return error(&e),
+        };
+        let path = Self::resolve(&workspace, &p.path);
+        let apply = |scripts: &mut tuma_core::workspace::files::Scripts| {
+            if let Some(code) = &p.pre_request {
+                scripts.pre_request = code.trim().to_string();
+            }
+            if let Some(code) = &p.test {
+                scripts.test = code.trim().to_string();
+            }
+        };
+        let result = if path.ends_with(".yaml") {
+            workspace.read_request(&path).and_then(|mut request| {
+                apply(&mut request.scripts);
+                workspace.write_request(&path, &request)
+            })
+        } else {
+            workspace.read_folder(&path).and_then(|mut folder| {
+                apply(&mut folder.scripts);
+                workspace.write_folder(&path, &folder)
+            })
+        };
+        match result {
+            Ok(()) => ok(&json!({ "saved": path, "next": "call run_saved to run them" })),
             Err(e) => error(&e.to_string()),
         }
     }

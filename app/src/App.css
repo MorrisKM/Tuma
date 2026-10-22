@@ -3896,3 +3896,35 @@ td.mock-method {
   background: color-mix(in srgb, var(--fail) 12%, transparent);
   cursor: help;
 }
+
+/* Asking a coding agent */
+
+.agent-assist {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  flex-shrink: 0;
+}
+
+.agent-assist input {
+  flex: 1;
+  min-width: 120px;
+  height: 28px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.agent-assist input:focus {
+  background: var(--bg-input);
+}
+
+.agent-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}

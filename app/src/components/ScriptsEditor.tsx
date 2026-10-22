@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Scripts } from "../types";
+import { AgentAssist } from "./AgentAssist";
 import { CodeEditor } from "./CodeEditor";
 
 type Which = "preRequest" | "test";
@@ -72,11 +73,14 @@ export function ScriptsEditor({
   scripts,
   onChange,
   scope,
+  path,
 }: {
   scripts: Scripts;
   onChange: (scripts: Scripts) => void;
   /** Where the scripts run, for the hint: "request", "folder" or "collection". */
   scope: "request" | "folder" | "collection";
+  /** The saved request's or folder's path, for asking an agent; null for an unsaved request. */
+  path: string | null;
 }) {
   const [which, setWhich] = useState<Which>("test");
   const value = scripts[which] ?? "";
@@ -84,6 +88,7 @@ export function ScriptsEditor({
 
   return (
     <div className="scripts-editor">
+      <AgentAssist path={path} scope={scope} />
       <div className="toolbar spaced">
         <div className="segmented">
           <button className={which === "preRequest" ? "active" : ""} onClick={() => setWhich("preRequest")}>

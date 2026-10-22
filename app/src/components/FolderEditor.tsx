@@ -1,5 +1,5 @@
 import { Play } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as api from "../api";
 import { normalizeVariables } from "../draft";
 import { useStore } from "../store";
@@ -30,6 +30,28 @@ export function FolderEditor({ path }: { path: string }) {
       },
       (e) => useStore.getState().notify({ tone: "error", text: String(e) }),
     );
+  }, [path]);
+
+  // Changes to the file from outside, such as scripts a coding agent wrote, come in while nothing here is unsaved.
+  const current = useRef({ folder, saved });
+  current.current = { folder, saved };
+  useEffect(() => {
+    const timer = setInterval(async () => {
+      if (!document.hasFocus()) return;
+      const { folder: shown, saved: was } = current.current;
+      if (!shown || JSON.stringify(shown) !== was) return;
+      try {
+        const fresh = await api.folderRead(path);
+        const text = JSON.stringify(fresh);
+        if (text !== was && JSON.stringify(current.current.folder) === was) {
+          setFolder(fresh);
+          setSaved(text);
+        }
+      } catch {
+        // Gone or unreadable; the next action reports it.
+      }
+    }, 2500);
+    return () => clearInterval(timer);
   }, [path]);
 
   if (!folder) return null;
@@ -125,6 +147,7 @@ export function FolderEditor({ path }: { path: string }) {
             scripts={folder.scripts ?? {}}
             onChange={(scripts) => setFolder({ ...folder, scripts })}
             scope={isCollection ? "collection" : "folder"}
+            path={path}
           />
         )}
         {tab === "description" && (

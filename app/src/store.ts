@@ -17,6 +17,7 @@ import {
 import { stripJsonc } from "./jsonc";
 import { useLayout } from "./layout";
 import type {
+  RequestFile,
   HistoryEntry,
   KeyValue,
   RequestError,
@@ -162,6 +163,9 @@ interface State {
   addFolder: (parent: string | null) => Promise<void>;
   rename: (path: string, name: string) => Promise<void>;
   remove: (node: TreeNode) => Promise<void>;
+  /** Takes in changes made to the open request's file outside the app, such as by a coding agent, when it has no
+   * unsaved changes. */
+  reloadFromDisk: () => Promise<void>;
   /** Copies a request, folder or collection next to the original, and opens a copied request. */
   duplicate: (path: string) => Promise<void>;
   /** A saved request without changes is copied on disk; otherwise the tab's request opens again in a new, unsaved tab. */
@@ -671,6 +675,23 @@ export const useStore = create<State>((set, get) => {
         if (view.kind === "folder") set({ view: { kind: "folder", path: moved(view.path)! } });
         await get().refresh();
       }),
+
+    reloadFromDisk: async () => {
+      const { draft, saved, activeTab, view } = get();
+      if (!draft.path || view.kind !== "request" || snapshot(draft) !== saved) return;
+      let file: RequestFile;
+      try {
+        file = await api.requestRead(draft.path);
+      } catch {
+        return;
+      }
+      const fresh = fromRequestFile(file, draft.path, draft.name);
+      // Still the same tab, still no edits, and the file really changed.
+      const now = get();
+      if (now.activeTab !== activeTab || now.draft.path !== draft.path || snapshot(now.draft) !== saved) return;
+      if (snapshot(fresh) === saved) return;
+      set({ draft: fresh, saved: snapshot(fresh), notice: { tone: "info", text: `"${draft.name}" changed on disk (by your agent?) and was reloaded.` } });
+    },
 
     duplicate: (path) =>
       attempt(async () => {

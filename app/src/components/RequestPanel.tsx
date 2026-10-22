@@ -61,6 +61,7 @@ export function RequestPanel() {
             scripts={draft.scripts}
             onChange={(scripts) => useStore.getState().update({ scripts })}
             scope="request"
+            path={draft.path}
           />
         )}
         {tab === "settings" && <SettingsEditor />}

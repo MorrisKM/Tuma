@@ -120,6 +120,8 @@ function App() {
       mocks.record(payload.id, payload.event),
     );
     void mocks.refresh();
+    // A coding agent may change the open request's file (its scripts, its tests).
+    const reload = setInterval(() => document.hasFocus() && void useStore.getState().reloadFromDisk(), 2500);
     // Collection runs, whether or not the runner is on screen.
     const stopRuns = listen<{ runId: string; step: RunStep }>("run-step", ({ payload }) => logStep(payload.step));
     // The web view's own menu (Back, Reload, Inspect) only where text can be edited, for copy and paste.
@@ -132,6 +134,7 @@ function App() {
     window.addEventListener("keydown", onKey, true);
     return () => {
       clearTimeout(updates);
+      clearInterval(reload);
       window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("contextmenu", onContextMenu);
       void stop.then((f) => f());
