@@ -50,6 +50,7 @@ export const folderRead = (path: string) => invoke<FolderFile>("folder_read", { 
 export const folderWrite = (path: string, folder: FolderFile) => invoke<void>("folder_write", { path, folder });
 /** Creates a collection when `parent` is null. */
 export const folderCreate = (parent: string | null, name: string) => invoke<string>("folder_create", { parent, name });
+export const itemDuplicate = (path: string) => invoke<string>("item_duplicate", { path });
 export const itemRename = (path: string, name: string) => invoke<string>("item_rename", { path, name });
 export const itemDelete = (path: string) => invoke<void>("item_delete", { path });
 

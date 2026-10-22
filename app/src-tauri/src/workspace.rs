@@ -185,6 +185,11 @@ pub fn item_rename(open: tauri::State<'_, Open>, path: String, name: String) -> 
 }
 
 #[tauri::command]
+pub fn item_duplicate(open: tauri::State<'_, Open>, path: String) -> Result<String> {
+    with(&open, |w| w.duplicate(&path))
+}
+
+#[tauri::command]
 pub fn item_delete(open: tauri::State<'_, Open>, path: String) -> Result<()> {
     with(&open, |w| w.delete(&path))
 }

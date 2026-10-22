@@ -63,6 +63,8 @@ export function TabStrip() {
       </div>
       {menu && (
         <Menu at={menu} onClose={() => setMenu(null)}>
+          <button onClick={() => void useStore.getState().duplicateTab(menu.id)}>Duplicate</button>
+          <hr />
           <button onClick={() => void closeTab(menu.id)}>Close</button>
           <button onClick={() => void closeAll(tabs.filter((t) => t.id !== menu.id).map((t) => t.id))}>
             Close others

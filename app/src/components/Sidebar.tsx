@@ -408,6 +408,7 @@ function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
               <button onClick={() => void useStore.getState().exportCollection(node.path)}>Export to Postman…</button>
             )}
             <button onClick={() => useStore.setState({ renaming: node.path })}>Rename</button>
+            <button onClick={() => void useStore.getState().duplicate(node.path)}>Duplicate</button>
             <hr />
             <button className="danger" onClick={() => void remove(node)}>
               Delete

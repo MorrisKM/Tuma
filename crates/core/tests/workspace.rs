@@ -267,6 +267,52 @@ fn create_rename_delete_keep_the_order() {
 }
 
 #[test]
+fn duplicate_copies_next_to_the_original() {
+    let dir = TempDir::new("duplicate");
+    let workspace = Workspace::create(&dir.0, "Test").unwrap();
+    let collection = workspace.create_folder(None, "API").unwrap();
+    let folder = workspace.create_folder(Some(&collection), "Users").unwrap();
+    let request = RequestFile {
+        url: "https://example.com/users".into(),
+        ..RequestFile::default()
+    };
+    let list = workspace.create_request(&folder, "list", &request).unwrap();
+    workspace
+        .create_request(&collection, "health", &request)
+        .unwrap();
+
+    // A request: right after the original, with the same contents.
+    let copy = workspace.duplicate(&list).unwrap();
+    assert_eq!(copy, "API/Users/list copy.yaml");
+    assert_eq!(workspace.read_request(&copy).unwrap(), request);
+    assert_eq!(
+        workspace.duplicate(&list).unwrap(),
+        "API/Users/list copy (2).yaml"
+    );
+
+    // A folder, with everything in it, also right after the original.
+    let folder_copy = workspace.duplicate(&folder).unwrap();
+    assert_eq!(folder_copy, "API/Users copy");
+    let names: Vec<_> = workspace.tree().unwrap()[0]
+        .children
+        .iter()
+        .map(|n| n.name.clone())
+        .collect();
+    assert_eq!(names, ["Users", "Users copy", "health"]);
+    let inside: Vec<_> = workspace.tree().unwrap()[0].children[1]
+        .children
+        .iter()
+        .map(|n| n.name.clone())
+        .collect();
+    // Each copy goes right after its original, so the newest copy comes first.
+    assert_eq!(inside, ["list", "list copy (2)", "list copy"]);
+
+    // A whole collection.
+    assert_eq!(workspace.duplicate(&collection).unwrap(), "API copy");
+    assert_eq!(workspace.tree().unwrap().len(), 2);
+}
+
+#[test]
 fn paths_cannot_leave_the_workspace() {
     let dir = TempDir::new("paths");
     let workspace = Workspace::create(&dir.0, "Test").unwrap();

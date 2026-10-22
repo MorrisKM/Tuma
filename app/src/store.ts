@@ -144,6 +144,10 @@ interface State {
   addFolder: (parent: string | null) => Promise<void>;
   rename: (path: string, name: string) => Promise<void>;
   remove: (node: TreeNode) => Promise<void>;
+  /** Copies a request, folder or collection next to the original, and opens a copied request. */
+  duplicate: (path: string) => Promise<void>;
+  /** A saved request without changes is copied on disk; otherwise the tab's request opens again in a new, unsaved tab. */
+  duplicateTab: (id: string) => Promise<void>;
   importFile: () => Promise<void>;
   exportCollection: (path: string) => Promise<void>;
   /** Replaces the active request with a cURL command's. */
@@ -592,6 +596,22 @@ export const useStore = create<State>((set, get) => {
         const { view } = get();
         if (view.kind === "folder") set({ view: { kind: "folder", path: moved(view.path)! } });
         await get().refresh();
+      }),
+
+    duplicate: (path) =>
+      attempt(async () => {
+        const copy = await api.itemDuplicate(path);
+        await get().refresh();
+        if (copy.endsWith(".yaml")) await get().openRequest(copy);
+        else get().toggle(copy, true);
+      }),
+
+    duplicateTab: (id) =>
+      attempt(async () => {
+        const tab = get().allTabs().find((t) => t.id === id);
+        if (!tab) return;
+        if (tab.draft.path && !tabDirty(tab)) return get().duplicate(tab.draft.path);
+        openDraft({ ...tab.draft, path: null, name: `${tab.draft.name} copy` }, false);
       }),
 
     remove: (node) =>

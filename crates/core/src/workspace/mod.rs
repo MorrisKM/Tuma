@@ -451,6 +451,42 @@ impl Workspace {
         Ok(())
     }
 
+    /// Copies a request, or a folder or collection with everything in it, next to the original as "<name> copy"
+    /// (numbered if that is taken), and returns the copy's path. The copy comes right after the original.
+    pub fn duplicate(&self, path: &str) -> Result<String> {
+        let source = self.abs(path)?;
+        let dir = source.parent().unwrap_or(&self.root).to_path_buf();
+        let is_request = source.is_file();
+        let original = if is_request {
+            stem(&source)
+        } else {
+            dir_name(&source)
+        };
+        let name = unique_name(&dir, &format!("{original} copy"))?;
+        let copy = if is_request {
+            let file = self.read_request(path)?;
+            let copy = dir.join(format!("{name}.{EXTENSION}"));
+            write_yaml(&copy, &file)?;
+            copy
+        } else {
+            let tree = self.read_tree(path)?;
+            let copy = dir.join(&name);
+            fs::create_dir(&copy).map_err(io_err(&copy))?;
+            self.write_tree(&copy, &tree)?;
+            copy
+        };
+        // Collections are listed by name; in a folder with an order, the copy goes after the original.
+        if dir != self.root {
+            let dir_rel = self.rel(&dir);
+            let mut folder = self.read_folder(&dir_rel)?;
+            if let Some(i) = folder.order.iter().position(|o| *o == original) {
+                folder.order.insert(i + 1, name);
+                self.write_folder(&dir_rel, &folder)?;
+            }
+        }
+        Ok(self.rel(&copy))
+    }
+
     fn append_to_order(&self, dir: &Path, name: &str) -> Result<()> {
         let file = dir.join(FOLDER_FILE);
         let mut folder: FolderFile = read_yaml_or_default(&file)?;
