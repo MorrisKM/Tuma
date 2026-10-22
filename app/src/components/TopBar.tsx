@@ -1,5 +1,7 @@
-import { Code2, Eye, Save } from "lucide-react";
+import { Check, ChevronDown, Code2, Eye, Layers, Plus, Save } from "lucide-react";
+import { Fragment, useState } from "react";
 import { useStore } from "../store";
+import { Menu } from "./ui";
 
 /** Above the URL: where the request lives, whether it has unsaved changes, the code snippet and Save. */
 export function TopBar() {
@@ -38,29 +40,36 @@ export function TopBar() {
   );
 }
 
-/** The environment requests use, as in Postman: at the top right, beside the tabs. */
+/** The environment requests use, as in Postman: at the top right, beside the tabs. A menu of the environments, with
+ * a button that adds one. */
 export function EnvironmentPicker() {
   const workspace = useStore((s) => s.workspace);
   const environments = useStore((s) => s.environments);
   const environment = useStore((s) => s.environment);
-  const { setEnvironment, openVariables } = useStore.getState();
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const { setEnvironment, openVariables, addEnvironment } = useStore.getState();
   if (!workspace) return null;
+  const choose = (name: string | null) => (
+    <button className="menu-check" onClick={() => setEnvironment(name)}>
+      <Check size={14} className={name === environment ? "accent" : "hidden"} />
+      {name ?? "No environment"}
+    </button>
+  );
   return (
     <div className="env-picker">
-      <span className={`env-dot${environment ? " on" : ""}`} />
-      <select
-        value={environment ?? ""}
-        onChange={(e) => setEnvironment(e.target.value || null)}
-        aria-label="Environment"
+      <button
+        className="env-button"
+        aria-haspopup="menu"
         title="The environment whose variables requests use"
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          setMenu(menu ? null : { x: r.left, y: r.bottom + 4 });
+        }}
       >
-        <option value="">No environment</option>
-        {environments.map((name) => (
-          <option key={name} value={name}>
-            {name}
-          </option>
-        ))}
-      </select>
+        <span className={`env-dot${environment ? " on" : ""}`} />
+        <span className="env-name">{environment ?? "No environment"}</span>
+        <ChevronDown size={14} className="muted" />
+      </button>
       <button
         className="icon-button"
         onClick={() => void openVariables(environment)}
@@ -69,6 +78,34 @@ export function EnvironmentPicker() {
       >
         <Eye size={15} />
       </button>
+      {menu && (
+        <Menu at={menu} onClose={() => setMenu(null)} className="env-menu">
+          <div className="menu-head">
+            <span>Environments</span>
+            <button
+              className="icon-button"
+              title="New environment"
+              aria-label="New environment"
+              onClick={() => void addEnvironment()}
+            >
+              <Plus size={15} />
+            </button>
+          </div>
+          {choose(null)}
+          {environments.map((name) => (
+            <Fragment key={name}>{choose(name)}</Fragment>
+          ))}
+          <hr />
+          <button className="menu-check" onClick={() => void addEnvironment()}>
+            <Plus size={14} />
+            New environment
+          </button>
+          <button className="menu-check" onClick={() => void openVariables(environment)}>
+            <Layers size={14} />
+            Manage environments
+          </button>
+        </Menu>
+      )}
     </div>
   );
 }

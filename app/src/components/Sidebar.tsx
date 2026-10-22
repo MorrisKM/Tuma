@@ -22,7 +22,6 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import * as api from "../api";
 import { layout, type Section, useLayout } from "../layout";
 import { requests, useStore } from "../store";
 import { applyTheme, type Theme, useTheme } from "../theme";
@@ -361,6 +360,19 @@ function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
         {!isRequest && (
           <button
             className="row-menu"
+            aria-label="New request"
+            title={`New request in ${node.name}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              void addRequest(node.path);
+            }}
+          >
+            <Plus size={14} />
+          </button>
+        )}
+        {!isRequest && (
+          <button
+            className="row-menu"
             aria-label="Run"
             title="Run…"
             onClick={(e) => {
@@ -442,20 +454,12 @@ function Environments() {
   const environments = useStore((s) => s.environments);
   const environment = useStore((s) => s.environment);
   const view = useStore((s) => s.view);
-  const { openVariables, setEnvironment, refresh, notify } = useStore.getState();
+  const { openVariables, setEnvironment } = useStore.getState();
   const editing = view.kind === "variables" ? view.environment : undefined;
 
   if (!workspace) return <p className="muted small sidebar-note">Open a workspace to keep environments in it.</p>;
 
-  const add = async () => {
-    try {
-      const name = await api.environmentCreate("New environment");
-      await refresh();
-      await openVariables(name);
-    } catch (e) {
-      notify({ tone: "error", text: String(e) });
-    }
-  };
+  const add = useStore.getState().addEnvironment;
 
   return (
     <>

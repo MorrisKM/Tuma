@@ -133,6 +133,8 @@ interface State {
   openRequest: (path: string) => Promise<void>;
   openFolder: (path: string) => Promise<void>;
   openVariables: (environment: string | null) => Promise<void>;
+  /** Creates an environment, makes requests use it, and opens it to add its variables. */
+  addEnvironment: () => Promise<void>;
   save: () => Promise<void>;
   saveAs: (parent: string, name: string) => Promise<void>;
   addRequest: (parent: string) => Promise<void>;
@@ -514,6 +516,13 @@ export const useStore = create<State>((set, get) => {
     openFolder: async (path) => set({ view: { kind: "folder", path } }),
 
     openVariables: async (environment) => set({ view: { kind: "variables", environment } }),
+    addEnvironment: () =>
+      attempt(async () => {
+        const name = await api.environmentCreate("New environment");
+        await get().refresh();
+        get().setEnvironment(name);
+        await get().openVariables(name);
+      }),
 
     save: () =>
       attempt(async () => {

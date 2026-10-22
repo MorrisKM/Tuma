@@ -1684,17 +1684,62 @@ label.check {
   flex-shrink: 0;
 }
 
-.env-picker select {
-  max-width: 220px;
-  height: 26px;
-  border-color: transparent;
-  background-color: transparent;
+.env-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  min-width: 170px;
+  max-width: 240px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
   font-weight: 500;
-  padding-left: 4px;
+  cursor: pointer;
 }
 
-.env-picker select:hover {
-  background-color: var(--bg-hover);
+.env-button:hover {
+  background: var(--bg-hover);
+}
+
+.env-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.menu.env-menu {
+  min-width: 230px;
+}
+
+.menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 2px 4px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+
+.menu-head .icon-button {
+  width: 24px;
+  height: 24px;
+}
+
+.menu button.menu-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hidden {
+  visibility: hidden;
 }
 
 .segmented.scopes {
