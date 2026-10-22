@@ -19,7 +19,8 @@ export type Body =
   | { type: "raw"; content: string; contentType: string }
   | { type: "form"; fields: KeyValue[] }
   | { type: "multipart"; parts: Part[] }
-  | { type: "file"; path: string; contentType?: string | null };
+  | { type: "file"; path: string; contentType?: string | null }
+  | { type: "graphql"; query: string; variables?: string; operationName?: string | null };
 
 export type Auth =
   | { type: "none" }

@@ -211,6 +211,16 @@ pub enum Body {
     Multipart {
         parts: Vec<Part>,
     },
+    /// A GraphQL operation, sent as JSON (`{"query", "variables", "operationName"}`).
+    #[serde(rename_all = "camelCase")]
+    Graphql {
+        query: String,
+        /// JSON text; `{{variables}}` are resolved before it is parsed.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        variables: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        operation_name: Option<String>,
+    },
     #[serde(rename_all = "camelCase")]
     File {
         path: PathBuf,
@@ -289,6 +299,15 @@ impl From<&Body> for http::Body {
                 path: path.clone(),
                 content_type: content_type.clone(),
             },
+            Body::Graphql {
+                query,
+                variables,
+                operation_name,
+            } => http::Body::Graphql {
+                query: query.clone(),
+                variables: variables.clone(),
+                operation_name: operation_name.clone(),
+            },
         }
     }
 }
@@ -310,6 +329,15 @@ impl From<&http::Body> for Body {
             http::Body::File { path, content_type } => Body::File {
                 path: path.clone(),
                 content_type: content_type.clone(),
+            },
+            http::Body::Graphql {
+                query,
+                variables,
+                operation_name,
+            } => Body::Graphql {
+                query: query.clone(),
+                variables: variables.clone(),
+                operation_name: operation_name.clone(),
             },
         }
     }

@@ -121,3 +121,7 @@ export const oauth2Authorize = (request: RequestFile, path: string | null, envir
   invoke<TokenStatus>("oauth2_authorize", { request, path, environment });
 export const oauth2Tokens = () => invoke<TokenInfo[]>("oauth2_tokens");
 export const oauth2Forget = (key: string) => invoke<void>("oauth2_forget", { key });
+
+/** The server's schema by introspection: the `data` of the answer, for graphql-js's buildClientSchema. */
+export const graphqlSchema = (request: RequestFile, path: string | null, environment: string | null) =>
+  invoke<unknown>("graphql_schema", { request, path, environment });

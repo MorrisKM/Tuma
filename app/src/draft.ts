@@ -4,7 +4,18 @@
 
 import type { Auth, Body, KeyValue, Part, RequestFile, Scripts, Settings } from "./types";
 
-export type BodyMode = "none" | "json" | "xml" | "html" | "text" | "javascript" | "raw" | "form" | "multipart" | "file";
+export type BodyMode =
+  | "none"
+  | "json"
+  | "xml"
+  | "html"
+  | "text"
+  | "javascript"
+  | "raw"
+  | "form"
+  | "multipart"
+  | "file"
+  | "graphql";
 
 export const TEXT_MODES = ["json", "xml", "html", "text", "javascript", "raw"] as const;
 export const isTextMode = (mode: BodyMode): mode is (typeof TEXT_MODES)[number] =>
@@ -25,6 +36,7 @@ export interface Draft {
   form: KeyValue[];
   parts: Part[];
   filePath: string;
+  graphql: { query: string; variables: string; operationName: string };
   /** null means inherit from the folder. */
   auth: Auth | null;
   settings: Settings;
@@ -55,6 +67,7 @@ export const newDraft = (): Draft => ({
   form: [],
   parts: [],
   filePath: "",
+  graphql: { query: "", variables: "", operationName: "" },
   auth: null,
   settings: defaultSettings(),
   description: "",
@@ -97,6 +110,13 @@ function toBody(d: Draft): Body {
       return { type: "multipart", parts: d.parts };
     case "file":
       return d.filePath ? { type: "file", path: d.filePath } : { type: "none" };
+    case "graphql":
+      return {
+        type: "graphql",
+        query: d.graphql.query,
+        ...(d.graphql.variables.trim() ? { variables: d.graphql.variables } : {}),
+        ...(d.graphql.operationName.trim() ? { operationName: d.graphql.operationName } : {}),
+      };
     default:
       return { type: "none" };
   }
@@ -126,6 +146,8 @@ export function fromRequestFile(r: RequestFile, path: string | null, name: strin
   if (body.type === "multipart")
     d.parts = body.parts.map((p) => ({ ...p, enabled: p.enabled !== false, file: p.file === true }));
   if (body.type === "file") d.filePath = body.path;
+  if (body.type === "graphql")
+    d.graphql = { query: body.query, variables: body.variables ?? "", operationName: body.operationName ?? "" };
   return d;
 }
 

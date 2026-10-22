@@ -228,6 +228,17 @@ fn apply_auth(
 async fn encode_body(body: &Body) -> Result<(Bytes, Option<String>), Error> {
     Ok(match body {
         Body::None => (Bytes::new(), None),
+        Body::Graphql {
+            query,
+            variables,
+            operation_name,
+        } => (
+            Bytes::from(
+                Body::graphql_json(query, variables, operation_name.as_deref())
+                    .map_err(Error::InvalidBody)?,
+            ),
+            Some("application/json".into()),
+        ),
         Body::Raw {
             content,
             content_type,

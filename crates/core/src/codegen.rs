@@ -16,6 +16,7 @@ pub enum Language {
 }
 
 pub fn generate(request: &Request, language: Language) -> String {
+    let request = &request.plain();
     match language {
         Language::Curl => crate::curl::to_curl(request),
         Language::Python => python(request),
@@ -109,6 +110,7 @@ fn python(request: &Request) -> String {
             "data=open({}, \"rb\")",
             string(&path.to_string_lossy())
         )),
+        (Body::Graphql { .. }, _) => unreachable!("generate() makes the body plain"),
         (Body::None, _) => None,
     };
     // requests sets the content type itself for json=, data= dicts and files=.
@@ -229,6 +231,7 @@ fn javascript(request: &Request) -> String {
             ));
             Some("file".into())
         }
+        (Body::Graphql { .. }, _) => unreachable!("generate() makes the body plain"),
         (Body::None, _) => None,
     };
     // fetch sets the content type itself for URLSearchParams and FormData.

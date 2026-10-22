@@ -694,6 +694,9 @@ pub fn request_value(file: &RequestFile, name: &str, id: &str) -> Value {
             }).collect::<Vec<_>>(),
         }),
         Body::File { path, .. } => json!({ "mode": "file", "file": { "src": path } }),
+        Body::Graphql {
+            query, variables, ..
+        } => json!({ "mode": "graphql", "graphql": { "query": query, "variables": variables } }),
     };
     json!({
         "id": id,
@@ -737,6 +740,7 @@ pub fn apply_request(file: &mut RequestFile, before: &Value, after: &Value) {
         Some("urlencoded") => json!(["urlencoded", b["urlencoded"]]),
         Some("formdata") => json!(["formdata", b["formdata"]]),
         Some("file") => json!(["file", b["file"]]),
+        Some("graphql") => json!(["graphql", b["graphql"]]),
         _ => Value::Null,
     };
     let (old, new) = (essential(&before["body"]), essential(&after["body"]));
@@ -786,6 +790,21 @@ pub fn apply_request(file: &mut RequestFile, before: &Value, after: &Value) {
             path: PathBuf::from(body["file"]["src"].as_str().unwrap_or_default()),
             content_type: None,
         },
+        Some("graphql") => Body::Graphql {
+            query: body["graphql"]["query"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string(),
+            variables: match &body["graphql"]["variables"] {
+                Value::String(s) => s.clone(),
+                Value::Null => String::new(),
+                other => other.to_string(),
+            },
+            operation_name: match &file.body {
+                Body::Graphql { operation_name, .. } => operation_name.clone(),
+                _ => None,
+            },
+        },
         _ => Body::None,
     };
 }
@@ -809,6 +828,11 @@ pub fn sent_request_value(
             "formdata": parts.iter().map(|p| pair(&p.name, &p.value, p.enabled)).collect::<Vec<_>>(),
         }),
         http::Body::File { path, .. } => json!({ "mode": "file", "file": { "src": path } }),
+        http::Body::Graphql {
+            query, variables, ..
+        } => {
+            json!({ "mode": "graphql", "graphql": { "query": query, "variables": variables } })
+        }
     };
     json!({
         "id": id,

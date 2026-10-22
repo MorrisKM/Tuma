@@ -87,7 +87,6 @@ fn postman_import_matches_golden_files() {
         [
             "\"List products\": 1 saved example(s) not imported",
             "\"List products\": 1 disabled query parameter(s) dropped",
-            "\"Search\": GraphQL body imported as JSON until GraphQL support arrives",
         ]
     );
 

@@ -6,6 +6,7 @@ import type { KeyValue } from "../types";
 import { AuthForm } from "./AuthForm";
 import { CodeEditor, type Language } from "./CodeEditor";
 import { blankPart, blankRow, KeyValueEditor } from "./KeyValueEditor";
+import { GraphqlEditor } from "./GraphqlEditor";
 import { ScriptsEditor } from "./ScriptsEditor";
 import { Tabs } from "./Tabs";
 
@@ -83,6 +84,7 @@ const BODY_MODES: { id: BodyMode; label: string }[] = [
   { id: "form", label: "Form URL-encoded" },
   { id: "multipart", label: "Multipart form" },
   { id: "file", label: "Binary file" },
+  { id: "graphql", label: "GraphQL" },
 ];
 
 async function pickFile(): Promise<string | null> {
@@ -98,7 +100,15 @@ function BodyEditor() {
   return (
     <div className="body-editor">
       <div className="toolbar">
-        <select value={mode} onChange={(e) => update({ bodyMode: e.target.value as BodyMode })} aria-label="Body type">
+        <select
+          value={mode}
+          onChange={(e) => {
+            const bodyMode = e.target.value as BodyMode;
+            // GraphQL goes over POST; a GET with a body would be ignored by most servers.
+            update(bodyMode === "graphql" && draft.method === "GET" ? { bodyMode, method: "POST" } : { bodyMode });
+          }}
+          aria-label="Body type"
+        >
           {BODY_MODES.map((m) => (
             <option key={m.id} value={m.id}>
               {m.label}
@@ -122,6 +132,7 @@ function BodyEditor() {
       </div>
 
       {mode === "none" && <p className="hint">This request has no body.</p>}
+      {mode === "graphql" && <GraphqlEditor />}
       {isTextMode(mode) && (
         <div className="editor-frame">
           <CodeEditor

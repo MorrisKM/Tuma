@@ -162,6 +162,11 @@ fn body(body: &Body) -> Option<Value> {
     let raw = |content: &str, language: &str| json!({ "mode": "raw", "raw": content, "options": { "raw": { "language": language } } });
     Some(match body {
         Body::None => return None,
+        Body::Graphql {
+            query, variables, ..
+        } => {
+            json!({ "mode": "graphql", "graphql": { "query": query, "variables": variables } })
+        }
         Body::Json { content } => raw(content, "json"),
         Body::Xml { content } => raw(content, "xml"),
         Body::Html { content } => raw(content, "html"),

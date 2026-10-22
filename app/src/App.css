@@ -1732,3 +1732,79 @@ iframe.visualizer {
   display: block;
   margin-top: 2px;
 }
+
+/* GraphQL */
+
+.graphql-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+}
+
+.graphql-panes {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.graphql-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.graphql-query {
+  flex: 2;
+  min-height: 120px;
+}
+
+.graphql-variables {
+  flex: 1;
+  min-height: 60px;
+}
+
+.operation-name {
+  width: 190px;
+  padding: 3px 8px;
+}
+
+.graphql-explorer {
+  width: 280px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  border-left: 1px solid var(--border);
+  padding-left: 12px;
+}
+
+.graphql-explorer h4 {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.graphql-explorer .type-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.gql-field {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  width: 100%;
+}
+
+.warning-text {
+  color: var(--redirect);
+}

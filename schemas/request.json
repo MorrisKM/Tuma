@@ -226,6 +226,33 @@
           ]
         },
         {
+          "description": "A GraphQL operation, sent as JSON (`{\"query\", \"variables\", \"operationName\"}`).",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "graphql"
+            },
+            "query": {
+              "type": "string"
+            },
+            "variables": {
+              "description": "JSON text; `{{variables}}` are resolved before it is parsed.",
+              "type": "string"
+            },
+            "operationName": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "query"
+          ]
+        },
+        {
           "type": "object",
           "properties": {
             "type": {

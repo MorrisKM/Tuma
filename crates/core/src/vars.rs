@@ -90,6 +90,15 @@ impl Scopes {
         let headers = rows(&request.headers, &mut u);
         let body = match &request.body {
             Body::None => Body::None,
+            Body::Graphql {
+                query,
+                variables,
+                operation_name,
+            } => Body::Graphql {
+                query: u(query),
+                variables: u(variables),
+                operation_name: operation_name.as_deref().map(&mut u),
+            },
             Body::Raw {
                 content,
                 content_type,

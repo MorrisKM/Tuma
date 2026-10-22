@@ -257,6 +257,7 @@ pub fn run() {
             oauth::oauth2_authorize,
             oauth::oauth2_tokens,
             oauth::oauth2_forget,
+            oauth::graphql_schema,
             settings::settings_read,
             settings::settings_write,
             settings::cookies_list,

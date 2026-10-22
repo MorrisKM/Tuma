@@ -1,4 +1,4 @@
-//! OAuth 2.0 from the app: the token status of the auth being edited, getting a new token (browser grants open the
+//! OAuth 2.0 and GraphQL introspection from the app: the token status of the auth being edited, getting a new token (browser grants open the
 //! system browser), and the token manager.
 
 use serde::Serialize;
@@ -116,4 +116,40 @@ pub fn oauth2_forget(open: tauri::State<'_, Open>, key: String) -> Result<()> {
     let guard = open.0.lock().unwrap();
     let ws = guard.as_ref().ok_or("No workspace is open")?;
     oauth2::forget(ws.id(), &key, secrets())
+}
+
+/// The schema of a GraphQL request's server, by introspection with its URL, headers and auth: the `data` object
+/// graphql-js's `buildClientSchema` takes.
+#[tauri::command]
+pub async fn graphql_schema(
+    open: tauri::State<'_, Open>,
+    request: RequestFile,
+    path: Option<String>,
+    environment: Option<String>,
+) -> Result<serde_json::Value> {
+    let ws = open.0.lock().unwrap().clone();
+    let network = tuma_core::settings::network_for(ws.as_ref(), secrets())?;
+    let introspection = tuma_core::graphql::introspection_request(&request);
+    let execution = runner::execute(runner::Job {
+        workspace: ws.as_ref(),
+        request: &introspection,
+        path: path.as_deref(),
+        context: None,
+        environment: environment.as_deref(),
+        overrides: &[],
+        extra_checks: None,
+        secrets: secrets(),
+        history: None,
+        source: "",
+        allow_host: None,
+        scripting: runner::Scripting {
+            enabled: false,
+            ..Default::default()
+        },
+        network: Some(network.clone()),
+    })
+    .await;
+    let _ = tuma_core::settings::keep_cookies(&network, ws.as_ref());
+    let response = execution.response.map_err(|f| f.message)?;
+    tuma_core::graphql::schema_from_response(response.status, &response.body)
 }

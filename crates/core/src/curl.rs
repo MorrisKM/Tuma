@@ -361,6 +361,7 @@ pub(crate) fn full_url(request: &Request) -> String {
 
 /// The request as a cURL command, one option per line. Variables must already be resolved.
 pub fn to_curl(request: &Request) -> String {
+    let request = &request.plain();
     let mut lines = Vec::new();
     let method = request.method.to_uppercase();
     let has_body = !matches!(request.body, HttpBody::None);
@@ -428,6 +429,7 @@ pub fn to_curl(request: &Request) -> String {
                 quote(&format!("@{}", path.display()))
             ));
         }
+        HttpBody::Graphql { .. } => unreachable!("to_curl() makes the body plain"),
     }
     if !request.settings.verify_tls {
         lines.push("--insecure".into());

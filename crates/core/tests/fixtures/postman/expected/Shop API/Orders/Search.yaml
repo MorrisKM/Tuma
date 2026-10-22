@@ -1,11 +1,6 @@
 method: POST
 url: "{{baseUrl}}/graphql"
 body:
-  type: json
-  content: |-
-    {
-      "query": "{ orders { id } }",
-      "variables": {
-        "first": 5
-      }
-    }
+  type: graphql
+  query: "{ orders { id } }"
+  variables: "{\"first\": 5}"

@@ -71,6 +71,13 @@ pub enum Body {
     FormUrlEncoded { fields: Vec<KeyValue> },
     /// `multipart/form-data`, with text fields and files.
     Multipart { parts: Vec<Part> },
+    /// A GraphQL operation, sent as `application/json`.
+    #[serde(rename_all = "camelCase")]
+    Graphql {
+        query: String,
+        variables: String,
+        operation_name: Option<String>,
+    },
     /// The contents of a file. The content type is guessed from the extension when not given.
     #[serde(rename_all = "camelCase")]
     File {
@@ -241,6 +248,54 @@ mod millis_opt {
         match d {
             Some(d) => s.serialize_some(&(d.as_secs_f64() * 1000.0)),
             None => s.serialize_none(),
+        }
+    }
+}
+
+impl Body {
+    /// A GraphQL operation as the JSON it is sent as. Empty variables are left out.
+    pub fn graphql_json(
+        query: &str,
+        variables: &str,
+        operation_name: Option<&str>,
+    ) -> Result<String, String> {
+        let mut out = serde_json::json!({ "query": query });
+        if !variables.trim().is_empty() {
+            let variables: serde_json::Value = serde_json::from_str(variables)
+                .map_err(|e| format!("the GraphQL variables are not valid JSON: {e}"))?;
+            out["variables"] = variables;
+        }
+        if let Some(name) = operation_name.filter(|n| !n.trim().is_empty()) {
+            out["operationName"] = name.into();
+        }
+        Ok(out.to_string())
+    }
+
+    /// The body with GraphQL turned into its JSON, for code that only knows plain bodies (snippets, cURL).
+    pub fn plain(&self) -> Body {
+        match self {
+            Body::Graphql {
+                query,
+                variables,
+                operation_name,
+            } => Body::Raw {
+                content: Body::graphql_json(query, variables, operation_name.as_deref())
+                    .unwrap_or_else(|_| {
+                        serde_json::json!({ "query": query, "variables": variables }).to_string()
+                    }),
+                content_type: "application/json".into(),
+            },
+            other => other.clone(),
+        }
+    }
+}
+
+impl Request {
+    /// The request with a plain body; see [`Body::plain`].
+    pub fn plain(&self) -> Request {
+        Request {
+            body: self.body.plain(),
+            ..self.clone()
         }
     }
 }

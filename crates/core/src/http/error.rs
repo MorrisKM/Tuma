@@ -11,6 +11,8 @@ pub enum Error {
     UnsupportedScheme(String),
     #[error("invalid method \"{0}\"")]
     InvalidMethod(String),
+    #[error("{0}")]
+    InvalidBody(String),
     #[error("invalid header \"{0}\"")]
     InvalidHeader(String),
     #[error("could not read {}: {source}", path.display())]
@@ -42,7 +44,9 @@ impl Error {
     pub fn kind(&self) -> &'static str {
         match self {
             Error::InvalidUrl { .. } | Error::UnsupportedScheme(_) => "invalidUrl",
-            Error::InvalidMethod(_) | Error::InvalidHeader(_) => "invalidRequest",
+            Error::InvalidMethod(_) | Error::InvalidHeader(_) | Error::InvalidBody(_) => {
+                "invalidRequest"
+            }
             Error::File { .. } => "file",
             Error::Dns { .. } => "dns",
             Error::Connect { .. } => "connect",

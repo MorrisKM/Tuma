@@ -52,13 +52,16 @@ interface Props {
   language?: Language;
   readOnly?: boolean;
   placeholder?: string;
+  /** More extensions, such as a language with a schema. Reconfigured when it changes. */
+  extension?: Extension;
 }
 
 /** A CodeMirror editor. With `readOnly` it is a viewer with search (Ctrl+F) and folding. */
-export function CodeEditor({ value, onChange, language = "text", readOnly = false, placeholder }: Props) {
+export function CodeEditor({ value, onChange, language = "text", readOnly = false, placeholder, extension }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView>(null);
   const languageSlot = useRef(new Compartment());
+  const extensionSlot = useRef(new Compartment());
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -79,6 +82,7 @@ export function CodeEditor({ value, onChange, language = "text", readOnly = fals
         EditorView.editable.of(!readOnly),
         placeholder ? placeholderExt(placeholder) : [],
         languageSlot.current.of(languages[language]()),
+        extensionSlot.current.of(extension ?? []),
         theme,
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !update.transactions.some((t) => t.annotation(external))) {
@@ -102,6 +106,10 @@ export function CodeEditor({ value, onChange, language = "text", readOnly = fals
   useEffect(() => {
     view.current?.dispatch({ effects: languageSlot.current.reconfigure(languages[language]()) });
   }, [language]);
+
+  useEffect(() => {
+    view.current?.dispatch({ effects: extensionSlot.current.reconfigure(extension ?? []) });
+  }, [extension]);
 
   return <div className="code-editor" ref={host} />;
 }

@@ -243,19 +243,14 @@ fn body(body: Option<&Value>, name: &str, warnings: &mut Warnings) -> Body {
         },
         "graphql" => {
             let graphql = &body["graphql"];
-            let variables: Value = match &graphql["variables"] {
-                Value::String(s) if !s.trim().is_empty() => {
-                    serde_json::from_str(s).unwrap_or(Value::Null)
-                }
-                Value::String(_) => Value::Null,
-                other => other.clone(),
-            };
-            warnings.add(format!(
-                "\"{name}\": GraphQL body imported as JSON until GraphQL support arrives"
-            ));
-            let json = serde_json::json!({ "query": graphql["query"], "variables": variables });
-            Body::Json {
-                content: serde_json::to_string_pretty(&json).unwrap_or_default(),
+            Body::Graphql {
+                query: str_at(graphql, "query").to_string(),
+                variables: match &graphql["variables"] {
+                    Value::String(s) => s.clone(),
+                    Value::Null => String::new(),
+                    other => serde_json::to_string_pretty(other).unwrap_or_default(),
+                },
+                operation_name: None,
             }
         }
         "" => Body::None,
