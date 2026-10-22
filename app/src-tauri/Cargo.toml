@@ -17,6 +17,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+uuid = { version = "1", features = ["v4"] }
 dirs = "6"
 tuma-core.workspace = true
 tauri = { version = "2.12", features = [] }

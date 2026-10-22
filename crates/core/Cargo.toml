@@ -18,7 +18,7 @@ flate2 = "1"
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 http = "1"
 http-body-util = "0.1"
-hyper = { version = "1", features = ["client", "http1", "http2"] }
+hyper = { version = "1", features = ["client", "http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 jsonschema = { version = "0.60", default-features = false }
 keyring = "4"

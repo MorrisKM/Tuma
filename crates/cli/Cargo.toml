@@ -17,7 +17,7 @@ tuma-core.workspace = true
 clap = { version = "4", features = ["derive", "env"] }
 serde.workspace = true
 serde_json.workspace = true
-tokio = { workspace = true, features = ["io-std"] }
+tokio = { workspace = true, features = ["io-std", "signal"] }
 anyhow = "1"
 rmcp = { version = "3.6", features = ["server", "macros", "transport-io"] }
 url = "2"

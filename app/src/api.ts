@@ -43,6 +43,33 @@ export interface WorkspaceList {
   folder: string;
   workspaces: { name: string; root: string; inFolder: boolean }[];
 }
+export interface MockInfo {
+  id: string;
+  scope: string | null;
+  url: string;
+  port: number;
+  delayMs: number;
+}
+export interface MockEvent {
+  at: number;
+  method: string;
+  path: string;
+  status: number;
+  request: string | null;
+  example: string | null;
+}
+export const mockStart = (scope: string | null, port: number, delayMs: number) =>
+  invoke<MockInfo>("mock_start", { scope, port, delayMs });
+export const mockStop = (id: string) => invoke<void>("mock_stop", { id });
+export interface MockRoute {
+  name: string;
+  path: string;
+  method: string;
+  pattern: string;
+  examples: string[];
+}
+export const mockRoutes = (scope: string | null) => invoke<MockRoute[]>("mock_routes", { scope });
+export const mockList = () => invoke<MockInfo[]>("mock_list");
 export type DocsFormat = "openapi" | "openapi-json" | "markdown" | "html";
 export const docsGenerate = (scope: string | null, format: DocsFormat, environment: string | null, file?: string) =>
   invoke<{ text: string; warnings: string[] }>("docs_generate", { scope, format, environment, file: file ?? null });

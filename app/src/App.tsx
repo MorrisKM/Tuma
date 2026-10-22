@@ -1,6 +1,6 @@
 import { Columns2, PanelLeft, Rows2, SquareTerminal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { appVersion } from "./api";
+import { appVersion, type MockEvent } from "./api";
 import { AgentsView } from "./components/AgentsView";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConsolePanel } from "./components/ConsolePanel";
@@ -8,6 +8,8 @@ import { useConsole } from "./console";
 import { RunnerView } from "./components/RunnerView";
 import { SettingsView } from "./components/SettingsView";
 import { FolderEditor } from "./components/FolderEditor";
+import { MockView } from "./components/MockView";
+import { mocks } from "./mocks";
 import { NoticeBar } from "./components/NoticeBar";
 import { RequestBar } from "./components/RequestBar";
 import { RequestPanel } from "./components/RequestPanel";
@@ -106,6 +108,11 @@ function App() {
         return { calls: { ...s.calls, [payload.id]: { ...current, status, events: [...current.events, payload.event] } } };
       });
     });
+    // Requests mock servers answered.
+    const stopMocks = listen<{ id: string; event: MockEvent }>("mock-event", ({ payload }) =>
+      mocks.record(payload.id, payload.event),
+    );
+    void mocks.refresh();
     // Collection runs, whether or not the runner is on screen.
     const stopRuns = listen<{ runId: string; step: RunStep }>("run-step", ({ payload }) => logStep(payload.step));
     // The web view's own menu (Back, Reload, Inspect) only where text can be edited, for copy and paste.
@@ -124,6 +131,7 @@ function App() {
       void stopWs.then((f) => f());
       void stopGrpc.then((f) => f());
       void stopRuns.then((f) => f());
+      void stopMocks.then((f) => f());
     };
   }, []);
 
@@ -145,6 +153,7 @@ function App() {
         {view.kind === "agents" && <AgentsView />}
         {view.kind === "runner" && <RunnerView key={view.path} path={view.path} />}
         {view.kind === "settings" && <SettingsView />}
+        {view.kind === "mock" && <MockView key={view.id} id={view.id} />}
         {consoleOpen && <ConsolePanel />}
         <StatusBar version={version} environment={workspace ? environment : undefined} />
       </main>

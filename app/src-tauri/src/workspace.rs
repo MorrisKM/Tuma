@@ -123,6 +123,8 @@ pub fn restore(app: &tauri::AppHandle) {
 /// Opens the workspace at `root` and remembers it.
 fn open_at(app: &tauri::AppHandle, open: &Open, root: PathBuf) -> Result<Info> {
     let workspace = Workspace::open(&root).map_err(|e| e.to_string())?;
+    // Mock servers serve the workspace they were started in.
+    app.state::<crate::mocks::Mocks>().stop_all();
     let result = info(&workspace);
     *open.0.lock().unwrap() = Some(workspace);
     remember(app, Some(root));
@@ -262,6 +264,7 @@ pub fn workspace_create(
 
 #[tauri::command]
 pub fn workspace_close(app: tauri::AppHandle, open: tauri::State<'_, Open>) {
+    app.state::<crate::mocks::Mocks>().stop_all();
     *open.0.lock().unwrap() = None;
     remember(&app, None);
 }

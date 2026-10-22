@@ -40,7 +40,9 @@ export type View =
   /** The collection runner, for a collection or folder. */
   | { kind: "runner"; path: string }
   /** This machine's settings: proxy, certificates, cookies. */
-  | { kind: "settings" };
+  | { kind: "settings" }
+  /** A running mock server and the requests it answered. */
+  | { kind: "mock"; id: string };
 
 export interface Notice {
   tone: "info" | "error";

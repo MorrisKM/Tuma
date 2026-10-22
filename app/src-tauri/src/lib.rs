@@ -1,6 +1,7 @@
 //! The desktop shell: Tauri commands that call into `tuma_core`. Keep logic out of here.
 
 mod grpc;
+mod mocks;
 mod oauth;
 mod runs;
 mod settings;
@@ -263,6 +264,7 @@ pub fn run() {
         .manage(runs::Running::default())
         .manage(sockets::Sockets::default())
         .manage(grpc::Calls::default())
+        .manage(mocks::Mocks::default())
         .manage(updates::Pending::default())
         .register_uri_scheme_protocol(visualizer::SCHEME, visualizer::serve)
         .setup(|app| {
@@ -288,6 +290,10 @@ pub fn run() {
             workspace::folder_write,
             workspace::folder_create,
             workspace::item_rename,
+            mocks::mock_start,
+            mocks::mock_stop,
+            mocks::mock_list,
+            mocks::mock_routes,
             workspace::docs_generate,
             workspace::workspace_list,
             workspace::workspaces_dir_set,

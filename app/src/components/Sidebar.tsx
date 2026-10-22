@@ -18,7 +18,9 @@ import {
   Play,
   Plus,
   Search,
+  Server,
   Settings,
+  Square,
   Sun,
   Trash2,
   Upload,
@@ -27,7 +29,8 @@ import {
 import { useEffect, useRef, useState } from "react";
 import * as api from "../api";
 import { layout, type Section, useLayout } from "../layout";
-import { requests, useStore } from "../store";
+import { mockName, mocks, useMocks } from "../mocks";
+import { folders, requests, useStore } from "../store";
 import { applyTheme, type Theme, useTheme } from "../theme";
 import type { HistoryEntry, TreeNode } from "../types";
 import { Splitter } from "./Splitter";
@@ -37,6 +40,7 @@ const SECTIONS: { id: Section; label: string; icon: typeof Library }[] = [
   { id: "collections", label: "Collections", icon: Library },
   { id: "environments", label: "Environments", icon: Layers },
   { id: "history", label: "History", icon: Clock },
+  { id: "mocks", label: "Mock servers", icon: Server },
 ];
 
 /** The icon rail and, beside it, the panel of the chosen section, which can be resized and hidden. */
@@ -54,6 +58,7 @@ export function Sidebar() {
             {section === "collections" && <Collections />}
             {section === "environments" && <Environments />}
             {section === "history" && <History />}
+            {section === "mocks" && <Mocks />}
           </aside>
           <Splitter
             axis="x"
@@ -475,6 +480,7 @@ function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
             <button onClick={() => useStore.setState({ renaming: node.path })}>Rename</button>
             <button onClick={() => void useStore.getState().duplicate(node.path)}>Duplicate</button>
             <button onClick={() => useStore.setState({ docs: { scope: node.path } })}>Generate API docs…</button>
+            {!isRequest && <button onClick={() => void mocks.start(node.path)}>Start a mock server</button>}
             <hr />
             <button className="danger" onClick={() => void remove(node)}>
               Delete
@@ -653,6 +659,98 @@ function History() {
             </li>
           ))}
         </ul>
+      </div>
+    </>
+  );
+}
+
+function Mocks() {
+  const workspace = useStore((s) => s.workspace);
+  const tree = useStore((s) => s.tree);
+  const view = useStore((s) => s.view);
+  const servers = useMocks((s) => s.servers);
+  const events = useMocks((s) => s.events);
+  const [scope, setScope] = useState("");
+  const [delay, setDelay] = useState(0);
+  const [port, setPort] = useState("");
+
+  if (!workspace) return <p className="muted small sidebar-note">Open a workspace to mock its requests.</p>;
+  const options = folders(tree);
+  return (
+    <>
+      <SectionHead title="Mock servers" />
+      <div className="sidebar-body">
+        {servers.length > 0 && (
+          <ul className="tree mock-list">
+            {servers.map((m) => (
+              <li key={m.id}>
+                <div
+                  className={`tree-row flat${view.kind === "mock" && view.id === m.id ? " active" : ""}`}
+                  onClick={() => useStore.setState({ view: { kind: "mock", id: m.id } })}
+                  title={m.url}
+                >
+                  <span className="live-dot" />
+                  <span className="tree-name">
+                    {mockName(m)}
+                    <span className="muted small mono"> :{m.port}</span>
+                  </span>
+                  {(events[m.id]?.length ?? 0) > 0 && <span className="source-tag">{events[m.id].length}</span>}
+                  <button
+                    className="row-menu"
+                    title="Stop"
+                    aria-label="Stop"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void mocks.stop(m.id);
+                    }}
+                  >
+                    <Square size={12} />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form
+          className="mock-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void mocks.start(scope || null, Number(port) || undefined, delay);
+          }}
+        >
+          <p className="muted small">
+            A local server that answers with your requests' saved examples, for building a frontend or another service
+            before the API exists.
+          </p>
+          <label>
+            <span>Serve</span>
+            <select value={scope} onChange={(e) => setScope(e.target.value)}>
+              <option value="">The whole workspace</option>
+              {options.map((o) => (
+                <option key={o.path} value={o.path}>
+                  {"\u00a0\u00a0".repeat(o.depth) + o.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Port</span>
+            <input value={port} placeholder="4010" inputMode="numeric" onChange={(e) => setPort(e.target.value.replace(/\D/g, ""))} />
+          </label>
+          <label>
+            <span>Delay (ms)</span>
+            <input
+              type="number"
+              min={0}
+              value={delay}
+              onChange={(e) => setDelay(Math.max(0, Number(e.target.value) || 0))}
+            />
+          </label>
+          <button className="button primary" type="submit">
+            <Play size={14} />
+            Start mock server
+          </button>
+        </form>
       </div>
     </>
   );

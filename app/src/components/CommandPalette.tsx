@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { requests, useStore } from "../store";
 import { layout } from "../layout";
+import { mocks } from "../mocks";
 import { applyTheme, type Theme } from "../theme";
 import { focusUrl } from "./UrlEditor";
 
@@ -47,6 +48,7 @@ export function CommandPalette() {
       { id: "open", label: "Open a folder as a workspace, in place…", hint: "Workspace", run: () => void s.openWorkspace() },
       ...(workspace
         ? [
+            { id: "mock-workspace", label: "Start a mock server for the workspace", hint: "Mock", run: () => void mocks.start(null) },
             { id: "docs-workspace", label: "Generate API docs for the workspace…", hint: "Docs", run: () => useStore.setState({ docs: { scope: null } }) },
             ...(s.draft.path
               ? [{ id: "docs-request", label: "Generate API docs for this request…", hint: "Docs", run: () => useStore.setState({ docs: { scope: s.draft.path } }) }]

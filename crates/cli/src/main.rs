@@ -91,6 +91,20 @@ enum Command {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
+    /// Run a mock server that answers with the saved examples of a collection's or folder's requests.
+    ///
+    /// Requests are matched by method and path ({{name}} and :name segments match anything). Choose an example with
+    /// an x-mock-response-code or x-mock-response-name header; otherwise the first successful one is sent. Edits to
+    /// examples apply at once. Stop it with Ctrl+C.
+    Mock {
+        /// A collection or folder; the whole workspace when left out.
+        scope: Option<String>,
+        #[arg(short, long, default_value_t = 4010)]
+        port: u16,
+        /// Wait this long before every answer, in milliseconds.
+        #[arg(long, default_value_t = 0)]
+        delay: u64,
+    },
     /// Check every file in the workspace: YAML syntax, unknown keys (typos), and checks that can't work.
     Check {
         /// Print JSON instead of text.
@@ -427,6 +441,64 @@ async fn run(cli: Cli) -> anyhow::Result<bool> {
                 }
                 None => print!("{}", docs.text),
             }
+            Ok(true)
+        }
+        Command::Mock { scope, port, delay } => {
+            let Some(workspace) = find_workspace(&start)? else {
+                bail!("no workspace here or above {}", start.display());
+            };
+            let routes = tuma_core::mock::routes(&workspace, scope.as_deref())
+                .map_err(anyhow::Error::msg)?;
+            let server = tuma_core::mock::start(
+                tuma_core::mock::Options {
+                    root: workspace.root().to_path_buf(),
+                    scope: scope.clone(),
+                    port,
+                    delay_ms: delay,
+                },
+                std::sync::Arc::new(|e: tuma_core::mock::MockEvent| {
+                    let by = e.request.map(|r| {
+                        format!(
+                            "  {r}{}",
+                            e.example.map(|x| format!(" › {x}")).unwrap_or_default()
+                        )
+                    });
+                    eprintln!(
+                        "{} {} {}{}",
+                        e.status,
+                        e.method,
+                        e.path,
+                        by.unwrap_or_default()
+                    );
+                }),
+            )
+            .await
+            .map_err(anyhow::Error::msg)?;
+            eprintln!(
+                "Mock server for {} at {}",
+                scope.as_deref().unwrap_or(workspace.name()),
+                server.url()
+            );
+            for r in &routes {
+                let examples = if r.examples.is_empty() {
+                    "no examples: answers 501".to_string()
+                } else {
+                    r.examples
+                        .iter()
+                        .map(|e| format!("{} {}", e.status, e.name))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
+                eprintln!(
+                    "  {:<7} {:<32} {} ({examples})",
+                    r.method,
+                    r.pattern(),
+                    r.name
+                );
+            }
+            eprintln!("Press Ctrl+C to stop.");
+            tokio::signal::ctrl_c().await?;
+            server.stop();
             Ok(true)
         }
         Command::Check { json } => {
