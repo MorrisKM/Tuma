@@ -474,3 +474,96 @@ fn workspaces_move_by_folder_and_zip() {
     // Anything else is refused.
     assert!(archive::import(&dir.0.join("workspaces"), &dir.0.join("elsewhere")).is_err());
 }
+
+#[test]
+fn imports_insomnia_bruno_and_plain_json() {
+    let dir = TempDir::new("json-imports");
+    let secrets = MemoryStore::default();
+    let mut workspace = Workspace::create(&dir.0, "Test").unwrap();
+
+    // Insomnia: a workspace with a folder, a request using {{ _.var }}, and a base and sub environment.
+    let insomnia = r#"{"_type":"export","__export_format":4,"resources":[
+      {"_id":"wrk_1","_type":"workspace","name":"Shop"},
+      {"_id":"fld_1","_type":"request_group","parentId":"wrk_1","name":"Orders","environment":{"limit":"10"}},
+      {"_id":"req_1","_type":"request","parentId":"fld_1","name":"List orders","method":"get",
+       "url":"{{ _.baseUrl }}/orders","parameters":[{"name":"page","value":"1"}],
+       "headers":[{"name":"Accept","value":"application/json"},{"name":"X-Off","value":"1","disabled":true}],
+       "authentication":{"type":"bearer","token":"{{ _.token }}"},
+       "body":{"mimeType":"application/json","text":"{\"a\":1}"}},
+      {"_id":"env_1","_type":"environment","parentId":"wrk_1","name":"Base","data":{"baseUrl":"http://localhost"}},
+      {"_id":"env_2","_type":"environment","parentId":"env_1","name":"Staging","data":{"baseUrl":"https://staging","token":"t"}}
+    ]}"#;
+    let (imported, _) = import::any(&mut workspace, insomnia, "insomnia.json", &secrets).unwrap();
+    assert_eq!(
+        imported,
+        Imported::Several(vec![
+            Imported::Collection("Shop".into()),
+            Imported::Environment("Staging".into())
+        ])
+    );
+    let request = workspace
+        .read_request("Shop/Orders/List orders.yaml")
+        .unwrap();
+    assert_eq!(request.method, "GET");
+    assert_eq!(request.url, "{{baseUrl}}/orders?page=1");
+    assert!(!request.headers[1].enabled);
+    assert!(
+        matches!(&request.auth, Some(tuma_core::workspace::files::Auth::Bearer { token }) if token == "{{token}}")
+    );
+    assert_eq!(
+        workspace.read_folder("Shop/Orders").unwrap().variables[0].name,
+        "limit"
+    );
+    let staging = workspace.read_environment("Staging", &secrets).unwrap();
+    assert!(
+        staging
+            .iter()
+            .any(|v| v.name == "baseUrl" && v.value == "https://staging")
+    );
+
+    // Bruno: requests sorted by seq, path params filled in, scripts kept as comments, environments.
+    let bruno = r#"{"name":"Pets","version":"1","items":[
+      {"type":"http-request","name":"Second","seq":2,"request":{"url":"{{host}}/pets","method":"POST",
+        "headers":[],"body":{"mode":"json","json":"{\"name\":\"Rex\"}"},"auth":{"mode":"inherit"}}},
+      {"type":"folder","name":"Admin","items":[
+        {"type":"http-request","name":"Get","seq":1,"request":{"url":"{{host}}/pets/:id","method":"GET",
+          "params":[{"name":"id","value":"7","type":"path","enabled":true}],
+          "script":{"req":"bru.setVar('x', 1)"},"body":{"mode":"none"},"auth":{"mode":"none"}}}]},
+      {"type":"http-request","name":"First","seq":1,"request":{"url":"{{host}}/health","method":"GET","body":{"mode":"none"}}}
+    ],"environments":[{"name":"Local","variables":[{"name":"host","value":"http://localhost:3000","enabled":true}]}]}"#;
+    let (imported, warnings) = import::any(&mut workspace, bruno, "pets.json", &secrets).unwrap();
+    assert_eq!(
+        imported,
+        Imported::Several(vec![
+            Imported::Collection("Pets".into()),
+            Imported::Environment("Local".into())
+        ])
+    );
+    let names: Vec<_> = workspace
+        .tree()
+        .unwrap()
+        .into_iter()
+        .find(|n| n.name == "Pets")
+        .unwrap()
+        .children
+        .into_iter()
+        .map(|n| n.name)
+        .collect();
+    assert_eq!(names, ["Admin", "First", "Second"]);
+    let get = workspace.read_request("Pets/Admin/Get.yaml").unwrap();
+    assert_eq!(get.url, "{{host}}/pets/7");
+    assert!(get.scripts.pre_request.contains("// bru.setVar('x', 1)"));
+    assert!(warnings.0.iter().any(|w| w.contains("Bruno")));
+
+    // A plain JSON object is an environment named after the file.
+    let (imported, _) = import::any(
+        &mut workspace,
+        r#"{"baseUrl": "https://api.example.com", "retries": 3}"#,
+        "/x/Production.json",
+        &secrets,
+    )
+    .unwrap();
+    assert_eq!(imported, Imported::Environment("Production".into()));
+    let production = workspace.read_environment("Production", &secrets).unwrap();
+    assert_eq!(production[1].value, "3");
+}

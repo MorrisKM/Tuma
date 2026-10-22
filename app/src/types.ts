@@ -223,7 +223,8 @@ export interface WorkspaceInfo {
 export type ImportResult =
   | { kind: "collection"; path: string; warnings: string[] }
   | { kind: "environment"; name: string; warnings: string[] }
-  | { kind: "globals"; warnings: string[] };
+  | { kind: "globals"; warnings: string[] }
+  | { kind: "several"; collections: string[]; environments: string[]; warnings: string[] };
 
 export interface Header {
   name: string;

@@ -381,12 +381,27 @@ pub fn globals_write(open: tauri::State<'_, Open>, variables: Vec<VariableValue>
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum ImportResult {
-    Collection { path: String, warnings: Vec<String> },
-    Environment { name: String, warnings: Vec<String> },
-    Globals { warnings: Vec<String> },
+    Collection {
+        path: String,
+        warnings: Vec<String>,
+    },
+    Environment {
+        name: String,
+        warnings: Vec<String>,
+    },
+    Globals {
+        warnings: Vec<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    Several {
+        collections: Vec<String>,
+        environments: Vec<String>,
+        warnings: Vec<String>,
+    },
 }
 
-/// Imports a file: an OpenAPI or Swagger spec, a Postman collection, environment or globals export, or a HAR file.
+/// Imports a file: an OpenAPI or Swagger spec, a Postman, Insomnia or Bruno export, a HAR file, or a JSON file of
+/// names and values as an environment.
 #[tauri::command]
 pub fn import_file(open: tauri::State<'_, Open>, file: PathBuf) -> Result<ImportResult> {
     let json = std::fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file.display()))?;
@@ -400,6 +415,21 @@ pub fn import_file(open: tauri::State<'_, Open>, file: PathBuf) -> Result<Import
         Imported::Collection(path) => ImportResult::Collection { path, warnings },
         Imported::Environment(name) => ImportResult::Environment { name, warnings },
         Imported::Globals => ImportResult::Globals { warnings },
+        Imported::Several(all) => {
+            let (mut collections, mut environments) = (Vec::new(), Vec::new());
+            for item in all {
+                match item {
+                    Imported::Collection(path) => collections.push(path),
+                    Imported::Environment(name) => environments.push(name),
+                    _ => {}
+                }
+            }
+            ImportResult::Several {
+                collections,
+                environments,
+                warnings,
+            }
+        }
     })
 }
 

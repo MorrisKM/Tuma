@@ -700,23 +700,36 @@ export const useStore = create<State>((set, get) => {
     importFile: () =>
       attempt(async () => {
         if (!get().workspace) {
-          set({ notice: { tone: "info", text: "Open a workspace folder first, then import into it." } });
+          set({
+            creatingWorkspace: true,
+            notice: { tone: "info", text: "Imports go into a workspace. Create one first, then import again." },
+          });
           return;
         }
         const file = await openDialog({
-          title: "Import an OpenAPI spec, a Postman export or a HAR file",
-          filters: [{ name: "OpenAPI, Postman or HAR", extensions: ["json", "yaml", "yml", "har"] }],
+          title: "Import collections or environments",
+          filters: [
+            { name: "Postman, Insomnia, Bruno, OpenAPI, HAR or JSON", extensions: ["json", "yaml", "yml", "har"] },
+            { name: "Any file", extensions: ["*"] },
+          ],
         });
         if (typeof file !== "string") return;
         const result = await api.importFile(file);
         await get().refresh();
+        const list = (kind: string, names: string[]) =>
+          names.length ? `${names.length === 1 ? kind : `${kind}s`} ${names.map((n) => `"${n}"`).join(", ")}` : "";
         const what =
           result.kind === "collection"
             ? `collection "${result.path}"`
             : result.kind === "environment"
               ? `environment "${result.name}"`
-              : "global variables";
+              : result.kind === "several"
+                ? [list("collection", result.collections), list("environment", result.environments)]
+                    .filter(Boolean)
+                    .join(" and ")
+                : "global variables";
         if (result.kind === "collection") get().toggle(result.path, true);
+        if (result.kind === "several") result.collections.forEach((c) => get().toggle(c, true));
         set({
           notice: {
             tone: "info",

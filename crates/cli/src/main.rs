@@ -302,6 +302,16 @@ impl Common {
     }
 }
 
+fn print_imported(imported: &tuma_core::import::Imported) {
+    use tuma_core::import::Imported;
+    match imported {
+        Imported::Collection(path) => println!("Imported collection \"{path}\""),
+        Imported::Environment(name) => println!("Imported environment \"{name}\""),
+        Imported::Globals => println!("Imported global variables"),
+        Imported::Several(all) => all.iter().for_each(print_imported),
+    }
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
     let cli = Cli::parse();
@@ -333,15 +343,7 @@ async fn run(cli: Cli) -> anyhow::Result<bool> {
             let (imported, warnings) =
                 tuma_core::import::any(&mut workspace, &text, &source, &EnvThenKeychain)
                     .map_err(anyhow::Error::msg)?;
-            match imported {
-                tuma_core::import::Imported::Collection(path) => {
-                    println!("Imported collection \"{path}\"")
-                }
-                tuma_core::import::Imported::Environment(name) => {
-                    println!("Imported environment \"{name}\"")
-                }
-                tuma_core::import::Imported::Globals => println!("Imported global variables"),
-            }
+            print_imported(&imported);
             for warning in warnings.0 {
                 println!("  ! {warning}");
             }
