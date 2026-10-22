@@ -113,7 +113,18 @@ interface State {
   sendMessage: (text: string) => Promise<void>;
 
   init: () => Promise<void>;
+  /** Opens a folder as a workspace where it is, offering to make it one. */
   openWorkspace: () => Promise<void>;
+  /** Opens a workspace that is already known, from the workspace menu. */
+  switchWorkspace: (root: string) => Promise<void>;
+  /** Creates a workspace in the workspaces folder and opens it. */
+  newWorkspace: (name: string) => Promise<void>;
+  /** Copies a workspace from a folder or a .zip into the workspaces folder and opens it. */
+  importWorkspace: (from: "folder" | "zip") => Promise<void>;
+  /** Saves the open workspace as a .zip. */
+  exportWorkspace: () => Promise<void>;
+  /** Whether the New workspace dialog is open. */
+  creatingWorkspace: boolean;
   closeWorkspace: () => Promise<void>;
   refresh: () => Promise<void>;
   loadScope: () => Promise<void>;
@@ -310,6 +321,7 @@ export const useStore = create<State>((set, get) => {
     savingAs: false,
     renaming: null,
     paletteOpen: false,
+    creatingWorkspace: false,
     snippetOpen: false,
     history: [],
     notice: null,
@@ -415,6 +427,59 @@ export const useStore = create<State>((set, get) => {
         }
         resetTabs();
         await setWorkspace(workspace);
+      }),
+
+    switchWorkspace: (root) =>
+      attempt(async () => {
+        if (root === get().workspace?.root) return;
+        if (anyDirty() && !(await ask_("Some open requests have unsaved changes. Discard them?"))) return;
+        const workspace = await api.workspaceOpen(root);
+        resetTabs();
+        await setWorkspace(workspace);
+      }),
+
+    newWorkspace: (name) =>
+      attempt(async () => {
+        if (anyDirty() && !(await ask_("Some open requests have unsaved changes. Discard them?"))) return;
+        const workspace = await api.workspaceNew(name);
+        set({ creatingWorkspace: false });
+        resetTabs();
+        await setWorkspace(workspace);
+        set({ notice: { tone: "info", text: `Created the workspace "${workspace.name}" in ${workspace.root}.` } });
+      }),
+
+    importWorkspace: (from) =>
+      attempt(async () => {
+        const source = await openDialog(
+          from === "folder"
+            ? { directory: true, title: "Choose the workspace folder to import" }
+            : { title: "Choose a workspace .zip to import", filters: [{ name: "Workspace", extensions: ["zip"] }] },
+        );
+        if (typeof source !== "string") return;
+        if (anyDirty() && !(await ask_("Some open requests have unsaved changes. Discard them?"))) return;
+        const workspace = await api.workspaceImport(source);
+        resetTabs();
+        await setWorkspace(workspace);
+        set({ notice: { tone: "info", text: `Imported "${workspace.name}" into ${workspace.root}. The original is unchanged.` } });
+      }),
+
+    exportWorkspace: () =>
+      attempt(async () => {
+        const workspace = get().workspace;
+        if (!workspace) return;
+        const file = await saveDialog({
+          title: "Export the workspace",
+          defaultPath: `${workspace.name}.zip`,
+          filters: [{ name: "Workspace", extensions: ["zip"] }],
+        });
+        if (!file) return;
+        const count = await api.workspaceExport(file);
+        set({
+          notice: {
+            tone: "info",
+            text: `Exported ${count} files to ${file}. Secret values stay in this computer's keychain and are not in it.`,
+          },
+        });
       }),
 
     closeWorkspace: () =>

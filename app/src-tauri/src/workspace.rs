@@ -44,12 +44,19 @@ fn info(workspace: &Workspace) -> Info {
     }
 }
 
-/// Remembers the last workspace so the app reopens it.
+/// What the app keeps about workspaces on this machine, in `settings.json`.
 #[derive(Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 struct Settings {
+    /// Reopened at startup.
     last_workspace: Option<PathBuf>,
+    /// Where new and imported workspaces go; the default when absent.
+    workspaces_dir: Option<PathBuf>,
+    /// Opened lately, newest first, for the workspace menu.
+    recent: Vec<PathBuf>,
 }
+
+const RECENT: usize = 10;
 
 fn settings_path(app: &tauri::AppHandle) -> Option<PathBuf> {
     app.path()
@@ -58,36 +65,169 @@ fn settings_path(app: &tauri::AppHandle) -> Option<PathBuf> {
         .map(|d| d.join("settings.json"))
 }
 
-fn remember(app: &tauri::AppHandle, root: Option<PathBuf>) {
+fn load(app: &tauri::AppHandle) -> Settings {
+    settings_path(app)
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+fn store(app: &tauri::AppHandle, settings: &Settings) {
     let Some(path) = settings_path(app) else {
         return;
-    };
-    let settings = Settings {
-        last_workspace: root,
     };
     let _ = std::fs::create_dir_all(path.parent().unwrap_or(&path));
     if let Err(e) = std::fs::write(
         &path,
-        serde_json::to_string_pretty(&settings).unwrap_or_default(),
+        serde_json::to_string_pretty(settings).unwrap_or_default(),
     ) {
         eprintln!("could not save settings: {e}");
     }
 }
 
+/// Remembers the open workspace, so the app reopens it, and puts it first among the recent ones.
+fn remember(app: &tauri::AppHandle, root: Option<PathBuf>) {
+    let mut settings = load(app);
+    if let Some(root) = &root {
+        settings.recent.retain(|r| r != root);
+        settings.recent.insert(0, root.clone());
+        settings.recent.truncate(RECENT);
+    }
+    settings.last_workspace = root;
+    store(app, &settings);
+}
+
+/// `Documents/Tuma Workspaces`, or the home folder's if there is no Documents folder.
+fn default_workspaces_dir() -> PathBuf {
+    dirs::document_dir()
+        .or_else(dirs::home_dir)
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("Tuma Workspaces")
+}
+
+fn workspaces_dir_of(app: &tauri::AppHandle) -> PathBuf {
+    load(app)
+        .workspaces_dir
+        .unwrap_or_else(default_workspaces_dir)
+}
+
 /// Reopens the last workspace at startup, if there was one and it still exists.
 pub fn restore(app: &tauri::AppHandle) {
-    let Some(path) = settings_path(app) else {
-        return;
-    };
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return;
-    };
-    let settings: Settings = serde_json::from_str(&text).unwrap_or_default();
-    if let Some(root) = settings.last_workspace
+    if let Some(root) = load(app).last_workspace
         && let Ok(workspace) = Workspace::open(root)
     {
         *app.state::<Open>().0.lock().unwrap() = Some(workspace);
     }
+}
+
+/// Opens the workspace at `root` and remembers it.
+fn open_at(app: &tauri::AppHandle, open: &Open, root: PathBuf) -> Result<Info> {
+    let workspace = Workspace::open(&root).map_err(|e| e.to_string())?;
+    let result = info(&workspace);
+    *open.0.lock().unwrap() = Some(workspace);
+    remember(app, Some(root));
+    Ok(result)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Listed {
+    name: String,
+    root: String,
+    /// In the workspaces folder, rather than only opened from elsewhere.
+    in_folder: bool,
+}
+
+/// The workspaces folder and the workspaces in it, then recent ones from elsewhere that still exist.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Workspaces {
+    folder: String,
+    workspaces: Vec<Listed>,
+}
+
+#[tauri::command]
+pub fn workspace_list(app: tauri::AppHandle) -> Workspaces {
+    let folder = workspaces_dir_of(&app);
+    let mut workspaces = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&folder) {
+        let mut found: Vec<Listed> = entries
+            .filter_map(|e| e.ok())
+            .filter_map(|e| Workspace::open(e.path()).ok())
+            .map(|w| Listed {
+                name: w.name().to_string(),
+                root: w.root().to_string_lossy().into_owned(),
+                in_folder: true,
+            })
+            .collect();
+        found.sort_by_key(|w| w.name.to_lowercase());
+        workspaces.extend(found);
+    }
+    for root in load(&app).recent {
+        let root_text = root.to_string_lossy().into_owned();
+        if workspaces.iter().any(|w| w.root == root_text) {
+            continue;
+        }
+        if let Ok(w) = Workspace::open(&root) {
+            workspaces.push(Listed {
+                name: w.name().to_string(),
+                root: root_text,
+                in_folder: false,
+            });
+        }
+    }
+    Workspaces {
+        folder: folder.to_string_lossy().into_owned(),
+        workspaces,
+    }
+}
+
+#[tauri::command]
+pub fn workspaces_dir_set(app: tauri::AppHandle, folder: PathBuf) -> Result<()> {
+    std::fs::create_dir_all(&folder)
+        .map_err(|e| format!("could not create {}: {e}", folder.display()))?;
+    let mut settings = load(&app);
+    settings.workspaces_dir = (folder != default_workspaces_dir()).then_some(folder);
+    store(&app, &settings);
+    Ok(())
+}
+
+/// Creates a workspace called `name` in the workspaces folder and opens it.
+#[tauri::command]
+pub fn workspace_new(
+    app: tauri::AppHandle,
+    open: tauri::State<'_, Open>,
+    name: String,
+) -> Result<Info> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("Give the workspace a name".into());
+    }
+    let folder = workspaces_dir_of(&app);
+    std::fs::create_dir_all(&folder)
+        .map_err(|e| format!("could not create {}: {e}", folder.display()))?;
+    let root = tuma_core::workspace::archive::free_folder(&folder, name);
+    Workspace::create(&root, name).map_err(|e| e.to_string())?;
+    open_at(&app, &open, root)
+}
+
+/// Copies a workspace from a folder or a `.zip` into the workspaces folder and opens the copy.
+#[tauri::command]
+pub fn workspace_import(
+    app: tauri::AppHandle,
+    open: tauri::State<'_, Open>,
+    source: PathBuf,
+) -> Result<Info> {
+    let root = tuma_core::workspace::archive::import(&source, &workspaces_dir_of(&app))?;
+    open_at(&app, &open, root)
+}
+
+/// Writes the open workspace to a `.zip` and returns how many files it holds.
+#[tauri::command]
+pub fn workspace_export(open: tauri::State<'_, Open>, file: PathBuf) -> Result<usize> {
+    let guard = open.0.lock().unwrap();
+    let workspace = guard.as_ref().ok_or("No workspace is open")?;
+    tuma_core::workspace::archive::export(workspace, &file)
 }
 
 #[tauri::command]
@@ -103,11 +243,7 @@ pub fn workspace_open(
 ) -> Result<Info> {
     // The folder itself, a project with a .tuma/ workspace, or any folder inside a workspace, as the CLI finds them.
     let root = tuma_core::runner::find_workspace(&root).unwrap_or(root);
-    let workspace = Workspace::open(&root).map_err(|e| e.to_string())?;
-    let result = info(&workspace);
-    *open.0.lock().unwrap() = Some(workspace);
-    remember(&app, Some(root));
-    Ok(result)
+    open_at(&app, &open, root)
 }
 
 #[tauri::command]

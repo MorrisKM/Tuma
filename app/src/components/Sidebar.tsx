@@ -20,8 +20,11 @@ import {
   Settings,
   Sun,
   Trash2,
+  Upload,
+  X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import * as api from "../api";
 import { layout, type Section, useLayout } from "../layout";
 import { requests, useStore } from "../store";
 import { applyTheme, type Theme, useTheme } from "../theme";
@@ -126,30 +129,81 @@ function Rail() {
 function WorkspaceSwitcher() {
   const workspace = useStore((s) => s.workspace);
   const [menu, setMenu] = useState(false);
-  const { openWorkspace, closeWorkspace } = useStore.getState();
+  const [list, setList] = useState<api.WorkspaceList | null>(null);
+  const { openWorkspace, closeWorkspace, switchWorkspace, importWorkspace, exportWorkspace } = useStore.getState();
+  const toggle = () => {
+    if (!menu) void api.workspaceList().then(setList, () => setList(null));
+    setMenu(!menu);
+  };
 
-  if (!workspace) {
-    return (
-      <div className="sidebar-workspace">
-        <button className="workspace-name" onClick={() => void openWorkspace()}>
-          <FolderOpen size={15} />
-          <span>Open a workspace…</span>
-        </button>
-      </div>
-    );
-  }
   return (
     <div className="sidebar-workspace">
-      <button className="workspace-name" onClick={() => setMenu(!menu)} title={workspace.root} aria-haspopup="menu">
-        <span className="workspace-badge">{workspace.name.slice(0, 1).toUpperCase()}</span>
-        <span className="workspace-label">{workspace.name}</span>
+      <button className="workspace-name" onClick={toggle} title={workspace?.root} aria-haspopup="menu">
+        {workspace ? (
+          <>
+            <span className="workspace-badge">{workspace.name.slice(0, 1).toUpperCase()}</span>
+            <span className="workspace-label">{workspace.name}</span>
+          </>
+        ) : (
+          <>
+            <FolderOpen size={15} />
+            <span className="workspace-label">Choose a workspace</span>
+          </>
+        )}
         <ChevronDown size={14} className="muted" />
       </button>
       {menu && (
-        <Menu onClose={() => setMenu(false)} className="menu-left">
-          <div className="menu-caption mono">{workspace.root}</div>
-          <button onClick={() => void openWorkspace()}>Open another workspace…</button>
-          <button onClick={() => void closeWorkspace()}>Close workspace</button>
+        <Menu onClose={() => setMenu(false)} className="menu-left workspace-menu">
+          {list && list.workspaces.length > 0 && (
+            <>
+              <div className="menu-head">
+                <span>Workspaces</span>
+              </div>
+              {list.workspaces.map((w) => (
+                <button
+                  key={w.root}
+                  className="menu-check"
+                  onClick={() => void switchWorkspace(w.root)}
+                  title={w.root}
+                >
+                  <Check size={14} className={w.root === workspace?.root ? "accent" : "hidden"} />
+                  <span className="menu-text">{w.name}</span>
+                  {!w.inFolder && <span className="muted small">elsewhere</span>}
+                </button>
+              ))}
+              <hr />
+            </>
+          )}
+          <button className="menu-check" onClick={() => useStore.setState({ creatingWorkspace: true })}>
+            <Plus size={14} />
+            New workspace…
+          </button>
+          <button className="menu-check" onClick={() => void importWorkspace("folder")}>
+            <Download size={14} />
+            Import a workspace folder…
+          </button>
+          <button className="menu-check" onClick={() => void importWorkspace("zip")}>
+            <Download size={14} />
+            Import a workspace .zip…
+          </button>
+          <button className="menu-check" onClick={() => void openWorkspace()}>
+            <FolderOpen size={14} />
+            Open a folder in place…
+          </button>
+          {workspace && (
+            <>
+              <hr />
+              <button className="menu-check" onClick={() => void exportWorkspace()}>
+                <Upload size={14} />
+                Export as .zip…
+              </button>
+              <button className="menu-check" onClick={() => void closeWorkspace()}>
+                <X size={14} />
+                Close workspace
+              </button>
+            </>
+          )}
+          {list && <div className="menu-caption mono">New workspaces go in {list.folder}</div>}
         </Menu>
       )}
     </div>
@@ -225,13 +279,19 @@ function Collections() {
       <div className="sidebar-empty">
         <FolderOpen size={28} strokeWidth={1.5} className="muted" />
         <p className="muted small">
-          A workspace is a folder of plain files, such as one in your project's repository. Requests, collections and
-          environments are saved there, so you can commit them.
+          A workspace holds your collections, requests and environments as plain files, so you can keep them in git and
+          share them.
         </p>
-        <button className="button primary" onClick={() => void openWorkspace()}>
-          Open or create a workspace
+        <button className="button primary" onClick={() => useStore.setState({ creatingWorkspace: true })}>
+          Create a workspace
         </button>
-        <button className="button" onClick={newTab}>
+        <button className="button" onClick={() => void useStore.getState().importWorkspace("folder")}>
+          Import a workspace
+        </button>
+        <button className="button ghost" onClick={() => void openWorkspace()}>
+          Open a folder in place
+        </button>
+        <button className="button ghost" onClick={newTab}>
           Send a request without one
         </button>
       </div>

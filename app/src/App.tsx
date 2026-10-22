@@ -12,6 +12,7 @@ import { NoticeBar } from "./components/NoticeBar";
 import { RequestBar } from "./components/RequestBar";
 import { RequestPanel } from "./components/RequestPanel";
 import { ResponsePanel } from "./components/ResponsePanel";
+import { NewWorkspaceDialog } from "./components/NewWorkspaceDialog";
 import { SaveDialog } from "./components/SaveDialog";
 import { Sidebar } from "./components/Sidebar";
 import { SnippetDialog } from "./components/SnippetDialog";
@@ -63,6 +64,7 @@ function App() {
   const [version, setVersion] = useState<string>();
   const view = useStore((s) => s.view);
   const savingAs = useStore((s) => s.savingAs);
+  const creatingWorkspace = useStore((s) => s.creatingWorkspace);
   const paletteOpen = useStore((s) => s.paletteOpen);
   const snippetOpen = useStore((s) => s.snippetOpen);
   const workspace = useStore((s) => s.workspace);
@@ -145,6 +147,7 @@ function App() {
         <StatusBar version={version} environment={workspace ? environment : undefined} />
       </main>
       {savingAs && <SaveDialog />}
+      {creatingWorkspace && <NewWorkspaceDialog />}
       {paletteOpen && <CommandPalette />}
       {snippetOpen && <SnippetDialog />}
     </div>

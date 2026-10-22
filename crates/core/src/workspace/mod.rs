@@ -12,6 +12,7 @@
 //!
 //! Paths passed in and out are relative to the workspace root and use `/`, such as `Users API/create user.yaml`.
 
+pub mod archive;
 pub mod current;
 pub mod files;
 

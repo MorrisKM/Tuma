@@ -86,6 +86,7 @@ export function SettingsView() {
         </button>
       </div>
       <div className="panel-body settings">
+        <WorkspacesFolder />
         <Updates />
         <h3>Proxy</h3>
         <div className="segmented">
@@ -317,6 +318,35 @@ export function SettingsView() {
 }
 
 /** The version, and checking for and installing updates. */
+/** Where new and imported workspaces go. */
+function WorkspacesFolder() {
+  const [folder, setFolder] = useState("");
+  const load = () => api.workspaceList().then((l) => setFolder(l.folder), () => {});
+  useEffect(() => void load(), []);
+  const change = async () => {
+    const picked = await openDialog({ directory: true, title: "Where should new workspaces go?", defaultPath: folder });
+    if (typeof picked !== "string") return;
+    try {
+      await api.workspacesDirSet(picked);
+      await load();
+    } catch (e) {
+      useStore.getState().notify({ tone: "error", text: String(e) });
+    }
+  };
+  return (
+    <>
+      <h3>Workspaces folder</h3>
+      <p className="hint">New workspaces are created here, and imported ones are copied here.</p>
+      <div className="cert-row">
+        <span className="mono">{folder}</span>
+        <button className="button small" onClick={() => void change()}>
+          Change
+        </button>
+      </div>
+    </>
+  );
+}
+
 function Updates() {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const [auto, setAuto] = useState(autoCheckEnabled);

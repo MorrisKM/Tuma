@@ -435,3 +435,42 @@ fn variables_in_scope_say_where_they_come_from() {
         ]
     );
 }
+
+#[test]
+fn workspaces_move_by_folder_and_zip() {
+    use tuma_core::workspace::archive;
+    let dir = TempDir::new("archive");
+    let source = dir.0.join("source");
+    let workspace = Workspace::create(&source, "Shop API").unwrap();
+    let collection = workspace.create_folder(None, "Orders").unwrap();
+    workspace
+        .create_request(&collection, "list", &RequestFile::default())
+        .unwrap();
+    fs::create_dir_all(source.join(".git")).unwrap();
+    fs::write(source.join(".git/config"), "x").unwrap();
+    let into = dir.0.join("workspaces");
+
+    // From a folder: copied under the workspace's name, without hidden files.
+    let copied = archive::import(&source, &into).unwrap();
+    assert_eq!(copied, into.join("Shop API"));
+    assert!(copied.join("Orders/list.yaml").is_file());
+    assert!(!copied.join(".git").exists());
+    // Again: a numbered folder, and the original is untouched.
+    assert_eq!(
+        archive::import(&source, &into).unwrap(),
+        into.join("Shop API (2)")
+    );
+    assert!(source.join(".git/config").is_file());
+
+    // Through a .zip.
+    let zip = dir.0.join("shop.zip");
+    assert_eq!(archive::export(&workspace, &zip).unwrap(), 3);
+    let unzipped = archive::import(&zip, &into).unwrap();
+    assert_eq!(unzipped, into.join("Shop API (3)"));
+    let reopened = Workspace::open(&unzipped).unwrap();
+    assert_eq!(reopened.name(), "Shop API");
+    assert_eq!(reopened.tree().unwrap()[0].children[0].name, "list");
+
+    // Anything else is refused.
+    assert!(archive::import(&dir.0.join("workspaces"), &dir.0.join("elsewhere")).is_err());
+}

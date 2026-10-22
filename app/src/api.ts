@@ -39,6 +39,15 @@ export const historyClear = () => invoke<void>("history_clear");
 export const workspaceCurrent = () => invoke<WorkspaceInfo | null>("workspace_current");
 export const workspaceOpen = (root: string) => invoke<WorkspaceInfo>("workspace_open", { root });
 export const workspaceCreate = (root: string, name: string) => invoke<WorkspaceInfo>("workspace_create", { root, name });
+export interface WorkspaceList {
+  folder: string;
+  workspaces: { name: string; root: string; inFolder: boolean }[];
+}
+export const workspaceList = () => invoke<WorkspaceList>("workspace_list");
+export const workspacesDirSet = (folder: string) => invoke<void>("workspaces_dir_set", { folder });
+export const workspaceNew = (name: string) => invoke<WorkspaceInfo>("workspace_new", { name });
+export const workspaceImport = (source: string) => invoke<WorkspaceInfo>("workspace_import", { source });
+export const workspaceExport = (file: string) => invoke<number>("workspace_export", { file });
 export const workspaceClose = () => invoke<void>("workspace_close");
 
 export const tree = () => invoke<TreeNode[]>("tree");

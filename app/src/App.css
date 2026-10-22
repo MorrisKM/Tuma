@@ -1645,6 +1645,25 @@ label.check {
   right: 8px;
 }
 
+.menu.workspace-menu {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.menu-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-menu .menu-caption {
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+  margin: 4px 0 0;
+  padding-top: 8px;
+}
+
 .menu-caption {
   padding: 6px 8px 8px;
   font-size: 11px;

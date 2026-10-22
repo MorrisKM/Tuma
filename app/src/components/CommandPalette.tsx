@@ -41,7 +41,13 @@ export function CommandPalette() {
             () => s.notify({ tone: "error", text: "Could not read the clipboard. Paste the command into the URL instead." }),
           ),
       },
-      { id: "open", label: workspace ? "Open another workspace…" : "Open or create a workspace…", run: () => void s.openWorkspace() },
+      { id: "new-workspace", label: "New workspace…", hint: "Workspace", run: () => useStore.setState({ creatingWorkspace: true }) },
+      { id: "import-workspace", label: "Import a workspace folder…", hint: "Workspace", run: () => void s.importWorkspace("folder") },
+      { id: "import-workspace-zip", label: "Import a workspace .zip…", hint: "Workspace", run: () => void s.importWorkspace("zip") },
+      { id: "open", label: "Open a folder as a workspace, in place…", hint: "Workspace", run: () => void s.openWorkspace() },
+      ...(workspace
+        ? [{ id: "export-workspace", label: "Export the workspace as .zip…", hint: "Workspace", run: () => void s.exportWorkspace() }]
+        : []),
       ...(workspace
         ? [
             { id: "collection", label: "New collection", run: () => void s.addFolder(null) },
