@@ -101,6 +101,8 @@ pub fn workspace_open(
     open: tauri::State<'_, Open>,
     root: PathBuf,
 ) -> Result<Info> {
+    // The folder itself, a project with a .tuma/ workspace, or any folder inside a workspace, as the CLI finds them.
+    let root = tuma_core::runner::find_workspace(&root).unwrap_or(root);
     let workspace = Workspace::open(&root).map_err(|e| e.to_string())?;
     let result = info(&workspace);
     *open.0.lock().unwrap() = Some(workspace);
@@ -243,12 +245,23 @@ pub enum ImportResult {
     Globals { warnings: Vec<String> },
 }
 
-/// Imports a Postman collection, environment or globals export file.
+/// Imports a file: an OpenAPI or Swagger spec, or a Postman collection, environment or globals export.
 #[tauri::command]
-pub fn import_postman(open: tauri::State<'_, Open>, file: PathBuf) -> Result<ImportResult> {
+pub fn import_file(open: tauri::State<'_, Open>, file: PathBuf) -> Result<ImportResult> {
     let json = std::fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file.display()))?;
     let mut guard = open.0.lock().unwrap();
     let workspace = guard.as_mut().ok_or("Open a workspace first")?;
+    if let Ok(spec) = tuma_core::openapi::Spec::parse(&json) {
+        let cwd = std::env::current_dir().unwrap_or_default();
+        let source =
+            tuma_core::openapi::source_for(&file.to_string_lossy(), &cwd, workspace.root());
+        let (path, warnings) = tuma_core::openapi::import(workspace, &spec, Some(&source))
+            .map_err(|e| e.to_string())?;
+        return Ok(ImportResult::Collection {
+            path,
+            warnings: warnings.0,
+        });
+    }
     let (imported, warnings) = import::postman(workspace, &json, secrets())?;
     let warnings = warnings.0;
     Ok(match imported {
@@ -256,4 +269,35 @@ pub fn import_postman(open: tauri::State<'_, Open>, file: PathBuf) -> Result<Imp
         Imported::Environment(name) => ImportResult::Environment { name, warnings },
         Imported::Globals => ImportResult::Globals { warnings },
     })
+}
+
+/// What the "Connect an agent" view needs: whether the `tuma` command is installed, and where.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSetup {
+    /// The `tuma` executable found on PATH, if any.
+    cli: Option<String>,
+    /// The open workspace's project folder, where agents should run `tuma mcp`.
+    project: Option<String>,
+}
+
+#[tauri::command]
+pub fn agent_setup(open: tauri::State<'_, Open>) -> AgentSetup {
+    let exe = if cfg!(windows) { "tuma.exe" } else { "tuma" };
+    let cli = std::env::var_os("PATH").and_then(|paths| {
+        std::env::split_paths(&paths)
+            .map(|dir| dir.join(exe))
+            .find(|p| p.is_file())
+            .map(|p| p.to_string_lossy().into_owned())
+    });
+    let project = open.0.lock().unwrap().as_ref().map(|w| {
+        let root = w.root();
+        let project = if root.ends_with(tuma_core::runner::HIDDEN_WORKSPACE) {
+            root.parent().unwrap_or(root)
+        } else {
+            root
+        };
+        project.to_string_lossy().into_owned()
+    });
+    AgentSetup { cli, project }
 }

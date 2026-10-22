@@ -4,7 +4,7 @@ import type { Header, Response, Timing } from "../types";
 import { CodeEditor, type Language } from "./CodeEditor";
 import { Tabs } from "./Tabs";
 
-type Tab = "body" | "headers" | "timing" | "request";
+type Tab = "body" | "checks" | "headers" | "timing" | "request";
 type View = "pretty" | "raw" | "preview";
 
 export function ResponsePanel() {
@@ -34,6 +34,9 @@ export function ResponsePanel() {
         onChange={setTab}
         tabs={[
           { id: "body", label: "Body" },
+          ...(response.checks.length
+            ? [{ id: "checks" as Tab, label: checksLabel(response) }]
+            : []),
           { id: "headers", label: "Headers", count: response.headers.length },
           { id: "timing", label: "Timing" },
           { id: "request", label: "Request" },
@@ -44,11 +47,36 @@ export function ResponsePanel() {
       <Unresolved names={response.unresolved} />
       <div className="panel-body">
         {tab === "body" && <BodyView response={response} />}
+        {tab === "checks" && <ChecksView response={response} />}
         {tab === "headers" && <HeaderTable headers={response.headers} />}
         {tab === "timing" && <TimingView response={response} />}
         {tab === "request" && <SentView response={response} />}
       </div>
     </section>
+  );
+}
+
+function checksLabel(response: Response): string {
+  const failed = response.checks.filter((c) => !c.passed).length;
+  return failed ? `Checks ✗ ${failed}/${response.checks.length}` : `Checks ✓ ${response.checks.length}`;
+}
+
+/** The results of the request's saved checks (its expect: block). */
+function ChecksView({ response }: { response: Response }) {
+  return (
+    <ul className="checks">
+      {response.checks.map((c, i) => (
+        <li key={i} className={c.passed ? "ok" : "fail"}>
+          <span className="check-mark">{c.passed ? "✓" : "✗"}</span>
+          <span className="check-name">{c.check}</span>
+          {!c.passed && (
+            <span className="check-detail mono">
+              expected {c.expected}, got {c.actual}
+            </span>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { appVersion } from "./api";
+import { AgentsView } from "./components/AgentsView";
 import { FolderEditor } from "./components/FolderEditor";
 import { NoticeBar } from "./components/NoticeBar";
 import { RequestBar } from "./components/RequestBar";
@@ -58,6 +59,7 @@ function App() {
         )}
         {view.kind === "folder" && <FolderEditor key={view.path} path={view.path} />}
         {view.kind === "variables" && <VariablesEditor key={view.environment ?? ""} environment={view.environment} />}
+        {view.kind === "agents" && <AgentsView />}
         <footer className="statusbar">
           <span>Ctrl+Enter send · Ctrl+S save · Ctrl+N new</span>
           <span>

@@ -490,7 +490,7 @@ async fn openapi(start: &Path, command: OpenapiCommand) -> anyhow::Result<bool> 
     match command {
         OpenapiCommand::Import { source } => {
             let workspace = runner::open_or_create(start, None)?;
-            let source = spec_source(&source, start, workspace.root());
+            let source = openapi::source_for(&source, start, workspace.root());
             let text = openapi::load(&source, workspace.root())
                 .await
                 .map_err(anyhow::Error::msg)?;
@@ -539,7 +539,7 @@ async fn openapi(start: &Path, command: OpenapiCommand) -> anyhow::Result<bool> 
             if do_import {
                 let workspace = runner::open_or_create(start, None)?;
                 let (source, spec) = &found[0];
-                let source = spec_source(source, start, workspace.root());
+                let source = openapi::source_for(source, start, workspace.root());
                 import(&workspace, spec, &source)?;
             }
             Ok(true)
@@ -587,33 +587,4 @@ async fn openapi(start: &Path, command: OpenapiCommand) -> anyhow::Result<bool> 
             Ok(true)
         }
     }
-}
-
-/// A spec location as stored in the collection: URLs as they are, files relative to the workspace folder so the
-/// workspace can be cloned elsewhere.
-pub(crate) fn spec_source(source: &str, cwd: &Path, workspace_root: &Path) -> String {
-    if source.contains("://") {
-        return source.to_string();
-    }
-    let absolute = cwd.join(source);
-    let absolute = absolute.canonicalize().unwrap_or(absolute);
-    let root = workspace_root
-        .canonicalize()
-        .unwrap_or_else(|_| workspace_root.to_path_buf());
-    relative_path(&absolute, &root).unwrap_or_else(|| absolute.to_string_lossy().into_owned())
-}
-
-/// `path` relative to `base`, using `..` where needed, with `/` separators.
-fn relative_path(path: &Path, base: &Path) -> Option<String> {
-    let path: Vec<_> = path.components().collect();
-    let base: Vec<_> = base.components().collect();
-    let common = path.iter().zip(&base).take_while(|(a, b)| a == b).count();
-    if common == 0 {
-        return None;
-    }
-    let ups = std::iter::repeat_n("..".to_string(), base.len() - common);
-    let downs = path[common..]
-        .iter()
-        .map(|c| c.as_os_str().to_string_lossy().into_owned());
-    Some(ups.chain(downs).collect::<Vec<_>>().join("/"))
 }

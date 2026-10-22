@@ -17,7 +17,9 @@ export type View =
   | { kind: "request" }
   | { kind: "folder"; path: string }
   /** Global variables, or an environment's. */
-  | { kind: "variables"; environment: string | null };
+  | { kind: "variables"; environment: string | null }
+  /** How to connect a coding agent over MCP. */
+  | { kind: "agents" };
 
 export interface Notice {
   tone: "info" | "error";
@@ -67,7 +69,7 @@ interface State {
   addFolder: (parent: string | null) => Promise<void>;
   rename: (path: string, name: string) => Promise<void>;
   remove: (node: TreeNode) => Promise<void>;
-  importPostman: () => Promise<void>;
+  importFile: () => Promise<void>;
 
   send: () => Promise<void>;
   cancel: () => void;
@@ -311,18 +313,18 @@ export const useStore = create<State>((set, get) => {
         await get().refresh();
       }),
 
-    importPostman: () =>
+    importFile: () =>
       attempt(async () => {
         if (!get().workspace) {
           set({ notice: { tone: "info", text: "Open a workspace folder first, then import into it." } });
           return;
         }
         const file = await openDialog({
-          title: "Import a Postman collection or environment",
-          filters: [{ name: "Postman export", extensions: ["json"] }],
+          title: "Import an OpenAPI spec or a Postman export",
+          filters: [{ name: "OpenAPI spec or Postman export", extensions: ["json", "yaml", "yml"] }],
         });
         if (typeof file !== "string") return;
-        const result = await api.importPostman(file);
+        const result = await api.importFile(file);
         await get().refresh();
         const what =
           result.kind === "collection"

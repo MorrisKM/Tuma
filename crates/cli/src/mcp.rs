@@ -499,7 +499,7 @@ impl Server {
         };
         let found: Result<(String, Spec), String> = match (&p.source, &p.server) {
             (Some(source), _) => {
-                let source = crate::spec_source(source, &self.start, workspace.root());
+                let source = tuma_core::openapi::source_for(source, &self.start, workspace.root());
                 match openapi::load(&source, workspace.root())
                     .await
                     .and_then(|t| Spec::parse(&t))
@@ -519,7 +519,11 @@ impl Server {
                         .ok()
                         .and_then(|t| Spec::parse(&t).ok())?;
                     Some((
-                        crate::spec_source(&f.to_string_lossy(), &self.start, workspace.root()),
+                        tuma_core::openapi::source_for(
+                            &f.to_string_lossy(),
+                            &self.start,
+                            workspace.root(),
+                        ),
                         spec,
                     ))
                 });

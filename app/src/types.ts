@@ -130,6 +130,22 @@ export interface Response {
   redirects: { status: number; url: string }[];
   sent: { method: string; url: string; headers: Header[]; bodySize: number };
   unresolved: string[];
+  /** Results of the request's `expect:` checks. */
+  checks: CheckResult[];
+}
+
+export interface CheckResult {
+  check: string;
+  passed: boolean;
+  expected: string;
+  actual: string;
+}
+
+export interface AgentSetup {
+  /** The `tuma` command on PATH, if installed. */
+  cli: string | null;
+  /** The project folder agents should run in. */
+  project: string | null;
 }
 
 export interface RequestError {
@@ -148,4 +164,6 @@ export interface HistoryEntry {
   error: string | null;
   totalMs: number | null;
   size: number | null;
+  /** Who sent it when not the app: "cli", or "mcp:<agent name>". */
+  source?: string | null;
 }

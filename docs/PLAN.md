@@ -102,9 +102,11 @@ person.
 
 ### Workspace files
 
-- The YAML format is documented, and a JSON Schema for each file type ships in the repo (`schemas/`) and is referenced
-  from the files, so agents and editors can validate what they write. `tuma check` validates a whole workspace and
-  reports errors with file and line.
+- A JSON Schema for each file type ships in the repo (`schemas/`), generated from the code, so agents and editors
+  can validate what they write (in VS Code, map them with the YAML extension's `yaml.schemas` setting). They are not
+  referenced from each file, which would add a line to every file and point at a URL that may not resolve.
+- `tuma check` (and the `check_workspace` MCP tool) validates a whole workspace with file and line: YAML syntax,
+  unknown keys (reading is lenient, so a typo would silently do nothing), and checks that can't work.
 
 ### Guardrails and visibility
 

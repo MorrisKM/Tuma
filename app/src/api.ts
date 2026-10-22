@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AgentSetup,
   FolderFile,
   HistoryEntry,
   ImportResult,
@@ -51,4 +52,7 @@ export const environmentDelete = (name: string) => invoke<void>("environment_del
 export const globalsRead = () => invoke<VariableValue[]>("globals_read");
 export const globalsWrite = (variables: VariableValue[]) => invoke<void>("globals_write", { variables });
 
-export const importPostman = (file: string) => invoke<ImportResult>("import_postman", { file });
+/** Imports an OpenAPI/Swagger spec or a Postman collection, environment or globals export. */
+export const importFile = (file: string) => invoke<ImportResult>("import_file", { file });
+
+export const agentSetup = () => invoke<AgentSetup>("agent_setup");

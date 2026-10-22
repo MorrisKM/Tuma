@@ -999,3 +999,81 @@ select:focus {
   gap: 8px;
   margin-top: 18px;
 }
+
+/* Checks, agent setup */
+
+.checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.checks li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.check-name {
+  color: var(--text);
+}
+
+.check-detail {
+  flex-basis: 100%;
+  padding-left: 22px;
+  color: var(--muted);
+}
+
+.source-tag {
+  font-size: 10px;
+  padding: 0 4px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.agents {
+  max-width: 760px;
+  line-height: 1.5;
+}
+
+.agents h3 {
+  font-size: 14px;
+  margin: 18px 0 6px;
+}
+
+.agents p {
+  margin: 0 0 8px;
+}
+
+.agents code {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.snippet {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+
+.snippet pre {
+  flex: 1;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.options {
+  margin: 0;
+  padding-left: 18px;
+}

@@ -10,8 +10,10 @@ use base64::Engine;
 use serde::Serialize;
 use tauri::Manager;
 use tokio::sync::oneshot;
+use tuma_core::expect::{self, CheckResult};
 use tuma_core::history::{Entry, History};
 use tuma_core::http::{self, Header, Redirect, SentRequest, Timing};
+use tuma_core::runner;
 use tuma_core::workspace::files::RequestFile;
 use tuma_core::workspace::prepare_standalone;
 
@@ -46,6 +48,8 @@ struct ResponseView {
     sent: SentRequest,
     /// `{{variables}}` that had no value and were sent as written.
     unresolved: Vec<String>,
+    /// The results of the request's `expect:` checks.
+    checks: Vec<CheckResult>,
 }
 
 #[derive(Serialize)]
@@ -81,17 +85,22 @@ async fn send_request(
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or_default();
+    // A path such as /users is relative to the baseUrl variable, as in the CLI.
+    let file = RequestFile {
+        url: runner::absolute_url(&request.url),
+        ..request.clone()
+    };
     let prepared = match open.0.lock().unwrap().as_ref() {
         Some(ws) => ws
             .prepare(
-                &request,
+                &file,
                 path.as_deref(),
                 environment.as_deref(),
                 &[],
                 workspace::secrets(),
             )
             .map_err(|e| ErrorView::new("workspace", e.to_string()))?,
-        None => prepare_standalone(&request, &[]),
+        None => prepare_standalone(&file, &[]),
     };
     let unresolved: Vec<String> = prepared.unresolved.into_iter().collect();
 
@@ -111,7 +120,7 @@ async fn send_request(
         id,
         sent_at,
         request,
-        path,
+        path: path.clone(),
         status: result.as_ref().ok().map(|r| r.status),
         error: result.as_ref().err().map(|e| e.to_string()),
         total_ms: result
@@ -131,6 +140,16 @@ async fn send_request(
         message: e.to_string(),
         unresolved: unresolved.clone(),
     })?;
+    let mut checks = expect::evaluate(&file.expect, &response);
+    if file.expect.schema {
+        let guard = open.0.lock().unwrap();
+        checks.push(runner::contract_check(
+            guard.as_ref(),
+            path.as_deref(),
+            &file,
+            &response,
+        ));
+    }
     let (body, body_base64) = match std::str::from_utf8(&response.body) {
         Ok(text) => (text.to_string(), false),
         Err(_) => (
@@ -153,6 +172,7 @@ async fn send_request(
         redirects: response.redirects,
         sent: response.sent,
         unresolved,
+        checks,
     })
 }
 
@@ -211,7 +231,8 @@ pub fn run() {
             workspace::environment_delete,
             workspace::globals_read,
             workspace::globals_write,
-            workspace::import_postman,
+            workspace::import_file,
+            workspace::agent_setup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

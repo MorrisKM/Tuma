@@ -7,7 +7,7 @@ type Tab = "collections" | "history";
 export function Sidebar() {
   const [tab, setTab] = useState<Tab>("collections");
   const workspace = useStore((s) => s.workspace);
-  const { openWorkspace, closeWorkspace, importPostman, addFolder, newRequest, openVariables } = useStore.getState();
+  const { openWorkspace, closeWorkspace, importFile, addFolder, newRequest, openVariables } = useStore.getState();
 
   return (
     <aside className="sidebar">
@@ -32,7 +32,7 @@ export function Sidebar() {
               <button className="button small" onClick={() => void addFolder(null)}>
                 New collection
               </button>
-              <button className="button small" onClick={() => void importPostman()}>
+              <button className="button small" onClick={() => void importFile()}>
                 Import
               </button>
               <button
@@ -44,6 +44,13 @@ export function Sidebar() {
               </button>
             </>
           )}
+          <button
+            className="button small"
+            onClick={() => useStore.setState({ view: { kind: "agents" } })}
+            title="Let a coding agent send requests and run tests through Tuma"
+          >
+            Connect an agent
+          </button>
         </div>
       </div>
       <div className="sidebar-tabs" role="tablist">
@@ -61,7 +68,7 @@ export function Sidebar() {
 function Collections() {
   const workspace = useStore((s) => s.workspace);
   const tree = useStore((s) => s.tree);
-  const { openWorkspace, importPostman, addFolder } = useStore.getState();
+  const { openWorkspace, importFile, addFolder } = useStore.getState();
 
   if (!workspace) {
     return (
@@ -83,8 +90,8 @@ function Collections() {
         <button className="button" onClick={() => void addFolder(null)}>
           New collection
         </button>
-        <button className="button" onClick={() => void importPostman()}>
-          Import from Postman
+        <button className="button" onClick={() => void importFile()}>
+          Import OpenAPI or Postman
         </button>
       </div>
     );
@@ -213,7 +220,13 @@ function RenameInput({ name, onDone }: { name: string; onDone: (name: string) =>
 
 function History() {
   const history = useStore((s) => s.history);
-  const { clearHistory, openHistory } = useStore.getState();
+  const { clearHistory, openHistory, loadHistory } = useStore.getState();
+
+  // Agents and the CLI add to history too; refresh while it is on screen.
+  useEffect(() => {
+    const timer = setInterval(() => void loadHistory().catch(() => {}), 2000);
+    return () => clearInterval(timer);
+  }, [loadHistory]);
 
   if (history.length === 0) return <p className="muted small sidebar-empty">Requests you send appear here.</p>;
   return (
@@ -236,6 +249,11 @@ function History() {
                       {entry.request.method}
                     </span>
                     <span className="history-url">{displayUrl(entry.request.url)}</span>
+                    {entry.source && (
+                      <span className="source-tag" title={`Sent by ${sourceName(entry.source)}`}>
+                        {entry.source === "cli" ? "CLI" : "agent"}
+                      </span>
+                    )}
                     <span className={`history-status ${statusTone(entry)}`}>{entry.status ?? "ERR"}</span>
                   </button>
                 </li>
@@ -260,6 +278,10 @@ function groupByDay(entries: HistoryEntry[]): [string, HistoryEntry[]][] {
 }
 
 const displayUrl = (url: string) => url.replace(/^https?:\/\//, "");
+
+/** "mcp:claude-code" → "claude-code (MCP)". */
+const sourceName = (source: string) =>
+  source === "cli" ? "the tuma CLI" : source.startsWith("mcp:") ? `${source.slice(4)} (MCP)` : source;
 
 function statusTone(entry: HistoryEntry): string {
   if (entry.status === null) return "fail";

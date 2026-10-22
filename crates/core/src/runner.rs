@@ -292,7 +292,7 @@ fn sole_collection(workspace: &Workspace) -> Option<String> {
 
 /// Checks the response against the OpenAPI spec of the request's collection, or for an unsaved request, against any
 /// spec in the workspace that has a matching operation.
-fn contract_check(
+pub fn contract_check(
     workspace: Option<&Workspace>,
     path: Option<&str>,
     file: &RequestFile,

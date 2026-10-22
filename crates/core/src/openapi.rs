@@ -931,6 +931,35 @@ pub fn discover_files(root: &Path) -> Vec<PathBuf> {
     out
 }
 
+/// A spec location as stored in the collection: URLs as they are, files relative to the workspace folder so the
+/// workspace can be cloned elsewhere.
+pub fn source_for(source: &str, cwd: &Path, workspace_root: &Path) -> String {
+    if source.contains("://") {
+        return source.to_string();
+    }
+    let absolute = cwd.join(source);
+    let absolute = absolute.canonicalize().unwrap_or(absolute);
+    let root = workspace_root
+        .canonicalize()
+        .unwrap_or_else(|_| workspace_root.to_path_buf());
+    relative_path(&absolute, &root).unwrap_or_else(|| absolute.to_string_lossy().into_owned())
+}
+
+/// `path` relative to `base`, using `..` where needed, with `/` separators.
+fn relative_path(path: &Path, base: &Path) -> Option<String> {
+    let path: Vec<_> = path.components().collect();
+    let base: Vec<_> = base.components().collect();
+    let common = path.iter().zip(&base).take_while(|(a, b)| a == b).count();
+    if common == 0 {
+        return None;
+    }
+    let ups = std::iter::repeat_n("..".to_string(), base.len() - common);
+    let downs = path[common..]
+        .iter()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned());
+    Some(ups.chain(downs).collect::<Vec<_>>().join("/"))
+}
+
 /// Imports a spec as a new collection, keeping a copy of it for contract checks and sync. `source` is recorded so
 /// the collection can be synced later.
 pub fn import(
