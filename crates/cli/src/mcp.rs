@@ -32,7 +32,8 @@ or set it once with set_variables. Write secrets as {{variables}}; their values 
 
 Check forms: \"status=201\", \"status=2xx\", \"time<500\", \"header content-type~json\", \"$.id exists\", \
 \"$.id !exists\", \"$.name == \\\"Ann\\\"\", \"$.count == 3\", \"$.email =~ ^.+@\", \"$.tags ~ admin\", \
-\"$.items length 3\", \"$.id type integer\".";
+\"$.items length 3\", \"$.id type integer\", and \"schema\" (the response matches the OpenAPI spec; import \
+one with import_openapi, which can find it on the running server).";
 
 /// Options from the command line.
 pub struct Options {
@@ -97,6 +98,9 @@ struct SendParams {
     select: Option<String>,
     /// Cut the body after this many characters (default 4000).
     max_body: Option<usize>,
+    /// Send as if saved in this collection or folder, to use its variables (such as baseUrl) and auth. Paths in a
+    /// workspace with a single collection use that collection.
+    collection: Option<String>,
     /// Save the request and its checks as a test at "Collection/Folder/Name", but only if every check passes.
     save_as: Option<String>,
     /// With save_as, replace a saved request with the same name.
@@ -152,6 +156,21 @@ struct WaitParams {
     #[serde(default)]
     vars: BTreeMap<String, String>,
     environment: Option<String>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+struct ImportParams {
+    /// A spec file (relative to the project) or URL. Leave out to look for one: spec files in the project, then the
+    /// usual URLs (/openapi.json, /v3/api-docs, /swagger.json, ...) on `server`.
+    source: Option<String>,
+    /// A running server to look for a spec on, such as http://localhost:8000.
+    server: Option<String>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+struct SyncParams {
+    /// The collection to sync. Leave out to sync every collection made from a spec.
+    collection: Option<String>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -211,6 +230,7 @@ impl Server {
                 workspace.as_ref(),
                 &request,
                 None,
+                p.collection.as_deref(),
                 environment,
                 &vars,
                 Some(&checks),
@@ -286,6 +306,7 @@ impl Server {
                     Some(&workspace),
                     &request,
                     Some(&path),
+                    None,
                     environment,
                     &vars,
                     None,
@@ -415,6 +436,7 @@ impl Server {
                     workspace: workspace.as_ref(),
                     request: &request,
                     path: None,
+                    context: None,
                     environment,
                     overrides: &vars,
                     extra_checks: None,
@@ -447,6 +469,119 @@ impl Server {
             "No response after {} ms. Last error: {last_error}",
             timeout.as_millis()
         ))
+    }
+
+    #[tool(
+        description = "Import an OpenAPI/Swagger spec as a collection: a request per operation with example bodies, \
+        auth from the security schemes, and baseUrl from the servers. Finds the spec if no source is given. Then \
+        \"schema\" checks compare responses with the spec."
+    )]
+    async fn import_openapi(&self, Parameters(p): Parameters<ImportParams>) -> CallToolResult {
+        use tuma_core::openapi::{self, Spec};
+        if self.read_only {
+            return error("Importing is turned off: this server was started with --read-only.");
+        }
+        let workspace = match runner::open_or_create(&self.start, None) {
+            Ok(w) => w,
+            Err(e) => return error(&e.to_string()),
+        };
+        let found: Result<(String, Spec), String> = match (&p.source, &p.server) {
+            (Some(source), _) => {
+                let source = crate::spec_source(source, &self.start, workspace.root());
+                match openapi::load(&source, workspace.root())
+                    .await
+                    .and_then(|t| Spec::parse(&t))
+                {
+                    Ok(spec) => Ok((source, spec)),
+                    Err(e) => Err(e),
+                }
+            }
+            (None, server) => {
+                let project = workspace
+                    .root()
+                    .parent()
+                    .unwrap_or(workspace.root())
+                    .to_path_buf();
+                let from_files = openapi::discover_files(&project).into_iter().find_map(|f| {
+                    let spec = std::fs::read_to_string(&f)
+                        .ok()
+                        .and_then(|t| Spec::parse(&t).ok())?;
+                    Some((
+                        crate::spec_source(&f.to_string_lossy(), &self.start, workspace.root()),
+                        spec,
+                    ))
+                });
+                match (from_files, server) {
+                    (Some(found), _) => Ok(found),
+                    (None, Some(server)) => openapi::discover_on_server(server)
+                        .await
+                        .ok_or_else(|| format!("No spec file in the project and none at the usual paths on {server}.")),
+                    (None, None) => Err("No spec file in the project. Pass `server` (where the API runs) or `source`.".into()),
+                }
+            }
+        };
+        let (source, spec) = match found {
+            Ok(found) => found,
+            Err(e) => return error(&e),
+        };
+        match openapi::import(&workspace, &spec, Some(&source)) {
+            Ok((path, warnings)) => {
+                let requests = runner::requests_under(&workspace, &path).unwrap_or_default();
+                ok(
+                    &json!({ "collection": path, "source": source, "requests": requests, "warnings": warnings.0 }),
+                )
+            }
+            Err(e) => error(&e.to_string()),
+        }
+    }
+
+    #[tool(
+        description = "Update collections made from a spec after the spec changed: adds new operations, updates \
+        changed URLs, and lists requests whose operation is gone. Saved bodies, auth and checks are kept."
+    )]
+    async fn sync_openapi(&self, Parameters(p): Parameters<SyncParams>) -> CallToolResult {
+        use tuma_core::openapi::{self, Spec};
+        if self.read_only {
+            return error("Syncing is turned off: this server was started with --read-only.");
+        }
+        let workspace = match self.workspace() {
+            Ok(Some(w)) => w,
+            Ok(None) => {
+                return error(
+                    "There is no workspace yet. Import a spec with import_openapi first.",
+                );
+            }
+            Err(e) => return error(&e),
+        };
+        let collections: Vec<String> = match p.collection {
+            Some(c) => vec![c],
+            None => workspace
+                .tree()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|n| n.path)
+                .collect(),
+        };
+        let mut reports = serde_json::Map::new();
+        for collection in collections {
+            let Ok(Some(source)) = workspace.read_folder(&collection).map(|f| f.openapi) else {
+                continue;
+            };
+            let result = match openapi::load(&source, workspace.root())
+                .await
+                .and_then(|t| Spec::parse(&t))
+            {
+                Ok(spec) => openapi::sync(&workspace, &collection, &spec)
+                    .map(|r| json!(r))
+                    .unwrap_or_else(|e| json!(e.to_string())),
+                Err(e) => json!(format!("could not read {source}: {e}")),
+            };
+            reports.insert(collection, result);
+        }
+        if reports.is_empty() {
+            return error("No collection here was imported from a spec.");
+        }
+        ok(&Value::Object(reports))
     }
 
     #[tool(
@@ -552,6 +687,7 @@ impl Server {
         workspace: Option<&Workspace>,
         request: &RequestFile,
         path: Option<&str>,
+        context: Option<&str>,
         environment: Option<&str>,
         vars: &[(String, String)],
         checks: Option<&Expectations>,
@@ -569,6 +705,7 @@ impl Server {
                 workspace,
                 request,
                 path,
+                context,
                 environment,
                 overrides: vars,
                 extra_checks: checks,

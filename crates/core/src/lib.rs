@@ -5,6 +5,7 @@ pub mod expect;
 pub mod history;
 pub mod http;
 pub mod import;
+pub mod openapi;
 pub mod runner;
 pub mod secrets;
 pub mod vars;

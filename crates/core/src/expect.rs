@@ -34,6 +34,10 @@ pub struct Expectations {
     pub headers: Vec<HeaderCheck>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub body: Vec<BodyCheck>,
+    /// The response must match the OpenAPI spec for its operation and status (a contract check). Needs a collection
+    /// imported from a spec.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub schema: bool,
 }
 
 impl Expectations {
@@ -465,6 +469,7 @@ enum Step {
 
 /// Parses the short form used on the command line:
 ///
+/// - `schema`: the response matches the OpenAPI spec
 /// - `status=201`, `status=2xx`
 /// - `time<500`
 /// - `header content-type~json` (contains), `header x-id` (exists), `header x-id=abc`
@@ -474,7 +479,9 @@ pub fn parse_short(text: &str) -> Result<Expectations, String> {
     let text = text.trim();
     let mut expect = Expectations::default();
     let err = || format!("can't read check \"{text}\"; see `tuma send --help` for the forms");
-    if let Some(value) = text
+    if text == "schema" {
+        expect.schema = true;
+    } else if let Some(value) = text
         .strip_prefix("status")
         .map(|s| s.trim_start())
         .and_then(|s| s.strip_prefix('='))
@@ -598,6 +605,7 @@ impl Expectations {
         }
         self.headers.extend(other.headers);
         self.body.extend(other.body);
+        self.schema |= other.schema;
     }
 }
 

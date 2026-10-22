@@ -39,6 +39,10 @@ pub struct FolderFile {
     pub variables: Vec<Variable>,
     #[serde(skip_serializing_if = "Scripts::is_empty")]
     pub scripts: Scripts,
+    /// For a collection made from an OpenAPI spec: where the spec comes from (a URL, or a path relative to the
+    /// workspace), so the collection can be synced.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub openapi: Option<String>,
 }
 
 /// `<name>.yaml`: one request. The file name (without `.yaml`) is the request's name.
@@ -49,6 +53,9 @@ pub struct RequestFile {
     pub url: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub description: String,
+    /// The OpenAPI operation this request calls, as `METHOD /path/{param}`, for sync and contract checks.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub headers: Vec<KeyValue>,
     #[serde(skip_serializing_if = "Body::is_none")]
@@ -72,6 +79,7 @@ impl Default for RequestFile {
             method: "GET".into(),
             url: String::new(),
             description: String::new(),
+            operation: None,
             headers: Vec::new(),
             body: Body::None,
             auth: None,

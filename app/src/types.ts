@@ -44,6 +44,8 @@ export interface RequestFile {
   method: string;
   url: string;
   description?: string;
+  /** The OpenAPI operation this request calls, such as "POST /users/{id}". */
+  operation?: string | null;
   headers?: Partial<KeyValue>[];
   body?: Body;
   auth?: Auth | null;
@@ -68,6 +70,8 @@ export interface FolderFile {
   headers?: Partial<KeyValue>[];
   variables?: Variable[];
   scripts?: Scripts;
+  /** Where the spec of a collection imported from OpenAPI comes from. */
+  openapi?: string | null;
 }
 
 /** A variable with its secret value filled in from the keychain. */

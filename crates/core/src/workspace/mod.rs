@@ -237,6 +237,23 @@ impl Workspace {
         write_yaml(&self.abs(path)?, request)
     }
 
+    /// Reads a file that is not a request or folder file, such as a collection's spec copy.
+    pub fn read_file(&self, path: &str) -> Result<String> {
+        let abs = self.abs(path)?;
+        fs::read_to_string(&abs).map_err(io_err(&abs))
+    }
+
+    /// Writes a file that is not a request or folder file. It must not end in `.yaml`, which would make it a request.
+    pub fn write_file(&self, path: &str, contents: &str) -> Result<()> {
+        if path.ends_with(".yaml") {
+            return Err(Error::InvalidPath(path.to_string()));
+        }
+        let abs = self.abs(path)?;
+        let tmp = abs.with_extension("tmp");
+        fs::write(&tmp, contents).map_err(io_err(&tmp))?;
+        fs::rename(&tmp, &abs).map_err(io_err(&abs))
+    }
+
     /// The settings of a collection or folder. A missing `_folder.yaml` reads as empty.
     pub fn read_folder(&self, path: &str) -> Result<FolderFile> {
         read_yaml_or_default(&self.abs(path)?.join(FOLDER_FILE))

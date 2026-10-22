@@ -29,6 +29,7 @@ export interface Draft {
   auth: Auth | null;
   settings: Settings;
   description: string;
+  operation: string | null;
   expect: Record<string, unknown>;
   scripts: Scripts;
 }
@@ -57,6 +58,7 @@ export const newDraft = (): Draft => ({
   auth: null,
   settings: defaultSettings(),
   description: "",
+  operation: null,
   expect: {},
   scripts: {},
 });
@@ -69,6 +71,7 @@ export function toRequestFile(d: Draft): RequestFile {
     method: d.method,
     url: d.url,
     description: d.description,
+    operation: d.operation,
     headers: d.headers,
     body: toBody(d),
     auth: d.auth,
@@ -110,6 +113,7 @@ export function fromRequestFile(r: RequestFile, path: string | null, name: strin
     auth: r.auth ?? null,
     settings: { ...defaultSettings(), ...r.settings },
     description: r.description ?? "",
+    operation: r.operation ?? null,
     expect: r.expect ?? {},
     scripts: r.scripts ?? {},
   };

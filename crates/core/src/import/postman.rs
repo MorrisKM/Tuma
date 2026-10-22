@@ -16,7 +16,7 @@ use crate::workspace::files::{
 
 /// What a Postman export file holds.
 pub enum Export {
-    Collection(FolderTree),
+    Collection(Box<FolderTree>),
     /// An environment, or Postman's globals (`name` is then "Globals").
     Environment {
         name: String,
@@ -29,7 +29,7 @@ pub enum Export {
 pub fn parse(json: &str, warnings: &mut Warnings) -> Result<Export, String> {
     let value: Value = serde_json::from_str(json).map_err(|e| format!("not valid JSON: {e}"))?;
     if value.get("info").is_some() && value.get("item").is_some() {
-        return Ok(Export::Collection(collection(&value, warnings)));
+        return Ok(Export::Collection(Box::new(collection(&value, warnings))));
     }
     if let Some(values) = value.get("values").and_then(Value::as_array) {
         let globals = str_at(&value, "_postman_variable_scope") == "globals";
@@ -123,6 +123,7 @@ fn request(item: &Value, name: &str, warnings: &mut Warnings) -> RequestFile {
         },
         url: url(req.get("url"), name, warnings),
         description: description(req.get("description")),
+        operation: None,
         headers: array(req.get("header")).iter().map(key_value).collect(),
         body: body(req.get("body"), name, warnings),
         auth: auth(req.get("auth"), name, warnings),

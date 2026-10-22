@@ -62,11 +62,34 @@ enum Command {
         #[arg(long)]
         read_only: bool,
     },
+    /// Import an OpenAPI or Swagger spec as a collection, find one, or sync a collection with its spec.
+    #[command(subcommand)]
+    Openapi(OpenapiCommand),
     /// Create a workspace: .tuma/ at the root of the current project.
     Init {
         /// The workspace's name. Defaults to the project folder's name.
         #[arg(long)]
         name: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum OpenapiCommand {
+    /// Import a spec (a file or URL, JSON or YAML) as a new collection.
+    Import { source: String },
+    /// Look for a spec: spec files in the project, and the usual URLs on a running server.
+    Discover {
+        /// A running server to ask, such as http://localhost:8000.
+        #[arg(long)]
+        server: Option<String>,
+        /// Import the first spec found.
+        #[arg(long)]
+        import: bool,
+    },
+    /// Update a collection from its spec: add new operations, update changed ones, list removed ones.
+    Sync {
+        /// The collection. Defaults to every collection made from a spec.
+        collection: Option<String>,
     },
 }
 
@@ -93,6 +116,10 @@ struct SendArgs {
     /// A check on the response. Repeat for more; see above for the forms.
     #[arg(short = 'x', long = "expect")]
     checks: Vec<String>,
+    /// Send as if saved in this collection or folder, to use its variables (such as baseUrl) and auth. A path URL
+    /// in a workspace with a single collection uses that collection.
+    #[arg(long = "in", value_name = "FOLDER")]
+    context: Option<String>,
     /// Save the request with its checks as a test, at "Collection/Folder/Name", if every check passes.
     #[arg(long, value_name = "PATH")]
     save: Option<String>,
@@ -178,6 +205,7 @@ async fn run(cli: Cli) -> anyhow::Result<bool> {
         Command::Send(args) => send(&start, *args).await,
         Command::Run(args) => run_saved(&start, args, false).await,
         Command::Test(args) => run_saved(&start, args, true).await,
+        Command::Openapi(command) => openapi(&start, command).await,
         Command::Mcp {
             environment,
             allow_hosts,
@@ -228,6 +256,7 @@ async fn send(start: &Path, args: SendArgs) -> anyhow::Result<bool> {
             workspace: workspace.as_ref(),
             request: &request,
             path: None,
+            context: args.context.as_deref(),
             environment: args.common.environment.as_deref(),
             overrides: &args.common.vars,
             extra_checks: Some(&checks),
@@ -354,6 +383,7 @@ async fn run_saved(start: &Path, args: RunArgs, only_tests: bool) -> anyhow::Res
                 workspace: Some(&workspace),
                 request: &request,
                 path: Some(&path),
+                context: None,
                 environment: args.common.environment.as_deref(),
                 overrides: &args.common.vars,
                 extra_checks: None,
@@ -403,4 +433,148 @@ async fn run_saved(start: &Path, args: RunArgs, only_tests: bool) -> anyhow::Res
         );
     }
     Ok(summary.failed == 0)
+}
+
+async fn openapi(start: &Path, command: OpenapiCommand) -> anyhow::Result<bool> {
+    use tuma_core::openapi::{self, Spec};
+
+    let import = |workspace: &Workspace, spec: &Spec, source: &str| -> anyhow::Result<()> {
+        let (path, warnings) = openapi::import(workspace, spec, Some(source))?;
+        let requests = runner::requests_under(workspace, &path)?.len();
+        println!("Imported \"{path}\": {requests} requests from {source}");
+        for warning in warnings.0 {
+            println!("  ! {warning}");
+        }
+        Ok(())
+    };
+
+    match command {
+        OpenapiCommand::Import { source } => {
+            let workspace = runner::open_or_create(start, None)?;
+            let source = spec_source(&source, start, workspace.root());
+            let text = openapi::load(&source, workspace.root())
+                .await
+                .map_err(anyhow::Error::msg)?;
+            let spec = Spec::parse(&text).map_err(anyhow::Error::msg)?;
+            import(&workspace, &spec, &source)?;
+            Ok(true)
+        }
+        OpenapiCommand::Discover {
+            server,
+            import: do_import,
+        } => {
+            let project = runner::find_workspace(start)
+                .and_then(|w| {
+                    if w.ends_with(runner::HIDDEN_WORKSPACE) {
+                        w.parent().map(Path::to_path_buf)
+                    } else {
+                        Some(w)
+                    }
+                })
+                .unwrap_or_else(|| start.to_path_buf());
+            let mut found: Vec<(String, Spec)> = Vec::new();
+            for file in openapi::discover_files(&project) {
+                if let Ok(spec) = std::fs::read_to_string(&file)
+                    .map_err(|e| e.to_string())
+                    .and_then(|t| Spec::parse(&t))
+                {
+                    found.push((file.to_string_lossy().into_owned(), spec));
+                }
+            }
+            if let Some(server) = &server {
+                if let Some((url, spec)) = openapi::discover_on_server(server).await {
+                    found.push((url, spec));
+                } else {
+                    println!("No spec at the usual paths on {server}.");
+                }
+            }
+            if found.is_empty() {
+                println!(
+                    "No OpenAPI spec found. Try --server http://localhost:<port> with your API running."
+                );
+                return Ok(false);
+            }
+            for (source, spec) in &found {
+                println!("{}  ({source})", spec.title());
+            }
+            if do_import {
+                let workspace = runner::open_or_create(start, None)?;
+                let (source, spec) = &found[0];
+                let source = spec_source(source, start, workspace.root());
+                import(&workspace, spec, &source)?;
+            }
+            Ok(true)
+        }
+        OpenapiCommand::Sync { collection } => {
+            let Some(workspace) = find_workspace(start)? else {
+                bail!("no workspace here or above {}", start.display());
+            };
+            let collections: Vec<String> = match collection {
+                Some(c) => vec![c],
+                None => workspace.tree()?.into_iter().map(|n| n.path).collect(),
+            };
+            let mut synced = 0;
+            for collection in collections {
+                let Some(source) = workspace.read_folder(&collection)?.openapi else {
+                    continue;
+                };
+                let text = openapi::load(&source, workspace.root())
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                let spec = Spec::parse(&text).map_err(anyhow::Error::msg)?;
+                let report = openapi::sync(&workspace, &collection, &spec)?;
+                synced += 1;
+                println!(
+                    "{collection}: {} added, {} updated, {} no longer in the spec",
+                    report.added.len(),
+                    report.updated.len(),
+                    report.removed.len()
+                );
+                for path in &report.added {
+                    println!("  + {path}");
+                }
+                for path in &report.updated {
+                    println!("  ~ {path}");
+                }
+                for path in &report.removed {
+                    println!("  - {path} (kept; delete it if the endpoint is gone)");
+                }
+            }
+            if synced == 0 {
+                bail!(
+                    "no collection here was imported from a spec; use `tuma openapi import` first"
+                );
+            }
+            Ok(true)
+        }
+    }
+}
+
+/// A spec location as stored in the collection: URLs as they are, files relative to the workspace folder so the
+/// workspace can be cloned elsewhere.
+pub(crate) fn spec_source(source: &str, cwd: &Path, workspace_root: &Path) -> String {
+    if source.contains("://") {
+        return source.to_string();
+    }
+    let absolute = cwd.join(source);
+    let absolute = absolute.canonicalize().unwrap_or(absolute);
+    let root = workspace_root
+        .canonicalize()
+        .unwrap_or_else(|_| workspace_root.to_path_buf());
+    relative_path(&absolute, &root).unwrap_or_else(|| absolute.to_string_lossy().into_owned())
+}
+
+/// `path` relative to `base`, using `..` where needed, with `/` separators.
+fn relative_path(path: &Path, base: &Path) -> Option<String> {
+    let path: Vec<_> = path.components().collect();
+    let base: Vec<_> = base.components().collect();
+    let common = path.iter().zip(&base).take_while(|(a, b)| a == b).count();
+    if common == 0 {
+        return None;
+    }
+    let ups = std::iter::repeat_n("..".to_string(), base.len() - common);
+    let downs = path[common..]
+        .iter()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned());
+    Some(ups.chain(downs).collect::<Vec<_>>().join("/"))
 }

@@ -11,6 +11,7 @@ use serde_json::Value;
 use crate::expect::{self, CheckResult, Expectations};
 use crate::history::{Entry, History};
 use crate::http::{self, Header};
+use crate::openapi;
 use crate::secrets::SecretStore;
 use crate::workspace::files::RequestFile;
 use crate::workspace::{self, Node, NodeKind, Workspace};
@@ -118,6 +119,9 @@ pub struct Job<'a> {
     pub request: &'a RequestFile,
     /// Where the request is saved, for inheritance.
     pub path: Option<&'a str>,
+    /// For a request that is not saved: a collection or folder to send it as if it were saved in, so it gets that
+    /// folder's variables and auth.
+    pub context: Option<&'a str>,
     pub environment: Option<&'a str>,
     /// One-off variable values that win over every scope.
     pub overrides: &'a [(String, String)],
@@ -153,10 +157,25 @@ pub async fn send(job: Job<'_>, detail: &Detail) -> Outcome {
         .unwrap_or_default();
     let mut file = job.request.clone();
     file.url = absolute_url(&file.url);
+    // Inheritance works from a request file's location, so a folder context becomes a file inside it.
+    let inherit_from = match (job.path, job.context, job.workspace) {
+        (Some(path), _, _) => Some(path.to_string()),
+        (None, Some(folder), _) => Some(format!("{}/request.yaml", folder.trim_matches('/'))),
+        (None, None, Some(ws)) if job.request.url.starts_with('/') => {
+            sole_collection(ws).map(|c| format!("{c}/request.yaml"))
+        }
+        _ => None,
+    };
 
     let (prepared, secrets) = match job.workspace {
         Some(ws) => {
-            match ws.prepare(&file, job.path, job.environment, job.overrides, job.secrets) {
+            match ws.prepare(
+                &file,
+                inherit_from.as_deref(),
+                job.environment,
+                job.overrides,
+                job.secrets,
+            ) {
                 Ok(prepared) => (
                     prepared,
                     ws.secret_values(job.environment, job.secrets)
@@ -171,7 +190,8 @@ pub async fn send(job: Job<'_>, detail: &Detail) -> Outcome {
     let unresolved = prepared.unresolved;
     if unresolved.contains("baseUrl") && job.request.url.starts_with('/') {
         let message = format!(
-            "\"{}\" is a path, so it needs a baseUrl variable; set one in an environment or use a full URL",
+            "\"{}\" is a path, so it needs a baseUrl variable: set one in an environment, pass one for this call, send it \
+             in a collection that has one, or use a full URL",
             job.request.url
         );
         return failed(job.path, &file, message, unresolved, &secrets);
@@ -221,7 +241,16 @@ pub async fn send(job: Job<'_>, detail: &Detail) -> Outcome {
     if let Some(extra) = job.extra_checks {
         expect.merge(extra.clone());
     }
-    let checks: Vec<CheckResult> = expect::evaluate(&expect, &response)
+    let mut checks = expect::evaluate(&expect, &response);
+    if expect.schema {
+        checks.push(contract_check(
+            job.workspace,
+            inherit_from.as_deref(),
+            &file,
+            &response,
+        ));
+    }
+    let checks: Vec<CheckResult> = checks
         .into_iter()
         .map(|c| CheckResult {
             actual: mask(&c.actual),
@@ -251,6 +280,59 @@ pub async fn send(job: Job<'_>, detail: &Detail) -> Outcome {
         checks,
         unresolved: unresolved.into_iter().collect(),
     }
+}
+
+/// The workspace's only collection, if it has exactly one: a path such as `/users` then means "in that API".
+fn sole_collection(workspace: &Workspace) -> Option<String> {
+    match workspace.tree().ok()?.as_slice() {
+        [only] => Some(only.path.clone()),
+        _ => None,
+    }
+}
+
+/// Checks the response against the OpenAPI spec of the request's collection, or for an unsaved request, against any
+/// spec in the workspace that has a matching operation.
+fn contract_check(
+    workspace: Option<&Workspace>,
+    path: Option<&str>,
+    file: &RequestFile,
+    response: &http::Response,
+) -> CheckResult {
+    let missing = |why: &str| CheckResult {
+        check: "response matches the spec".into(),
+        passed: false,
+        expected: "an OpenAPI spec for this request".into(),
+        actual: why.into(),
+    };
+    let Some(workspace) = workspace else {
+        return missing("no workspace");
+    };
+    let url_path = url::Url::parse(&response.url)
+        .map(|u| u.path().to_string())
+        .unwrap_or_default();
+    let specs = match path.and_then(|p| openapi::snapshot_for(workspace, p)) {
+        Some(spec) => vec![spec],
+        None => openapi::snapshots(workspace),
+    };
+    let found = specs.iter().find_map(|spec| {
+        let operation = file
+            .operation
+            .clone()
+            .or_else(|| spec.find_operation(&file.method, &url_path))?;
+        Some((spec, operation))
+    });
+    let Some((spec, operation)) = found else {
+        return missing(
+            "no imported spec has this operation; import one with `tuma openapi import`",
+        );
+    };
+    let content_type = response
+        .headers
+        .iter()
+        .find(|h| h.name.eq_ignore_ascii_case("content-type"))
+        .map(|h| h.value.as_str())
+        .unwrap_or_default();
+    spec.check_response(&operation, response.status, content_type, &response.body)
 }
 
 fn failed(

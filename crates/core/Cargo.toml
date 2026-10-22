@@ -18,6 +18,7 @@ http = "1"
 http-body-util = "0.1"
 hyper = { version = "1", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
+jsonschema = { version = "0.60", default-features = false }
 keyring = "4"
 mime_guess = "2"
 regex = "1"
