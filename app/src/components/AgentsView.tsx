@@ -60,6 +60,10 @@ export function AgentsView() {
           <li>
             <code>--read-only</code>: don't let agents save requests or change variables.
           </li>
+          <li>
+            <code>--max-load-users 50</code> and <code>--max-load-seconds 60</code>: the most an agent's performance test
+            may use (the defaults). Agents load-test only the hosts they may call.
+          </li>
         </ul>
         <p className="hint">The same is available without MCP: run tuma --help.</p>
       </div>

@@ -63,8 +63,9 @@ The first stable release.
 - The `tuma` command: `send`, `run`, `test`, `check`, `import`, `export`, `docs`, `mock`, `perf`, `openapi`, `grpc`,
   `ws`, `auth`, with `--json` output and exit codes for CI
 - `tuma mcp`: an MCP server so coding agents can test the API they are building, write its scripts and tests, and
-  document it (describe requests, save examples, generate docs), with host rules and secrets masked; the app's Scripts
-  tab writes the prompt for them
+  document it (describe requests, save examples, generate docs) and load-test it (`run_performance_test`, capped at
+  50 users and 60 seconds unless raised with `--max-load-users` and `--max-load-seconds`), with host rules and
+  secrets masked; the app's Scripts tab writes the prompt for them
 
 ### App
 

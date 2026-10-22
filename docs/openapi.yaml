@@ -1,0 +1,179 @@
+openapi: "3.1.0"
+info:
+  title: test
+  version: "1.0.0"
+  description: |-
+    Sends a test card payment to **httpbin.org's echo endpoint** (`/anything/pay`). This is not a real payment API: httpbin accepts any method, path and body and sends back the request it received as JSON. Use it to check what Tuma actually sends (body, headers, and fields after encryption).
+    
+    ### Body (JSON)
+    
+    | Field | Type | Meaning |
+    |---|---|---|
+    | `card` | string | Card number. The saved request uses Visa's public test number `4111111111111111`. Never put a real card number here: use a `{{cardNumber}}` secret variable. |
+    | `amount` | number | Amount to charge, in the currency's major unit (for example `10`). |
+    | `currency` | string | ISO 4217 code, for example `KES`. |
+    
+    ### Auth
+    
+    None. httpbin.org needs no credentials, and this request sends no `Authorization` header.
+    
+    ### Response
+    
+    Always `200 OK` with `application/json`. The response echoes the request:
+    - `json`: the parsed body, or `null` when the body isn't valid JSON
+    - `data`: the raw body text
+    - `headers`, `method`, `url`, `args`, `form`, `files`, `origin` (the caller's IP)
+    
+    ### Errors
+    
+    The endpoint does no validation, so a missing field, a wrong type or malformed JSON still gets `200` (see the *Malformed JSON* example: `json` is `null`). Only these come back as errors:
+    - **5xx / 503**: httpbin.org is overloaded or down. Retry later.
+    - **Network or timeout errors**: no HTTP response; Tuma reports a send failure.
+paths:
+  /anything/pay:
+    post:
+      summary: test
+      operationId: test
+      tags:
+      - 1st collection
+      description: |-
+        Sends a test card payment to **httpbin.org's echo endpoint** (`/anything/pay`). This is not a real payment API: httpbin accepts any method, path and body and sends back the request it received as JSON. Use it to check what Tuma actually sends (body, headers, and fields after encryption).
+        
+        ### Body (JSON)
+        
+        | Field | Type | Meaning |
+        |---|---|---|
+        | `card` | string | Card number. The saved request uses Visa's public test number `4111111111111111`. Never put a real card number here: use a `{{cardNumber}}` secret variable. |
+        | `amount` | number | Amount to charge, in the currency's major unit (for example `10`). |
+        | `currency` | string | ISO 4217 code, for example `KES`. |
+        
+        ### Auth
+        
+        None. httpbin.org needs no credentials, and this request sends no `Authorization` header.
+        
+        ### Response
+        
+        Always `200 OK` with `application/json`. The response echoes the request:
+        - `json`: the parsed body, or `null` when the body isn't valid JSON
+        - `data`: the raw body text
+        - `headers`, `method`, `url`, `args`, `form`, `files`, `origin` (the caller's IP)
+        
+        ### Errors
+        
+        The endpoint does no validation, so a missing field, a wrong type or malformed JSON still gets `200` (see the *Malformed JSON* example: `json` is `null`). Only these come back as errors:
+        - **5xx / 503**: httpbin.org is overloaded or down. Retry later.
+        - **Network or timeout errors**: no HTTP response; Tuma reports a send failure.
+      requestBody:
+        content:
+          application/json:
+            example:
+              card: "4111111111111111"
+              amount: 10
+              currency: KES
+            schema:
+              type: object
+              properties:
+                card:
+                  type: string
+                amount:
+                  type: integer
+                currency:
+                  type: string
+      responses:
+        "200":
+          description: Echoed payment, Malformed JSON (still 200)
+          content:
+            application/json:
+              examples:
+                Echoed payment:
+                  value:
+                    args: {}
+                    data: |-
+                      {
+                        "card": "4111111111111111",
+                        "amount": 10,
+                        "currency": "KES"
+                      }
+                    files: {}
+                    form: {}
+                    headers:
+                      Accept: "*/*"
+                      Accept-Encoding: gzip, deflate, br
+                      Content-Length: "69"
+                      Content-Type: application/json
+                      Host: httpbin.org
+                      User-Agent: Tuma/1.0.0
+                    json:
+                      amount: 10
+                      card: "4111111111111111"
+                      currency: KES
+                    method: POST
+                    origin: "203.0.113.10"
+                    url: https://httpbin.org/anything/pay
+                Malformed JSON (still 200):
+                  value:
+                    args: {}
+                    data: "{\"amount\": "
+                    files: {}
+                    form: {}
+                    headers:
+                      Accept: "*/*"
+                      Accept-Encoding: gzip, deflate, br
+                      Content-Length: "11"
+                      Content-Type: application/json
+                      Host: httpbin.org
+                      User-Agent: Tuma/1.0.0
+                    json: null
+                    method: POST
+                    origin: "203.0.113.10"
+                    url: https://httpbin.org/anything/pay
+              schema:
+                type: object
+                properties:
+                  args:
+                    type: object
+                    properties: {}
+                  data:
+                    type: string
+                  files:
+                    type: object
+                    properties: {}
+                  form:
+                    type: object
+                    properties: {}
+                  headers:
+                    type: object
+                    properties:
+                      Accept:
+                        type: string
+                      Accept-Encoding:
+                        type: string
+                      Content-Length:
+                        type: string
+                      Content-Type:
+                        type: string
+                      Host:
+                        type: string
+                      User-Agent:
+                        type: string
+                  json:
+                    type: object
+                    properties:
+                      amount:
+                        type: integer
+                      card:
+                        type: string
+                      currency:
+                        type: string
+                  method:
+                    type: string
+                  origin:
+                    type: string
+                  url:
+                    type: string
+                    format: uri
+servers:
+- url: https://httpbin.org
+tags:
+- name: 1st collection
+

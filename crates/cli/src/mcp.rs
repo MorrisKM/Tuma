@@ -41,6 +41,10 @@ Check forms: \"status=201\", \"status=2xx\", \"time<500\", \"header content-type
 \"$.items length 3\", \"$.id type integer\", and \"schema\" (the response matches the OpenAPI spec; import \
 one with import_openapi, which can find it on the running server).
 
+Performance: run_performance_test load-tests a request, folder or collection on a server you may test (localhost and \
+the environment's hosts) and returns throughput, error rate, latency percentiles and passive security findings. Use \
+max_p95_ms / max_error_rate to check a change didn't make it slower; start small. Users and duration are capped.
+
 API docs: generate_docs writes OpenAPI, Markdown or HTML from the saved requests. To make them good, first give each \
 request a description with describe_request and save real responses with save_example (send the request, then save \
 what came back, success and error cases); then generate the docs and write them where the user asked.";
@@ -51,6 +55,10 @@ pub struct Options {
     pub environment: Option<String>,
     pub allow_hosts: Vec<String>,
     pub read_only: bool,
+    /// The most virtual users a performance test from an agent may use.
+    pub max_load_users: u32,
+    /// The longest a performance test from an agent may run, in seconds.
+    pub max_load_seconds: u64,
 }
 
 #[derive(Clone)]
@@ -59,6 +67,8 @@ pub struct Server {
     environment: Option<String>,
     allow_hosts: Vec<String>,
     read_only: bool,
+    max_load_users: u32,
+    max_load_seconds: u64,
     tool_router: ToolRouter<Self>,
 }
 
@@ -72,6 +82,8 @@ pub async fn serve(options: Options) -> anyhow::Result<()> {
             .map(|h| h.to_ascii_lowercase())
             .collect(),
         read_only: options.read_only,
+        max_load_users: options.max_load_users.clamp(1, tuma_core::perf::MAX_USERS),
+        max_load_seconds: options.max_load_seconds.max(1),
         tool_router: Server::tool_router(),
     };
     let service = server.serve(rmcp::transport::stdio()).await?;
@@ -159,6 +171,39 @@ struct DescribeParams {
     path: String,
     /// What the request does, its parameters' meaning and its errors, in Markdown. Replaces the current text.
     description: String,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+struct PerfParams {
+    /// A saved request's path, or a folder's or collection's (its requests are sent one after another).
+    scope: String,
+    /// Virtual users sending at the same time. Default 10; the server caps it (50 unless the user raised it).
+    #[serde(default)]
+    users: Option<u32>,
+    /// How long to run, in seconds. Default 20; capped (60 unless the user raised it). 0 runs `iterations` instead.
+    #[serde(default)]
+    duration_s: Option<u64>,
+    /// With duration_s 0: how many times each user goes through the requests. Still stops at the time cap.
+    #[serde(default)]
+    iterations: Option<u32>,
+    /// Start the users over this many seconds.
+    #[serde(default)]
+    ramp_up_s: Option<u64>,
+    /// Think time between a user's requests, in milliseconds.
+    #[serde(default)]
+    delay_ms: Option<u64>,
+    /// The environment to use. Defaults to the server's.
+    #[serde(default)]
+    environment: Option<String>,
+    /// Fail when the 95th percentile latency is above this many milliseconds.
+    #[serde(default)]
+    max_p95_ms: Option<f64>,
+    /// Fail when more than this percentage of requests fail.
+    #[serde(default)]
+    max_error_rate: Option<f64>,
+    /// Also write the report to this file (.html or .json), relative to the project.
+    #[serde(default)]
+    report: Option<String>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -765,6 +810,143 @@ impl Server {
             Ok(()) => ok(&json!({ "saved": path, "next": "call run_saved to run them" })),
             Err(e) => error(&e.to_string()),
         }
+    }
+
+    #[tool(
+        description = "Load-test a saved request, folder or collection: virtual users send its requests over and over, \
+        then you get throughput, error rate, latency percentiles (p50 to p99) per request, passive security findings \
+        (headers, cookies, CORS, HTTPS, leaks) and pass/fail against max_p95_ms and max_error_rate. Only localhost and \
+        the environment's hosts may be tested; users and duration are capped. Scripts don't run during it."
+    )]
+    async fn run_performance_test(&self, Parameters(p): Parameters<PerfParams>) -> CallToolResult {
+        if p.report.is_some() && self.read_only {
+            return error(
+                "Writing files is turned off: this server was started with --read-only. Leave out report.",
+            );
+        }
+        let workspace = match self.workspace() {
+            Ok(Some(w)) => w,
+            Ok(None) => return error("There is no workspace yet."),
+            Err(e) => return error(&e),
+        };
+        let scope = Self::resolve(&workspace, &p.scope);
+        let environment = p.environment.or_else(|| self.environment.clone());
+        let network = match tuma_core::settings::network_for(Some(&workspace), &EnvThenKeychain) {
+            Ok(n) => n,
+            Err(e) => return error(&e),
+        };
+        let (targets, mut notes) = match tuma_core::perf::prepare(
+            &workspace,
+            Some(&scope),
+            environment.as_deref(),
+            &EnvThenKeychain,
+            Some(&network),
+        )
+        .await
+        {
+            Ok(t) => t,
+            Err(e) => return error(&e),
+        };
+        // The same host rules as send_request: localhost, the environment's hosts, and what the user allowed.
+        let allow = self.host_policy(Some(&workspace), environment.as_deref());
+        let mut blocked: Vec<String> = targets
+            .iter()
+            .filter_map(|t| runner::host_of(&t.request.url))
+            .filter(|h| !allow(h))
+            .collect();
+        blocked.sort();
+        blocked.dedup();
+        if !blocked.is_empty() {
+            return error(&format!(
+                "{} is not a host agents may load-test. Agents may test localhost and the hosts in the selected \
+                 environment; the user can allow more with `tuma mcp --allow-host {}`",
+                blocked.join(", "),
+                blocked[0]
+            ));
+        }
+        let wanted_users = p.users.unwrap_or(10).max(1);
+        let wanted_seconds = p.duration_s.unwrap_or(20);
+        let users = wanted_users.min(self.max_load_users);
+        if users < wanted_users {
+            notes.push(format!("users capped at {users} (the server's limit; the user can raise it with --max-load-users)"));
+        }
+        let duration_s = wanted_seconds.min(self.max_load_seconds);
+        if duration_s < wanted_seconds {
+            notes.push(format!("duration capped at {duration_s} s (the server's limit; the user can raise it with --max-load-seconds)"));
+        }
+        let options = tuma_core::perf::Options {
+            users,
+            duration_s,
+            iterations: p.iterations.unwrap_or(1),
+            ramp_up_s: p.ramp_up_s.unwrap_or(0).min(self.max_load_seconds),
+            delay_ms: p.delay_ms.unwrap_or(0),
+            max_p95_ms: p.max_p95_ms,
+            max_error_rate: p.max_error_rate,
+        };
+        // Iterations have no time of their own: the time cap still ends the run.
+        let (stop, stopped) = tokio::sync::watch::channel(false);
+        let cap = std::time::Duration::from_secs(self.max_load_seconds + options.ramp_up_s);
+        let stopper = tokio::spawn(async move {
+            tokio::time::sleep(cap).await;
+            let _ = stop.send(true);
+        });
+        let name = scope.trim_end_matches(".yaml").to_string();
+        let report = tuma_core::perf::run(
+            &name,
+            targets,
+            options,
+            environment,
+            notes,
+            network,
+            Arc::new(|_| {}),
+            stopped,
+        )
+        .await;
+        stopper.abort();
+
+        let mut written = None;
+        if let Some(file) = &p.report {
+            let path = self.start.join(file);
+            let text = if path.extension().is_some_and(|e| e == "json") {
+                tuma_core::perf::report::json(&report)
+            } else {
+                tuma_core::perf::report::html(&report)
+            };
+            if let Err(e) = std::fs::write(&path, text) {
+                return error(&format!(
+                    "the test ran, but {} could not be written: {e}",
+                    path.display()
+                ));
+            }
+            written = Some(path);
+        }
+        ok(&json!({
+            "scope": name,
+            "passed": report.passed,
+            "failures": report.failures,
+            "stoppedAtTimeCap": report.stopped,
+            "elapsedMs": report.elapsed_ms,
+            "users": report.options.users,
+            "requests": report.requests,
+            "errors": report.errors,
+            "errorRate": (report.error_rate * 100.0).round() / 100.0,
+            "throughputPerSecond": (report.throughput * 10.0).round() / 10.0,
+            "latencyMs": report.latency,
+            "perRequest": report.per_request.iter().map(|r| json!({
+                "name": r.name,
+                "path": r.path,
+                "method": r.method,
+                "requests": r.requests,
+                "errors": r.errors,
+                "statuses": r.statuses,
+                "p50Ms": r.latency.p50,
+                "p95Ms": r.latency.p95,
+                "p99Ms": r.latency.p99,
+            })).collect::<Vec<_>>(),
+            "securityFindings": report.findings,
+            "notes": report.notes,
+            "report": written,
+        }))
     }
 
     #[tool(

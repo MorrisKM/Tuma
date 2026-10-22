@@ -63,6 +63,12 @@ enum Command {
         /// Don't let agents save requests or change variables.
         #[arg(long)]
         read_only: bool,
+        /// The most virtual users an agent's performance test may use (at most 200).
+        #[arg(long, default_value_t = 50)]
+        max_load_users: u32,
+        /// The longest an agent's performance test may run, in seconds.
+        #[arg(long, default_value_t = 60)]
+        max_load_seconds: u64,
     },
     /// Import a file into the workspace: an OpenAPI/Swagger spec, a Postman collection or environment, or a HAR file.
     Import { file: PathBuf },
@@ -701,12 +707,16 @@ async fn run(cli: Cli) -> anyhow::Result<bool> {
             environment,
             allow_hosts,
             read_only,
+            max_load_users,
+            max_load_seconds,
         } => {
             mcp::serve(mcp::Options {
                 start,
                 environment,
                 allow_hosts,
                 read_only,
+                max_load_users,
+                max_load_seconds,
             })
             .await?;
             Ok(true)
