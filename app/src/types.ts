@@ -48,6 +48,8 @@ export interface RequestFile {
   body?: Body;
   auth?: Auth | null;
   settings?: Settings;
+  /** Checks on the response (status, headers, JSON paths); kept as is, the editor does not show them yet. */
+  expect?: Record<string, unknown>;
   scripts?: Scripts;
 }
 

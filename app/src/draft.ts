@@ -1,6 +1,6 @@
 // The request being edited. It keeps more than a request file does (the query table, body text for every body type)
 // so switching tabs or body types never loses what was typed, and it carries fields the editor does not show yet
-// (description, scripts) so saving never drops them.
+// (description, checks, scripts) so saving never drops them.
 
 import type { Auth, Body, KeyValue, Part, RequestFile, Scripts, Settings } from "./types";
 
@@ -29,6 +29,7 @@ export interface Draft {
   auth: Auth | null;
   settings: Settings;
   description: string;
+  expect: Record<string, unknown>;
   scripts: Scripts;
 }
 
@@ -56,6 +57,7 @@ export const newDraft = (): Draft => ({
   auth: null,
   settings: defaultSettings(),
   description: "",
+  expect: {},
   scripts: {},
 });
 
@@ -71,6 +73,7 @@ export function toRequestFile(d: Draft): RequestFile {
     body: toBody(d),
     auth: d.auth,
     settings: d.settings,
+    expect: d.expect,
     scripts: d.scripts,
   };
 }
@@ -107,6 +110,7 @@ export function fromRequestFile(r: RequestFile, path: string | null, name: strin
     auth: r.auth ?? null,
     settings: { ...defaultSettings(), ...r.settings },
     description: r.description ?? "",
+    expect: r.expect ?? {},
     scripts: r.scripts ?? {},
   };
   d.params = parseQuery(d.url);

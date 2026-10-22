@@ -1,5 +1,5 @@
 [package]
-name = "tuma"
+name = "tuma-app"
 description = "A fast, local-first API client"
 version.workspace = true
 edition.workspace = true

@@ -87,10 +87,11 @@ async fn send_request(
                 &request,
                 path.as_deref(),
                 environment.as_deref(),
+                &[],
                 workspace::secrets(),
             )
             .map_err(|e| ErrorView::new("workspace", e.to_string()))?,
-        None => prepare_standalone(&request),
+        None => prepare_standalone(&request, &[]),
     };
     let unresolved: Vec<String> = prepared.unresolved.into_iter().collect();
 
@@ -118,6 +119,7 @@ async fn send_request(
             .ok()
             .map(|r| r.timing.total.as_secs_f64() * 1000.0),
         size: result.as_ref().ok().map(|r| r.body.len()),
+        source: None,
     };
     // Failing to record history must not fail the request.
     if let Err(error) = history.append(&entry) {

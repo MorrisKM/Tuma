@@ -283,6 +283,50 @@ impl Workspace {
         Ok(self.rel(&path))
     }
 
+    /// Makes sure a collection and folder path such as `Users API/Admin` exists, creating what is missing, and
+    /// returns it with names made safe.
+    pub fn ensure_folder(&self, path: &str) -> Result<String> {
+        let mut current: Option<String> = None;
+        for segment in path.split('/').map(str::trim).filter(|s| !s.is_empty()) {
+            let name = file_name(segment);
+            let candidate = match &current {
+                Some(parent) => format!("{parent}/{name}"),
+                None => name.clone(),
+            };
+            if !self.abs(&candidate)?.is_dir() {
+                self.create_folder(current.as_deref(), &name)?;
+            }
+            current = Some(candidate);
+        }
+        current.ok_or_else(|| Error::InvalidPath(path.to_string()))
+    }
+
+    /// Saves a request at `Collection/Folder/Name`, creating folders as needed. An existing request with that name is
+    /// replaced only when `overwrite` is set. Returns the request's path.
+    pub fn save_request_at(
+        &self,
+        path: &str,
+        request: &RequestFile,
+        overwrite: bool,
+    ) -> Result<String> {
+        let path = path.trim_matches('/').trim_end_matches(".yaml");
+        let (folder, name) = path.rsplit_once('/').ok_or_else(|| {
+            Error::InvalidPath(format!(
+                "{path} (give a collection and a name, such as \"Users API/create user\")"
+            ))
+        })?;
+        let folder = self.ensure_folder(folder)?;
+        let file = format!("{folder}/{}.{EXTENSION}", file_name(name));
+        if self.abs(&file)?.is_file() {
+            if !overwrite {
+                return Err(Error::Exists(file));
+            }
+            self.write_request(&file, request)?;
+            return Ok(file);
+        }
+        self.create_request(&folder, name, request)
+    }
+
     /// Renames a request, folder or collection and returns its new path. The position in its folder is kept.
     pub fn rename(&self, path: &str, new_name: &str) -> Result<String> {
         let old = self.abs(path)?;
@@ -565,17 +609,37 @@ impl Workspace {
         Ok(())
     }
 
+    /// The values of the secret variables a request could use, so output can mask them. Very short values are left
+    /// out: masking every "1" would make output unreadable and protect nothing.
+    pub fn secret_values(
+        &self,
+        environment: Option<&str>,
+        secrets: &dyn SecretStore,
+    ) -> Result<Vec<String>> {
+        let mut vars = self.read_globals(secrets)?;
+        if let Some(environment) = environment {
+            vars.extend(self.read_environment(environment, secrets)?);
+        }
+        Ok(vars
+            .into_iter()
+            .filter(|v| v.secret && v.value.len() >= 4)
+            .map(|v| v.value)
+            .collect())
+    }
+
     // Sending
 
     /// Builds the request to send: auth and headers inherited from folders, then `{{variables}}` resolved from the
     /// environment, the folders (nearest first), the collection and the globals, in that order of priority.
     ///
     /// `path` is where the request is saved, if it is; an unsaved request only sees the environment and globals.
+    /// `overrides` are one-off values, such as `tuma send --var`, that win over every scope.
     pub fn prepare(
         &self,
         request: &RequestFile,
         path: Option<&str>,
         environment: Option<&str>,
+        overrides: &[(String, String)],
         secrets: &dyn SecretStore,
     ) -> Result<Prepared> {
         // The request's folders, nearest first, ending with the collection.
@@ -595,6 +659,7 @@ impl Workspace {
                 .collect::<Vec<_>>()
         };
         let mut scopes = Scopes::default();
+        scopes.push(overrides.iter().cloned());
         if let Some(environment) = environment {
             scopes.push(enabled(self.read_environment(environment, secrets)?));
         }
@@ -622,11 +687,13 @@ impl Workspace {
     }
 }
 
-/// Builds the request to send when no workspace is open: no inheritance, and only dynamic variables such as
-/// `{{$guid}}`.
-pub fn prepare_standalone(request: &RequestFile) -> Prepared {
+/// Builds the request to send when no workspace is open: no inheritance, and only `overrides` and dynamic variables
+/// such as `{{$guid}}`.
+pub fn prepare_standalone(request: &RequestFile, overrides: &[(String, String)]) -> Prepared {
+    let mut scopes = Scopes::default();
+    scopes.push(overrides.iter().cloned());
     let (request, unresolved) =
-        Scopes::default().resolve_request(&to_http(request, request.auth.as_ref(), &[]));
+        scopes.resolve_request(&to_http(request, request.auth.as_ref(), &[]));
     Prepared {
         request,
         unresolved,

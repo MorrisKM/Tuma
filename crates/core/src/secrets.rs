@@ -40,6 +40,45 @@ impl SecretStore for Keychain {
     }
 }
 
+/// For the CLI and CI: a secret can come from an environment variable named `TUMA_SECRET_` plus the variable's name in
+/// upper case (`apiKey` → `TUMA_SECRET_APIKEY`), which wins over the keychain. When there is no keychain, as on most CI
+/// machines, a secret without an environment variable reads as missing instead of failing.
+pub struct EnvThenKeychain;
+
+impl EnvThenKeychain {
+    fn env_name(key: &str) -> String {
+        let name = key.rsplit('/').next().unwrap_or(key);
+        let name: String = name
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() {
+                    c.to_ascii_uppercase()
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        format!("TUMA_SECRET_{name}")
+    }
+}
+
+impl SecretStore for EnvThenKeychain {
+    fn get(&self, key: &str) -> Result<Option<String>, String> {
+        if let Ok(value) = std::env::var(Self::env_name(key)) {
+            return Ok(Some(value));
+        }
+        Ok(Keychain.get(key).unwrap_or(None))
+    }
+
+    fn set(&self, key: &str, value: &str) -> Result<(), String> {
+        Keychain.set(key, value)
+    }
+
+    fn delete(&self, key: &str) -> Result<(), String> {
+        Keychain.delete(key)
+    }
+}
+
 /// Keeps secrets in memory, for tests and machines without a keychain.
 #[derive(Default)]
 pub struct MemoryStore(Mutex<HashMap<String, String>>);

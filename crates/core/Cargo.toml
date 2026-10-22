@@ -12,6 +12,7 @@ authors.workspace = true
 base64 = "0.23"
 brotli = "9"
 bytes = "1"
+dirs = "6"
 flate2 = "1"
 http = "1"
 http-body-util = "0.1"
@@ -19,6 +20,7 @@ hyper = { version = "1", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 keyring = "4"
 mime_guess = "2"
+regex = "1"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 rustls-platform-verifier = "0.7"
 serde.workspace = true

@@ -154,7 +154,9 @@ fn prepare_inherits_auth_and_resolves_variables() {
     let workspace = imported_workspace(&dir, &secrets);
     let prepare = |path: &str, env: Option<&str>| {
         let file = workspace.read_request(path).unwrap();
-        workspace.prepare(&file, Some(path), env, &secrets).unwrap()
+        workspace
+            .prepare(&file, Some(path), env, &[], &secrets)
+            .unwrap()
     };
 
     // Inherits the collection's bearer auth; the token is a secret in the environment.
@@ -219,7 +221,7 @@ fn folder_headers_and_variables_apply_nearest_first() {
     let path = workspace.create_request(&folder, "Me", &file).unwrap();
 
     let prepared = workspace
-        .prepare(&file, Some(&path), None, &secrets)
+        .prepare(&file, Some(&path), None, &[], &secrets)
         .unwrap();
     assert_eq!(prepared.request.headers.len(), 1);
     assert_eq!(prepared.request.headers[0].value, "admins");

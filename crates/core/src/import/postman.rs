@@ -127,6 +127,7 @@ fn request(item: &Value, name: &str, warnings: &mut Warnings) -> RequestFile {
         body: body(req.get("body"), name, warnings),
         auth: auth(req.get("auth"), name, warnings),
         settings: Default::default(),
+        expect: Default::default(),
         scripts: scripts(item.get("event")),
     }
 }

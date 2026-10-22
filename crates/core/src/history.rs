@@ -25,6 +25,9 @@ pub struct Entry {
     pub error: Option<String>,
     pub total_ms: Option<f64>,
     pub size: Option<usize>,
+    /// Who sent it when it was not the desktop app: `cli`, or `mcp` plus the agent's name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 pub struct History {
@@ -32,6 +35,12 @@ pub struct History {
 }
 
 impl History {
+    /// The history the desktop app shows, shared with the CLI and the MCP server. The same folder as Tauri's app data
+    /// folder for the app's identifier.
+    pub fn default_location() -> Option<Self> {
+        dirs::data_dir().map(|d| Self::new(d.join("dev.tuma.app")))
+    }
+
     /// Keeps history in `history.jsonl` inside `dir`.
     pub fn new(dir: impl Into<PathBuf>) -> Self {
         Self {
@@ -94,6 +103,7 @@ mod tests {
             error: None,
             total_ms: Some(1.5),
             size: Some(10),
+            source: None,
         }
     }
 

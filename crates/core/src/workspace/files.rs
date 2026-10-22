@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::expect::Expectations;
 use crate::http::{self, ApiKeyLocation};
 
 /// `workspace.yaml` at the workspace root.
@@ -57,6 +58,9 @@ pub struct RequestFile {
     pub auth: Option<Auth>,
     #[serde(skip_serializing_if = "is_default_settings")]
     pub settings: http::Settings,
+    /// Checks that `tuma test` and `tuma run` apply to the response.
+    #[serde(skip_serializing_if = "Expectations::is_empty")]
+    pub expect: Expectations,
     /// Kept from Postman imports; they run once scripting arrives (milestone M5).
     #[serde(skip_serializing_if = "Scripts::is_empty")]
     pub scripts: Scripts,
@@ -72,6 +76,7 @@ impl Default for RequestFile {
             body: Body::None,
             auth: None,
             settings: http::Settings::default(),
+            expect: Expectations::default(),
             scripts: Scripts::default(),
         }
     }

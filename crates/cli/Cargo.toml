@@ -1,0 +1,22 @@
+[package]
+name = "tuma-cli"
+description = "Tuma from the command line and for AI agents: send requests, run saved tests, serve MCP"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "tuma"
+path = "src/main.rs"
+
+[dependencies]
+tuma-core.workspace = true
+clap = { version = "4", features = ["derive", "env"] }
+serde.workspace = true
+# Keeps --json output in field order (status before body), not alphabetical.
+serde_json = { workspace = true, features = ["preserve_order"] }
+tokio = { workspace = true, features = ["io-std"] }
+anyhow = "1"
