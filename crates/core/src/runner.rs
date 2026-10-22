@@ -127,6 +127,22 @@ pub struct Job<'a> {
     pub history: Option<&'a History>,
     /// Recorded in history: `cli` or `mcp`.
     pub source: &'a str,
+    /// When set, only hosts it accepts may be called. Checked after variables are resolved.
+    pub allow_host: Option<&'a (dyn Fn(&str) -> bool + Sync)>,
+}
+
+/// The host of a URL as Tuma sends it (`http://` is assumed), lower case.
+pub fn host_of(url: &str) -> Option<String> {
+    let url = url.trim();
+    let url = if url.contains("://") {
+        url.to_string()
+    } else {
+        format!("http://{url}")
+    };
+    url::Url::parse(&url)
+        .ok()?
+        .host_str()
+        .map(|h| h.trim_matches(['[', ']']).to_ascii_lowercase())
 }
 
 /// Sends a request and checks the response. Failures to send become an [`Outcome`] with `error` set.
@@ -159,6 +175,17 @@ pub async fn send(job: Job<'_>, detail: &Detail) -> Outcome {
             job.request.url
         );
         return failed(job.path, &file, message, unresolved, &secrets);
+    }
+
+    if let Some(allow) = job.allow_host {
+        let host = host_of(&prepared.request.url).unwrap_or_default();
+        if !allow(&host) {
+            let message = format!(
+                "{host} is not an allowed host. Agents may call localhost and the hosts in the selected environment; \
+                 the user can allow more with `tuma mcp --allow-host {host}`"
+            );
+            return failed(job.path, &file, message, unresolved, &secrets);
+        }
     }
 
     let result = http::send(&prepared.request).await;

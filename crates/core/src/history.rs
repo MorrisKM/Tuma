@@ -35,9 +35,12 @@ pub struct History {
 }
 
 impl History {
-    /// The history the desktop app shows, shared with the CLI and the MCP server. The same folder as Tauri's app data
-    /// folder for the app's identifier.
+    /// The history the desktop app shows, shared with the CLI and the MCP server: Tauri's app data folder for the
+    /// app's identifier, or `TUMA_DATA_DIR` when set.
     pub fn default_location() -> Option<Self> {
+        if let Some(dir) = std::env::var_os("TUMA_DATA_DIR") {
+            return Some(Self::new(dir));
+        }
         dirs::data_dir().map(|d| Self::new(d.join("dev.tuma.app")))
     }
 

@@ -1,5 +1,6 @@
 //! `tuma`: send requests and run saved tests from a terminal, CI or an AI agent, and serve MCP.
 
+mod mcp;
 mod output;
 
 use std::path::{Path, PathBuf};
@@ -46,6 +47,21 @@ enum Command {
     Run(RunArgs),
     /// Run the saved requests that have checks (an expect: block), and fail if any check fails.
     Test(RunArgs),
+    /// Serve the Model Context Protocol over stdio, so coding agents can send requests and run tests.
+    ///
+    /// Add it to your agent, for example: claude mcp add tuma -- tuma mcp
+    Mcp {
+        /// The environment to use when a tool call does not name one.
+        #[arg(short, long = "env", env = "TUMA_ENV")]
+        environment: Option<String>,
+        /// Also let agents call this host (repeat for more; *.example.com and * work). localhost and the hosts in the
+        /// selected environment are always allowed.
+        #[arg(long = "allow-host", value_name = "HOST")]
+        allow_hosts: Vec<String>,
+        /// Don't let agents save requests or change variables.
+        #[arg(long)]
+        read_only: bool,
+    },
     /// Create a workspace: .tuma/ at the root of the current project.
     Init {
         /// The workspace's name. Defaults to the project folder's name.
@@ -162,6 +178,20 @@ async fn run(cli: Cli) -> anyhow::Result<bool> {
         Command::Send(args) => send(&start, *args).await,
         Command::Run(args) => run_saved(&start, args, false).await,
         Command::Test(args) => run_saved(&start, args, true).await,
+        Command::Mcp {
+            environment,
+            allow_hosts,
+            read_only,
+        } => {
+            mcp::serve(mcp::Options {
+                start,
+                environment,
+                allow_hosts,
+                read_only,
+            })
+            .await?;
+            Ok(true)
+        }
         Command::Init { name } => {
             if let Some(root) = runner::find_workspace(&start) {
                 bail!("there is already a workspace at {}", root.display());
@@ -204,6 +234,7 @@ async fn send(start: &Path, args: SendArgs) -> anyhow::Result<bool> {
             secrets: &EnvThenKeychain,
             history: history.as_ref(),
             source: "cli",
+            allow_host: None,
         },
         &detail,
     )
@@ -329,6 +360,7 @@ async fn run_saved(start: &Path, args: RunArgs, only_tests: bool) -> anyhow::Res
                 secrets: &EnvThenKeychain,
                 history: history.as_ref(),
                 source: "cli",
+                allow_host: None,
             },
             &detail,
         )

@@ -75,7 +75,7 @@ person.
 - **No setup.** `tuma mcp` and `tuma send` work in any repo. Requests to `localhost` need nothing; a `.tuma/` workspace
   is created the first time something is saved.
 - **Ad-hoc requests.** `send` takes method, URL, headers, body and auth directly; there's no need to save a request
-  first. Relative URLs resolve against the environment's `baseUrl`, and the environment's auth applies.
+  first. A path such as `/users` resolves against the `baseUrl` variable, from the environment or a one-off `--var`.
 - **Assertions in the same call.** Status, header values, JSON path checks (equals, exists, matches), response time,
   and "the response matches the OpenAPI schema for this operation". Each check returns pass or fail, with expected and
   actual values.
@@ -110,8 +110,9 @@ person.
 
 - Agents never see secrets. Tuma resolves `{{var}}` and keychain secrets itself, and masks secret values in everything
   it returns.
-- By default an agent can send to `localhost` and to the hosts in the current environment. Other hosts need
-  `--allow-host`; writing files needs `--allow-write`.
+- By default an agent can send to `localhost` and to the hosts in the selected environment. Other hosts need
+  `tuma mcp --allow-host`. Agents can save requests and set non-secret variables, which only touches the workspace's
+  YAML files (reviewable in git); `tuma mcp --read-only` turns that off. Agents cannot set or read secrets.
 - Agent requests appear live in the desktop app's history, marked as sent by an agent, so you can watch, replay and
   edit them.
 - Settings show a ready-made MCP config to paste into Claude Code, Cursor or VS Code.

@@ -20,3 +20,5 @@ serde.workspace = true
 serde_json = { workspace = true, features = ["preserve_order"] }
 tokio = { workspace = true, features = ["io-std"] }
 anyhow = "1"
+rmcp = { version = "3.6", features = ["server", "macros", "transport-io"] }
+url = "2"
