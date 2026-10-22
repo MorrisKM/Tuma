@@ -43,3 +43,5 @@ The first stable release.
 ### App
 
 - Tabs, a command palette (Ctrl+K), keyboard shortcuts, light and dark themes, history, and automatic updates
+- A resizable sidebar with collections, environments and history (Ctrl+B hides it), the environment beside the tabs,
+  and the request and response split by a handle you drag, one above the other or side by side

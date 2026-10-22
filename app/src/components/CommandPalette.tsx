@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { requests, useStore } from "../store";
+import { layout } from "../layout";
 import { applyTheme, type Theme } from "../theme";
 import { focusUrl } from "./UrlEditor";
 
@@ -57,6 +58,9 @@ export function CommandPalette() {
         : []),
       { id: "settings", label: "Settings: proxy, certificates, cookies", run: () => useStore.setState({ view: { kind: "settings" } }) },
       { id: "agents", label: "Connect a coding agent (MCP)", run: () => useStore.setState({ view: { kind: "agents" } }) },
+      { id: "sidebar", label: "Show or hide the sidebar", hint: "Ctrl+B", run: layout.toggleSidebar },
+      { id: "layout", label: "Response beside or below the request", hint: "Layout", run: layout.toggleOrientation },
+      { id: "history", label: "Show history", hint: "Sidebar", run: () => layout.open("history") },
       theme("light", "Light theme"),
       theme("dark", "Dark theme"),
       theme("system", "Theme: follow the system"),

@@ -1,3 +1,4 @@
+import { Play, Square } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
@@ -105,10 +106,12 @@ export function RunnerView({ path }: { path: string }) {
         </div>
         {runId ? (
           <button className="button" onClick={() => void api.stopRun(runId)}>
+            <Square size={13} />
             Stop
           </button>
         ) : (
           <button className="button primary" onClick={() => void start()}>
+            <Play size={14} />
             Run
           </button>
         )}

@@ -79,7 +79,7 @@ export function SettingsView() {
         <div className="crumbs">
           <span className="crumb current">Settings</span>
           <span className="muted small">This machine only: not saved in workspaces</span>
-          {dirty && <span className="dirty">●</span>}
+          {dirty && <span className="dirty-dot" title="Unsaved changes" />}
         </div>
         <button className="button primary" disabled={!dirty} onClick={() => void save()}>
           Save

@@ -7,7 +7,7 @@ import { VariableTable } from "./VariableTable";
 
 /** Global variables, or one environment's. `environment` null means globals. */
 export function VariablesEditor({ environment }: { environment: string | null }) {
-  const environments = useStore((s) => s.environments);
+  const active = useStore((s) => s.environment);
   const [variables, setVariables] = useState<VariableValue[] | null>(null);
   const [saved, setSaved] = useState("");
   const [renaming, setRenaming] = useState(false);
@@ -29,16 +29,6 @@ export function VariablesEditor({ environment }: { environment: string | null })
     try {
       await (environment === null ? api.globalsWrite(variables) : api.environmentWrite(environment, variables));
       setSaved(JSON.stringify(variables));
-    } catch (e) {
-      fail(e);
-    }
-  };
-  const add = async () => {
-    try {
-      const name = await api.environmentCreate("New environment");
-      await refresh();
-      await openVariables(name);
-      setRenaming(true);
     } catch (e) {
       fail(e);
     }
@@ -77,28 +67,15 @@ export function VariablesEditor({ environment }: { environment: string | null })
   return (
     <section className="folder-editor" onKeyDown={(e) => e.key === "s" && (e.ctrlKey || e.metaKey) && save()}>
       <div className="top-bar">
-        <div className="segmented scopes">
-          <button className={environment === null ? "active" : ""} onClick={() => void openVariables(null)}>
-            Globals
-          </button>
-          {environments.map((name) => (
-            <button key={name} className={environment === name ? "active" : ""} onClick={() => void openVariables(name)}>
-              {name}
-            </button>
-          ))}
-          <button onClick={() => void add()} title="New environment">
-            +
-          </button>
-        </div>
-        <button className="button primary" disabled={!dirty} onClick={() => void save()}>
-          Save
-        </button>
-      </div>
-      <div className="panel-body">
-        <div className="toolbar spaced">
+        <div className="crumbs">
+          <span className="crumb">
+            {environment === null ? "Variables" : "Environments"}
+            <span className="crumb-sep">/</span>
+          </span>
           {renaming && environment ? (
             <input
               autoFocus
+              className="rename"
               defaultValue={environment}
               onBlur={(e) => void rename(e.target.value)}
               onKeyDown={(e) => {
@@ -107,22 +84,34 @@ export function VariablesEditor({ environment }: { environment: string | null })
               }}
             />
           ) : (
-            <h2 className="section-title">{environment ?? "Global variables"}</h2>
+            <span className="crumb current">{environment ?? "Globals"}</span>
           )}
-          {environment && !renaming && (
-            <span className="actions">
-              <button className="link-button" onClick={() => setRenaming(true)}>
-                Rename
-              </button>
-              <button className="link-button danger" onClick={() => void remove()}>
-                Delete
-              </button>
-            </span>
-          )}
+          {environment && environment === active && <span className="pill">Active</span>}
+          {dirty && <span className="dirty-dot" title="Unsaved changes" />}
         </div>
+        {environment && environment !== active && (
+          <button className="button ghost" onClick={() => setEnvironment(environment)}>
+            Use this environment
+          </button>
+        )}
+        {environment && !renaming && (
+          <>
+            <button className="button ghost" onClick={() => setRenaming(true)}>
+              Rename
+            </button>
+            <button className="button ghost danger" onClick={() => void remove()}>
+              Delete
+            </button>
+          </>
+        )}
+        <button className="button primary" disabled={!dirty} onClick={() => void save()}>
+          Save
+        </button>
+      </div>
+      <div className="panel-body">
         <p className="hint">
           {environment
-            ? "Select this environment in the top bar to use these values. They win over collection and folder variables."
+            ? "Requests use these values while this environment is selected. They win over collection and folder variables."
             : "Available to every request in the workspace, with the lowest priority."}
         </p>
         <VariableTable variables={variables} onChange={setVariables} allowSecrets />

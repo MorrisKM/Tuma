@@ -8,6 +8,7 @@ import { GrpcLog } from "./GrpcViews";
 import { EventsView } from "./EventsView";
 import { MessageLog } from "./WebSocketViews";
 import { ConsoleView, TestsView, testsLabel, VisualizerView } from "./ScriptResults";
+import { Logo } from "./ui";
 import { Tabs } from "./Tabs";
 
 type Tab = "body" | "events" | "tests" | "console" | "visualize" | "headers" | "timing" | "request";
@@ -54,7 +55,14 @@ export function ResponsePanel() {
       </section>
     );
   }
-  if (sending && !response) return <Placeholder>Sending…</Placeholder>;
+  if (sending && !response) {
+    return (
+      <Placeholder>
+        <span className="spinner big" />
+        <span>Sending…</span>
+      </Placeholder>
+    );
+  }
   if (error && error.kind !== "cancelled") {
     const skipped = error.kind === "skipped";
     return (
@@ -79,7 +87,31 @@ export function ResponsePanel() {
       </section>
     );
   }
-  if (!response) return <Placeholder>Send a request to see the response here.</Placeholder>;
+  if (!response) {
+    return (
+      <Placeholder>
+        <Logo size={56} />
+        <span>Enter a URL and send the request to see the response here.</span>
+        <span className="placeholder-keys">
+          <span>
+            <kbd>Ctrl</kbd>
+            <kbd>↵</kbd>
+          </span>
+          <span>Send</span>
+          <span>
+            <kbd>Ctrl</kbd>
+            <kbd>L</kbd>
+          </span>
+          <span>Focus the URL</span>
+          <span>
+            <kbd>Ctrl</kbd>
+            <kbd>K</kbd>
+          </span>
+          <span>Find a request or command</span>
+        </span>
+      </Placeholder>
+    );
+  }
   const tests = testsLabel(response.checks, response.tests, response.scriptErrors);
   // A tab that this response doesn't have shows the body instead.
   const shown: Tab =
@@ -132,7 +164,7 @@ export function ResponsePanel() {
 function Placeholder({ children }: { children: React.ReactNode }) {
   return (
     <section className="response-panel">
-      <p className="empty muted">{children}</p>
+      <div className="placeholder">{children}</div>
     </section>
   );
 }
@@ -252,7 +284,7 @@ function BodyView({ response }: { response: Response }) {
 function Preview({ response, type }: { response: Response; type: string }) {
   if (type === "text/html" && !response.bodyBase64) {
     // Sandboxed with no permissions: scripts in the page do not run.
-    return <iframe className="preview" sandbox="" srcDoc={response.body} title="HTML preview" />;
+    return <iframe className="html-preview" sandbox="" srcDoc={response.body} title="HTML preview" />;
   }
   const data = response.bodyBase64 ? response.body : btoa(unescape(encodeURIComponent(response.body)));
   return <img className="preview-image" src={`data:${type};base64,${data}`} alt="Response" />;

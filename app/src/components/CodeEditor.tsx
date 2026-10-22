@@ -35,9 +35,11 @@ const highlight = HighlightStyle.define([
 const theme = EditorView.theme({
   "&": { height: "100%", fontSize: "13px", backgroundColor: "transparent", color: "var(--text)" },
   "&.cm-focused": { outline: "none" },
-  ".cm-scroller": { fontFamily: "var(--mono)", lineHeight: "1.5" },
-  ".cm-gutters": { backgroundColor: "transparent", border: "none", color: "var(--muted)" },
+  ".cm-scroller": { fontFamily: "var(--mono)", fontSize: "12.5px", lineHeight: "1.6" },
+  ".cm-gutters": { backgroundColor: "transparent", border: "none", color: "var(--faint)" },
+  ".cm-lineNumbers .cm-gutterElement": { padding: "0 6px 0 10px" },
   ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "transparent" },
+  ".cm-foldPlaceholder": { backgroundColor: "var(--bg-active)", border: "none", color: "var(--muted)" },
   ".cm-cursor": { borderLeftColor: "var(--text)" },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
     backgroundColor: "var(--selection) !important",

@@ -1,3 +1,4 @@
+import { Play } from "lucide-react";
 import { useEffect, useState } from "react";
 import * as api from "../api";
 import { normalizeVariables } from "../draft";
@@ -53,7 +54,7 @@ export function FolderEditor({ path }: { path: string }) {
         <div className="crumbs">
           <span className="crumb current">{name}</span>
           <span className="muted small">{isCollection ? "Collection settings" : "Folder settings"}</span>
-          {dirty && <span className="dirty">●</span>}
+          {dirty && <span className="dirty-dot" title="Unsaved changes" />}
         </div>
         <div className="toolbar">
           <button
@@ -61,6 +62,7 @@ export function FolderEditor({ path }: { path: string }) {
             onClick={() => useStore.setState({ view: { kind: "runner", path } })}
             title="Run every request inside, with its scripts and checks"
           >
+            <Play size={14} />
             Run…
           </button>
           <button className="button primary" disabled={!dirty} onClick={() => void save()}>
