@@ -82,6 +82,20 @@ fn request(name: &str, file: &RequestFile) -> Value {
     if let Some(events) = events(&file.scripts) {
         out["event"] = events;
     }
+    if !file.examples.is_empty() {
+        out["response"] = file
+            .examples
+            .iter()
+            .map(|e| {
+                json!({
+                    "name": e.name,
+                    "code": e.status,
+                    "header": e.headers.iter().map(key_value).collect::<Vec<_>>(),
+                    "body": e.body,
+                })
+            })
+            .collect();
+    }
     out
 }
 

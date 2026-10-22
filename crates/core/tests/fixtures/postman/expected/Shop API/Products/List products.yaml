@@ -6,3 +6,7 @@ headers:
 - name: X-Debug
   value: "1"
   enabled: false
+examples:
+- name: OK
+  status: 200
+  body: "[]"

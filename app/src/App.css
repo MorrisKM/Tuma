@@ -3305,3 +3305,72 @@ iframe.visualizer {
   color: var(--muted) !important;
   font-style: italic;
 }
+
+/* Examples */
+
+.response-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.examples-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.examples {
+  flex: 1;
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+}
+
+.examples-list {
+  width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+}
+
+.examples-list .list-item.selected {
+  background: var(--bg-active);
+}
+
+.examples-add {
+  align-self: flex-start;
+  margin: 6px 8px;
+}
+
+.example-detail {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.example-name {
+  flex: 1;
+  min-width: 140px;
+  font-weight: 600;
+}
+
+.example-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.example-field input[type="number"] {
+  width: 72px;
+}
+
+.example-field input.mono {
+  width: 190px;
+}

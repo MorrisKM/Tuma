@@ -123,6 +123,15 @@ export interface RequestFile {
   messages?: SavedMessage[];
   /** gRPC requests: the method and where it is described. */
   grpc?: GrpcSettings | null;
+  /** Saved responses, for documentation and mock servers. */
+  examples?: Example[];
+}
+
+export interface Example {
+  name: string;
+  status: number;
+  headers?: { name: string; value: string; enabled?: boolean }[];
+  body?: string;
 }
 
 export interface GrpcSettings {

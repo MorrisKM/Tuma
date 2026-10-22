@@ -84,10 +84,7 @@ fn postman_import_matches_golden_files() {
 
     assert_eq!(
         warnings.0,
-        [
-            "\"List products\": 1 saved example(s) not imported",
-            "\"List products\": 1 disabled query parameter(s) dropped",
-        ]
+        ["\"List products\": 1 disabled query parameter(s) dropped",]
     );
 
     // What the importer writes is valid by `tuma check`'s strict rules.

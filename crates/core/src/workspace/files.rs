@@ -79,6 +79,42 @@ pub struct RequestFile {
     /// reflection. The message is the JSON body.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grpc: Option<crate::grpc::GrpcSettings>,
+    /// Responses saved as examples: they document the request, and mock servers answer with them.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub examples: Vec<Example>,
+}
+
+/// A response kept with its request, for documentation and mock servers.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Example {
+    pub name: String,
+    pub status: u16,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub headers: Vec<KeyValue>,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub body: String,
+}
+
+impl Default for Example {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            status: 200,
+            headers: Vec::new(),
+            body: String::new(),
+        }
+    }
+}
+
+impl Example {
+    /// The example's Content-Type header, without parameters, if it has one.
+    pub fn content_type(&self) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|h| h.enabled && h.name.eq_ignore_ascii_case("content-type"))
+            .map(|h| h.value.split(';').next().unwrap_or("").trim())
+    }
 }
 
 /// A WebSocket message kept with its request.
@@ -119,6 +155,7 @@ impl Default for RequestFile {
             scripts: Scripts::default(),
             messages: Vec::new(),
             grpc: None,
+            examples: Vec::new(),
         }
     }
 }

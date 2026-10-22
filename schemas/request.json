@@ -70,6 +70,13 @@
           "type": "null"
         }
       ]
+    },
+    "examples": {
+      "description": "Responses saved as examples: they document the request, and mock servers answer with them.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Example"
+      }
     }
   },
   "$defs": {
@@ -932,6 +939,32 @@
           "items": {
             "type": "string"
           }
+        }
+      }
+    },
+    "Example": {
+      "description": "A response kept with its request, for documentation and mock servers.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "default": ""
+        },
+        "status": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 200
+        },
+        "headers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/KeyValue"
+          }
+        },
+        "body": {
+          "type": "string"
         }
       }
     }

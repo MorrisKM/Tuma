@@ -1,6 +1,8 @@
+import { BookmarkPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useStore } from "../store";
-import type { Header, Response, Timing } from "../types";
+import type { Example, Header, Response, Timing } from "../types";
+import { uniqueName } from "./ExamplesEditor";
 import { select } from "../jsonpath";
 import { CodeEditor, type Language } from "./CodeEditor";
 import { isGrpc, isWebSocket } from "../draft";
@@ -140,7 +142,10 @@ export function ResponsePanel() {
           { id: "request", label: "Request" },
         ]}
       >
-        <StatusLine response={response} />
+        <span className="response-actions">
+          {!response.bodyBase64 && !response.events && <SaveExample response={response} />}
+          <StatusLine response={response} />
+        </span>
       </Tabs>
       <Unresolved names={response.unresolved} />
       <div className="panel-body">
@@ -158,6 +163,35 @@ export function ResponsePanel() {
         {shown === "request" && <SentView response={response} />}
       </div>
     </section>
+  );
+}
+
+/** Keeps this response with the request, for its docs and mock servers. */
+function SaveExample({ response }: { response: Response }) {
+  const [saved, setSaved] = useState(false);
+  useEffect(() => setSaved(false), [response]);
+  const save = () => {
+    const { draft, update } = useStore.getState();
+    const type = response.headers.find((h) => h.name === "content-type")?.value;
+    const example: Example = {
+      name: uniqueName(draft.examples, `${response.status} ${response.reason}`.trim()),
+      status: response.status,
+      headers: type ? [{ name: "Content-Type", value: type }] : [],
+      body: response.body,
+    };
+    update({ examples: [...draft.examples, example] });
+    setSaved(true);
+  };
+  return (
+    <button
+      className="button ghost small"
+      onClick={save}
+      disabled={saved}
+      title="Keep this response with the request, for API docs and mock servers. Save the request to keep it."
+    >
+      <BookmarkPlus size={14} />
+      {saved ? "Saved as example" : "Save as example"}
+    </button>
   );
 }
 

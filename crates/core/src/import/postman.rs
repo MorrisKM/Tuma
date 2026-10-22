@@ -15,7 +15,7 @@ use crate::http::auth::{
 use crate::workspace::FolderTree;
 use crate::workspace::TreeItem;
 use crate::workspace::files::{
-    Auth, Body, FolderFile, KeyValue, Part, RequestFile, Scripts, Variable,
+    Auth, Body, Example, FolderFile, KeyValue, Part, RequestFile, Scripts, Variable,
 };
 
 /// What a Postman export file holds.
@@ -114,12 +114,19 @@ fn request(item: &Value, name: &str, warnings: &mut Warnings) -> RequestFile {
             ..RequestFile::default()
         };
     }
-    let examples = array(item.get("response")).len();
-    if examples > 0 {
-        warnings.add(format!(
-            "\"{name}\": {examples} saved example(s) not imported"
-        ));
-    }
+    // Saved responses become the request's examples.
+    let examples = array(item.get("response"))
+        .iter()
+        .map(|r| Example {
+            name: match str_at(r, "name") {
+                "" => "Example".to_string(),
+                n => n.to_string(),
+            },
+            status: r.get("code").and_then(Value::as_u64).unwrap_or(200) as u16,
+            headers: array(r.get("header")).iter().map(key_value).collect(),
+            body: str_at(r, "body").to_string(),
+        })
+        .collect();
     RequestFile {
         method: match str_at(&req, "method") {
             "" => "GET".to_string(),
@@ -136,6 +143,7 @@ fn request(item: &Value, name: &str, warnings: &mut Warnings) -> RequestFile {
         scripts: scripts(item.get("event")),
         messages: Vec::new(),
         grpc: None,
+        examples,
     }
 }
 

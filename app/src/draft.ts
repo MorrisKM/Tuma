@@ -2,7 +2,18 @@
 // so switching tabs or body types never loses what was typed, and it carries fields the editor does not show yet
 // (description, checks, scripts) so saving never drops them.
 
-import type { Auth, Body, GrpcSettings, KeyValue, Part, RequestFile, SavedMessage, Scripts, Settings } from "./types";
+import type {
+  Auth,
+  Body,
+  Example,
+  GrpcSettings,
+  KeyValue,
+  Part,
+  RequestFile,
+  SavedMessage,
+  Scripts,
+  Settings,
+} from "./types";
 
 /** gRPC settings as files keep them: empty lists left out. */
 const cleanGrpc = (g: GrpcSettings): GrpcSettings => ({
@@ -59,6 +70,8 @@ export interface Draft {
   scripts: Scripts;
   /** WebSocket requests: saved messages. */
   messages: SavedMessage[];
+  /** Responses saved as examples. */
+  examples: Example[];
   /** gRPC requests: the method and its .proto files. The message is `raw`. */
   grpc: GrpcSettings;
 }
@@ -92,6 +105,7 @@ export const newDraft = (): Draft => ({
   expect: {},
   scripts: {},
   messages: [],
+  examples: [],
   grpc: { method: "" },
 });
 
@@ -112,6 +126,7 @@ export function toRequestFile(d: Draft): RequestFile {
     expect: d.expect,
     scripts: d.scripts,
     ...(d.messages.length ? { messages: d.messages } : {}),
+    ...(d.examples.length ? { examples: d.examples } : {}),
     ...(isGrpc(d.url) ? { grpc: cleanGrpc(d.grpc) } : {}),
   };
 }
@@ -159,6 +174,7 @@ export function fromRequestFile(r: RequestFile, path: string | null, name: strin
     expect: r.expect ?? {},
     scripts: r.scripts ?? {},
     messages: r.messages ?? [],
+    examples: r.examples ?? [],
     grpc: r.grpc ?? { method: "" },
   };
   d.params = parseQuery(d.url);
