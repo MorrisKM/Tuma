@@ -622,6 +622,17 @@ impl Workspace {
     }
 }
 
+/// Builds the request to send when no workspace is open: no inheritance, and only dynamic variables such as
+/// `{{$guid}}`.
+pub fn prepare_standalone(request: &RequestFile) -> Prepared {
+    let (request, unresolved) =
+        Scopes::default().resolve_request(&to_http(request, request.auth.as_ref(), &[]));
+    Prepared {
+        request,
+        unresolved,
+    }
+}
+
 /// Converts a request file to an engine request, given the auth and headers it inherits.
 pub fn to_http(
     request: &RequestFile,

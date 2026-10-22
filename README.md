@@ -8,7 +8,7 @@ Rust and Tauri.
 - **Fast.** Native Rust networking and the system webview instead of a bundled browser.
 - **Easy to switch.** Imports Postman collections and environments.
 
-> **Status:** early development (milestone M1: sending requests). See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
+> **Status:** early development (milestone M2: workspaces, environments and Postman import). See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
 ## Development
 

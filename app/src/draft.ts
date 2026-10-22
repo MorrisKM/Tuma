@@ -1,69 +1,92 @@
-// The request being edited. It keeps more than a `Request` does (the query table, body text for every body type,
-// fields for every auth type) so switching tabs or types never loses what was typed.
+// The request being edited. It keeps more than a request file does (the query table, body text for every body type)
+// so switching tabs or body types never loses what was typed, and it carries fields the editor does not show yet
+// (description, scripts) so saving never drops them.
 
-import type { Auth, Body, KeyValue, Part, Request, Settings } from "./types";
+import type { Auth, Body, KeyValue, Part, RequestFile, Scripts, Settings } from "./types";
 
-export type BodyMode = "none" | "json" | "xml" | "html" | "text" | "javascript" | "form" | "multipart" | "file";
-export type AuthMode = Auth["type"];
+export type BodyMode = "none" | "json" | "xml" | "html" | "text" | "javascript" | "raw" | "form" | "multipart" | "file";
 
-export const RAW_TYPES: Partial<Record<BodyMode, string>> = {
-  json: "application/json",
-  xml: "application/xml",
-  html: "text/html",
-  text: "text/plain",
-  javascript: "application/javascript",
-};
+export const TEXT_MODES = ["json", "xml", "html", "text", "javascript", "raw"] as const;
+export const isTextMode = (mode: BodyMode): mode is (typeof TEXT_MODES)[number] =>
+  (TEXT_MODES as readonly string[]).includes(mode);
 
 export interface Draft {
+  /** Where the request is saved in the workspace, or null if it is not. */
+  path: string | null;
+  name: string;
   method: string;
   url: string;
   params: KeyValue[];
   headers: KeyValue[];
   bodyMode: BodyMode;
   raw: string;
+  /** The content type for the "raw" (other text) body mode. */
+  rawContentType: string;
   form: KeyValue[];
   parts: Part[];
   filePath: string;
-  authMode: AuthMode;
-  token: string;
-  username: string;
-  password: string;
-  apiKey: string;
-  apiValue: string;
-  apiLocation: "header" | "query";
+  /** null means inherit from the folder. */
+  auth: Auth | null;
   settings: Settings;
+  description: string;
+  scripts: Scripts;
 }
 
+// Must match tuma_core's defaults, or every saved request would get a `settings:` block.
+export const defaultSettings = (): Settings => ({
+  timeoutMs: null,
+  followRedirects: true,
+  maxRedirects: 10,
+  verifyTls: true,
+});
+
 export const newDraft = (): Draft => ({
+  path: null,
+  name: "Untitled",
   method: "GET",
   url: "",
   params: [],
   headers: [],
   bodyMode: "none",
   raw: "",
+  rawContentType: "text/plain",
   form: [],
   parts: [],
   filePath: "",
-  authMode: "none",
-  token: "",
-  username: "",
-  password: "",
-  apiKey: "",
-  apiValue: "",
-  apiLocation: "header",
-  settings: { timeoutMs: 30000, followRedirects: true, maxRedirects: 10, verifyTls: true },
+  auth: null,
+  settings: defaultSettings(),
+  description: "",
+  scripts: {},
 });
 
-export function toRequest(d: Draft): Request {
-  return { method: d.method, url: d.url, headers: d.headers, body: toBody(d), auth: toAuth(d), settings: d.settings };
+const kv = (rows: Partial<KeyValue>[] | undefined): KeyValue[] =>
+  (rows ?? []).map((r) => ({ name: r.name ?? "", value: r.value ?? "", enabled: r.enabled !== false }));
+
+export function toRequestFile(d: Draft): RequestFile {
+  return {
+    method: d.method,
+    url: d.url,
+    description: d.description,
+    headers: d.headers,
+    body: toBody(d),
+    auth: d.auth,
+    settings: d.settings,
+    scripts: d.scripts,
+  };
 }
 
 function toBody(d: Draft): Body {
-  const rawType = RAW_TYPES[d.bodyMode];
-  if (rawType) return { type: "raw", content: d.raw, contentType: rawType };
   switch (d.bodyMode) {
+    case "json":
+    case "xml":
+    case "html":
+    case "text":
+    case "javascript":
+      return { type: d.bodyMode, content: d.raw };
+    case "raw":
+      return { type: "raw", content: d.raw, contentType: d.rawContentType };
     case "form":
-      return { type: "formUrlEncoded", fields: d.form };
+      return { type: "form", fields: d.form };
     case "multipart":
       return { type: "multipart", parts: d.parts };
     case "file":
@@ -73,45 +96,33 @@ function toBody(d: Draft): Body {
   }
 }
 
-function toAuth(d: Draft): Auth {
-  switch (d.authMode) {
-    case "bearer":
-      return { type: "bearer", token: d.token };
-    case "basic":
-      return { type: "basic", username: d.username, password: d.password };
-    case "apiKey":
-      return { type: "apiKey", key: d.apiKey, value: d.apiValue, location: d.apiLocation };
-    default:
-      return { type: "none" };
-  }
-}
-
-/** Rebuilds a draft from a sent request, for reopening history. */
-export function fromRequest(r: Request): Draft {
-  const d: Draft = { ...newDraft(), method: r.method, url: r.url, headers: r.headers, settings: r.settings };
-  d.params = parseQuery(r.url);
-  const body = r.body;
-  if (body.type === "raw") {
-    const mode = (Object.keys(RAW_TYPES) as BodyMode[]).find((m) => RAW_TYPES[m] === body.contentType);
-    d.bodyMode = mode ?? "text";
-    d.raw = body.content;
-  } else if (body.type === "formUrlEncoded") {
-    d.bodyMode = "form";
-    d.form = body.fields;
-  } else if (body.type === "multipart") {
-    d.bodyMode = "multipart";
-    d.parts = body.parts;
-  } else if (body.type === "file") {
-    d.bodyMode = "file";
-    d.filePath = body.path;
-  }
-  const auth = r.auth;
-  d.authMode = auth.type;
-  if (auth.type === "bearer") d.token = auth.token;
-  if (auth.type === "basic") Object.assign(d, { username: auth.username, password: auth.password });
-  if (auth.type === "apiKey") Object.assign(d, { apiKey: auth.key, apiValue: auth.value, apiLocation: auth.location });
+export function fromRequestFile(r: RequestFile, path: string | null, name: string): Draft {
+  const d: Draft = {
+    ...newDraft(),
+    path,
+    name,
+    method: r.method || "GET",
+    url: r.url ?? "",
+    headers: kv(r.headers),
+    auth: r.auth ?? null,
+    settings: { ...defaultSettings(), ...r.settings },
+    description: r.description ?? "",
+    scripts: r.scripts ?? {},
+  };
+  d.params = parseQuery(d.url);
+  const body = r.body ?? { type: "none" };
+  d.bodyMode = body.type;
+  if ("content" in body) d.raw = body.content;
+  if (body.type === "raw") d.rawContentType = body.contentType;
+  if (body.type === "form") d.form = kv(body.fields);
+  if (body.type === "multipart")
+    d.parts = body.parts.map((p) => ({ ...p, enabled: p.enabled !== false, file: p.file === true }));
+  if (body.type === "file") d.filePath = body.path;
   return d;
 }
+
+/** A name for a request, from the end of its file path. */
+export const nameFromPath = (path: string) => path.split("/").pop()!.replace(/\.yaml$/, "");
 
 /** The query string's rows, as typed: nothing is decoded. */
 export function parseQuery(url: string): KeyValue[] {
@@ -141,3 +152,7 @@ export function withQuery(url: string, params: KeyValue[]): string {
     .join("&");
   return (query ? `${base}?${query}` : base) + hash;
 }
+
+/** Variables as the variables editor shows them. */
+export const normalizeVariables = (vars: { name: string; value?: string; secret?: boolean; enabled?: boolean }[]) =>
+  vars.map((v) => ({ name: v.name, value: v.value ?? "", secret: v.secret === true, enabled: v.enabled !== false }));

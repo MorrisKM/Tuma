@@ -1,22 +1,39 @@
 import { useEffect, useState } from "react";
 import { appVersion } from "./api";
+import { FolderEditor } from "./components/FolderEditor";
+import { NoticeBar } from "./components/NoticeBar";
 import { RequestBar } from "./components/RequestBar";
 import { RequestPanel } from "./components/RequestPanel";
 import { ResponsePanel } from "./components/ResponsePanel";
+import { SaveDialog } from "./components/SaveDialog";
 import { Sidebar } from "./components/Sidebar";
+import { TopBar } from "./components/TopBar";
+import { VariablesEditor } from "./components/VariablesEditor";
 import { useStore } from "./store";
 import "./App.css";
 
 function App() {
   const [version, setVersion] = useState<string>();
+  const view = useStore((s) => s.view);
+  const savingAs = useStore((s) => s.savingAs);
+  const workspace = useStore((s) => s.workspace);
+  const environment = useStore((s) => s.environment);
 
   useEffect(() => {
     appVersion().then(setVersion);
-    // Ctrl+Enter (Cmd+Enter on macOS) sends from anywhere, including the body editor.
+    void useStore.getState().init();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const { send, save, newRequest, view } = useStore.getState();
+      if (e.key === "Enter") {
         e.preventDefault();
-        void useStore.getState().send();
+        void send();
+      } else if (e.key === "s" && view.kind === "request") {
+        e.preventDefault();
+        void save();
+      } else if (e.key === "n") {
+        e.preventDefault();
+        void newRequest();
       }
     };
     // Capture phase, so the body editor's own Ctrl+Enter binding doesn't get it first.
@@ -28,16 +45,28 @@ function App() {
     <div className="shell">
       <Sidebar />
       <main className="workspace">
-        <RequestBar />
-        <div className="panes">
-          <RequestPanel />
-          <ResponsePanel />
-        </div>
+        <NoticeBar />
+        {view.kind === "request" && (
+          <>
+            <TopBar />
+            <RequestBar />
+            <div className="panes">
+              <RequestPanel />
+              <ResponsePanel />
+            </div>
+          </>
+        )}
+        {view.kind === "folder" && <FolderEditor key={view.path} path={view.path} />}
+        {view.kind === "variables" && <VariablesEditor key={view.environment ?? ""} environment={view.environment} />}
         <footer className="statusbar">
-          <span>Ctrl+Enter to send</span>
-          <span>{version && `v${version}`}</span>
+          <span>Ctrl+Enter send · Ctrl+S save · Ctrl+N new</span>
+          <span>
+            {workspace && (environment ? `Environment: ${environment} · ` : "No environment · ")}
+            {version && `v${version}`}
+          </span>
         </footer>
       </main>
+      {savingAs && <SaveDialog />}
     </div>
   );
 }

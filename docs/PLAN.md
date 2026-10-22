@@ -38,11 +38,17 @@ my-workspace/
 ├── workspace.yaml
 ├── environments/local.yaml        Variables; secret values are only keychain references
 └── PCK HWR API/
-    ├── _folder.yaml               Folder-level auth, headers, variables
+    ├── _folder.yaml               Folder-level order, auth, headers, variables
     └── notify.yaml                method, url, headers, body, auth, expect (assertions)
 ```
 
-YAML because it reads well in diffs. Keys are written in a stable order so diffs stay clean.
+YAML because it reads well in diffs. Keys are written in a stable order and defaults are left out, so diffs stay
+clean. A file's name is the request's name. Each folder's `_folder.yaml` lists its children in display order, so
+reordering changes one file. A request without `auth` inherits it from the nearest folder that sets one.
+
+`{{variables}}` resolve from, highest priority first: the selected environment, the request's folders (nearest
+first), the collection, then the workspace's globals. The environment wins over collection variables, as in Postman,
+so a collection can carry defaults that each environment overrides.
 
 ## Milestones
 
@@ -50,7 +56,7 @@ YAML because it reads well in diffs. Keys are written in a stable order so diffs
 | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
 | **M0** | Scaffold, CI building Linux/macOS/Windows packages, lint and test setup                                                                                                       | A blank window launches on all 3 operating systems |
 | **M1** Send | Method, URL, query params, headers, body (JSON, form, multipart, raw, binary file), auth (Bearer, Basic, API key), response viewer (pretty or raw, headers, timing, size), history | A real POST with headers and a JSON body works end to end |
-| **M2** Organize | Collections and folders on disk, environments, `{{var}}` resolution (request → folder → collection → environment → global), keychain secrets, **Postman v2.1 import** | Real Postman exports import cleanly               |
+| **M2** Organize | Collections and folders on disk, environments, `{{var}}` resolution (environment → folder → collection → global), keychain secrets, **Postman v2.1 import** | Real Postman exports import cleanly               |
 | **M3** Agent tool | `tuma` CLI (`send`, `run`, `test`, `check`, `--json`); `tuma mcp` server; ad-hoc requests with assertions; `expect:` assertions in request files; OpenAPI import, discovery, sync and contract checks; JSON Schemas for workspace files | An agent builds an endpoint, tests it through MCP and saves a passing request as a test, with no setup |
 | **M4** UX polish | Tabs, command palette (Ctrl+K), keyboard-first navigation, dark and light themes, search, cURL import/export, code snippets (curl, Python, JS)                           | It feels nicer than Postman for daily use         |
 | **M5** Scripts | Pre-request and test scripts in an embedded JS engine (`rquickjs`) with a `pm.*`-compatible subset; collection runner; JUnit output for `tuma test` | Imported Postman scripts run unchanged |

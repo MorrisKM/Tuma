@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::http::Request;
+use crate::workspace::files::RequestFile;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -15,7 +15,11 @@ pub struct Entry {
     pub id: String,
     /// Unix time in milliseconds.
     pub sent_at: u64,
-    pub request: Request,
+    /// The request as written, before variables were resolved.
+    pub request: RequestFile,
+    /// Where the request is saved in the workspace, if it is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
     /// `None` when the request failed before a response arrived.
     pub status: Option<u16>,
     pub error: Option<String>,
@@ -81,11 +85,11 @@ mod tests {
         Entry {
             id: id.into(),
             sent_at: 1,
-            request: Request {
-                method: "GET".into(),
+            request: RequestFile {
                 url: "example.com".into(),
                 ..Default::default()
             },
+            path: None,
             status: Some(200),
             error: None,
             total_ms: Some(1.5),

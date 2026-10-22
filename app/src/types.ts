@@ -1,4 +1,5 @@
-// Mirrors tuma_core::http (crates/core/src/http/model.rs) and the views in src-tauri/src/lib.rs.
+// Mirrors the Rust types sent over IPC: tuma_core::workspace::files (the on-disk format), tuma_core::workspace and the
+// views in src-tauri/src/lib.rs. Fields the Rust side leaves out when they hold their default are optional here.
 
 export interface KeyValue {
   name: string;
@@ -14,8 +15,9 @@ export interface Part extends KeyValue {
 
 export type Body =
   | { type: "none" }
+  | { type: "json" | "xml" | "html" | "text" | "javascript"; content: string }
   | { type: "raw"; content: string; contentType: string }
-  | { type: "formUrlEncoded"; fields: KeyValue[] }
+  | { type: "form"; fields: KeyValue[] }
   | { type: "multipart"; parts: Part[] }
   | { type: "file"; path: string; contentType?: string | null };
 
@@ -32,14 +34,65 @@ export interface Settings {
   verifyTls: boolean;
 }
 
-export interface Request {
+export interface Scripts {
+  preRequest?: string;
+  test?: string;
+}
+
+/** A request file. A missing `auth` means "inherit from the folder". */
+export interface RequestFile {
   method: string;
   url: string;
-  headers: KeyValue[];
-  body: Body;
-  auth: Auth;
-  settings: Settings;
+  description?: string;
+  headers?: Partial<KeyValue>[];
+  body?: Body;
+  auth?: Auth | null;
+  settings?: Settings;
+  scripts?: Scripts;
 }
+
+export interface Variable {
+  name: string;
+  value?: string;
+  secret?: boolean;
+  enabled?: boolean;
+}
+
+/** A `_folder.yaml`. A missing `auth` means "inherit". */
+export interface FolderFile {
+  description?: string;
+  order?: string[];
+  auth?: Auth | null;
+  headers?: Partial<KeyValue>[];
+  variables?: Variable[];
+  scripts?: Scripts;
+}
+
+/** A variable with its secret value filled in from the keychain. */
+export interface VariableValue {
+  name: string;
+  value: string;
+  secret: boolean;
+  enabled: boolean;
+}
+
+export interface TreeNode {
+  kind: "collection" | "folder" | "request";
+  name: string;
+  path: string;
+  method?: string;
+  children?: TreeNode[];
+}
+
+export interface WorkspaceInfo {
+  name: string;
+  root: string;
+}
+
+export type ImportResult =
+  | { kind: "collection"; path: string; warnings: string[] }
+  | { kind: "environment"; name: string; warnings: string[] }
+  | { kind: "globals"; warnings: string[] };
 
 export interface Header {
   name: string;
@@ -70,18 +123,21 @@ export interface Response {
   timing: Timing;
   redirects: { status: number; url: string }[];
   sent: { method: string; url: string; headers: Header[]; bodySize: number };
+  unresolved: string[];
 }
 
 export interface RequestError {
   kind: string;
   message: string;
+  unresolved?: string[];
 }
 
 export interface HistoryEntry {
   id: string;
   /** Unix time in milliseconds. */
   sentAt: number;
-  request: Request;
+  request: RequestFile;
+  path?: string | null;
   status: number | null;
   error: string | null;
   totalMs: number | null;

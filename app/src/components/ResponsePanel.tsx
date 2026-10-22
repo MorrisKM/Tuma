@@ -21,6 +21,7 @@ export function ResponsePanel() {
           <strong>Could not send the request</strong>
           <p className="mono">{error.message}</p>
         </div>
+        <Unresolved names={error.unresolved ?? []} />
       </section>
     );
   }
@@ -40,6 +41,7 @@ export function ResponsePanel() {
       >
         <StatusLine response={response} />
       </Tabs>
+      <Unresolved names={response.unresolved} />
       <div className="panel-body">
         {tab === "body" && <BodyView response={response} />}
         {tab === "headers" && <HeaderTable headers={response.headers} />}
@@ -55,6 +57,21 @@ function Placeholder({ children }: { children: React.ReactNode }) {
     <section className="response-panel">
       <p className="empty muted">{children}</p>
     </section>
+  );
+}
+
+/** Variables that had no value, so their {{placeholders}} were sent as written. */
+function Unresolved({ names }: { names: string[] }) {
+  const environment = useStore((s) => s.environment);
+  if (names.length === 0) return null;
+  return (
+    <div className="unresolved">
+      {names.length === 1 ? "This variable has" : "These variables have"} no value
+      {environment ? ` in "${environment}" or any other scope` : " (no environment is selected)"}:{" "}
+      {names.map((n) => (
+        <code key={n}>{`{{${n}}}`}</code>
+      ))}
+    </div>
   );
 }
 

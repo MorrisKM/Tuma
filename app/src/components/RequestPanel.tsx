@@ -1,8 +1,9 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
-import { type AuthMode, type BodyMode, RAW_TYPES } from "../draft";
+import { type BodyMode, isTextMode } from "../draft";
 import { useStore } from "../store";
 import type { KeyValue } from "../types";
+import { AuthForm } from "./AuthForm";
 import { CodeEditor, type Language } from "./CodeEditor";
 import { blankPart, blankRow, KeyValueEditor } from "./KeyValueEditor";
 import { Tabs } from "./Tabs";
@@ -50,8 +51,9 @@ function Headers() {
     <>
       <KeyValueEditor rows={headers} onChange={(headers) => useStore.getState().update({ headers })} blank={blankRow} />
       <p className="hint">
-        Tuma adds User-Agent, Accept, Accept-Encoding and Content-Type unless you set them here. The Request tab of the
-        response shows exactly what was sent.
+        Headers set on the collection and its folders are sent too, unless you set the same header here. Tuma adds
+        User-Agent, Accept, Accept-Encoding and Content-Type unless you set them. The Request tab of the response shows
+        exactly what was sent.
       </p>
     </>
   );
@@ -64,6 +66,7 @@ const BODY_MODES: { id: BodyMode; label: string }[] = [
   { id: "html", label: "HTML" },
   { id: "text", label: "Text" },
   { id: "javascript", label: "JavaScript" },
+  { id: "raw", label: "Other text" },
   { id: "form", label: "Form URL-encoded" },
   { id: "multipart", label: "Multipart form" },
   { id: "file", label: "Binary file" },
@@ -94,15 +97,24 @@ function BodyEditor() {
             Format
           </button>
         )}
+        {mode === "raw" && (
+          <input
+            className="mono"
+            value={draft.rawContentType}
+            placeholder="Content type"
+            aria-label="Content type"
+            onChange={(e) => update({ rawContentType: e.target.value })}
+          />
+        )}
       </div>
 
       {mode === "none" && <p className="hint">This request has no body.</p>}
-      {RAW_TYPES[mode] && (
+      {isTextMode(mode) && (
         <div className="editor-frame">
           <CodeEditor
             value={draft.raw}
             onChange={(raw) => update({ raw })}
-            language={mode === "text" ? "text" : (mode as Language)}
+            language={mode === "raw" ? "text" : (mode as Language)}
           />
         </div>
       )}
@@ -166,75 +178,19 @@ function prettyJson(text: string): string {
   }
 }
 
-const AUTH_MODES: { id: AuthMode; label: string }[] = [
-  { id: "none", label: "No auth" },
-  { id: "bearer", label: "Bearer token" },
-  { id: "basic", label: "Basic auth" },
-  { id: "apiKey", label: "API key" },
-];
-
 function AuthEditor() {
-  const d = useStore((s) => s.draft);
-  const update = useStore.getState().update;
-
+  const auth = useStore((s) => s.draft.auth);
+  const saved = useStore((s) => s.draft.path !== null);
   return (
-    <div className="form">
-      <label>
-        <span>Type</span>
-        <select value={d.authMode} onChange={(e) => update({ authMode: e.target.value as AuthMode })}>
-          {AUTH_MODES.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      {d.authMode === "bearer" && (
-        <label>
-          <span>Token</span>
-          <input value={d.token} spellCheck={false} onChange={(e) => update({ token: e.target.value })} />
-        </label>
-      )}
-      {d.authMode === "basic" && (
-        <>
-          <label>
-            <span>Username</span>
-            <input value={d.username} spellCheck={false} onChange={(e) => update({ username: e.target.value })} />
-          </label>
-          <label>
-            <span>Password</span>
-            <input type="password" value={d.password} onChange={(e) => update({ password: e.target.value })} />
-          </label>
-        </>
-      )}
-      {d.authMode === "apiKey" && (
-        <>
-          <label>
-            <span>Key</span>
-            <input
-              value={d.apiKey}
-              placeholder="X-Api-Key"
-              spellCheck={false}
-              onChange={(e) => update({ apiKey: e.target.value })}
-            />
-          </label>
-          <label>
-            <span>Value</span>
-            <input value={d.apiValue} spellCheck={false} onChange={(e) => update({ apiValue: e.target.value })} />
-          </label>
-          <label>
-            <span>Add to</span>
-            <select
-              value={d.apiLocation}
-              onChange={(e) => update({ apiLocation: e.target.value as "header" | "query" })}
-            >
-              <option value="header">Header</option>
-              <option value="query">Query params</option>
-            </select>
-          </label>
-        </>
-      )}
-    </div>
+    <AuthForm
+      auth={auth}
+      onChange={(auth) => useStore.getState().update({ auth })}
+      inheritHint={
+        saved
+          ? "Uses the auth of the nearest folder or collection that sets one."
+          : "This request is not saved in a collection, so it has nothing to inherit: no auth is sent."
+      }
+    />
   );
 }
 
