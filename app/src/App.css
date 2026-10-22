@@ -946,6 +946,14 @@ body.resizing-y * {
   background: var(--accent-soft);
 }
 
+.tab .dot {
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
 .tabs-extra {
   flex-shrink: 0;
   padding-left: 12px;
@@ -4072,4 +4080,9 @@ td.mock-method {
 
 .mock-heading svg {
   vertical-align: -2px;
+}
+
+/* Every editor's caret (the URL bar's and GraphQL's too) in the theme's text color. */
+.cm-content {
+  caret-color: var(--text) !important;
 }

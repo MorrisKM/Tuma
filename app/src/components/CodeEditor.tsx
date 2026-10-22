@@ -47,6 +47,8 @@ const theme = EditorView.theme({
   ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "transparent" },
   ".cm-foldPlaceholder": { backgroundColor: "var(--bg-active)", border: "none", color: "var(--muted)" },
   ".cm-cursor": { borderLeftColor: "var(--text)" },
+  // CodeMirror's default caret is black unless an editor is marked dark; this one follows the app's theme.
+  ".cm-content": { caretColor: "var(--text)" },
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
     backgroundColor: "var(--selection) !important",
   },

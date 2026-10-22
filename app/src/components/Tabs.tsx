@@ -1,7 +1,8 @@
 import { useScrollRow } from "./ui";
 
 interface Props<T extends string> {
-  tabs: { id: T; label: string; count?: number }[];
+  /** `count` shows a number; `dot` marks a tab that has something set, where a number would mean nothing. */
+  tabs: { id: T; label: string; count?: number; dot?: boolean }[];
   active: T;
   onChange: (id: T) => void;
   children?: React.ReactNode;
@@ -23,6 +24,7 @@ export function Tabs<T extends string>({ tabs, active, onChange, children }: Pro
           >
             {tab.label}
             {tab.count ? <span className="count">{tab.count}</span> : null}
+            {tab.dot && !tab.count ? <span className="dot" aria-label="Set" /> : null}
           </button>
         ))}
       </div>

@@ -1,6 +1,6 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
-import { type BodyMode, isGrpc, isTextMode, isWebSocket, toRequestFile } from "../draft";
+import { type BodyMode, type Draft, isGrpc, isTextMode, isWebSocket, toRequestFile } from "../draft";
 import { formatJsonc } from "../jsonc";
 import { useStore } from "../store";
 import type { KeyValue } from "../types";
@@ -33,8 +33,8 @@ export function RequestPanel() {
         tabs={[
           { id: "params", label: "Params", count: active(draft.params) },
           { id: "headers", label: "Headers", count: active(draft.headers) },
-          { id: "body", label: "Body" },
-          { id: "auth", label: "Auth" },
+          { id: "body", label: "Body", dot: hasBody(draft) },
+          { id: "auth", label: "Auth", dot: !!draft.auth && draft.auth.type !== "none" },
           {
             id: "scripts",
             label: "Scripts",
@@ -68,6 +68,24 @@ export function RequestPanel() {
       </div>
     </section>
   );
+}
+
+/** Whether the body would send anything. */
+function hasBody(d: Draft): boolean {
+  switch (d.bodyMode) {
+    case "none":
+      return false;
+    case "form":
+      return d.form.some((r) => r.enabled && r.name);
+    case "multipart":
+      return d.parts.some((p) => p.enabled && p.name);
+    case "file":
+      return !!d.filePath;
+    case "graphql":
+      return !!d.graphql.query.trim();
+    default:
+      return !!d.raw.trim();
+  }
 }
 
 function Params() {
