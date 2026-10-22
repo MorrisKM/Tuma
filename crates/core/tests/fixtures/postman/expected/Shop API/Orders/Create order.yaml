@@ -1,0 +1,23 @@
+method: POST
+url: "{{baseUrl}}/orders"
+description: Places an order.
+headers:
+- name: Content-Type
+  value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "productId": 42,
+      "quantity": 2
+    }
+auth:
+  type: apiKey
+  key: X-Api-Key
+  value: "{{apiKey}}"
+  location: header
+scripts:
+  test: |-
+    pm.test("created", function () {
+        pm.response.to.have.status(201);
+    });

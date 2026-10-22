@@ -17,15 +17,18 @@ http = "1"
 http-body-util = "0.1"
 hyper = { version = "1", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
+keyring = "4"
 mime_guess = "2"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 rustls-platform-verifier = "0.7"
 serde.workspace = true
+serde-saphyr = "2"
 serde_json.workspace = true
 thiserror = "2"
 tokio = { workspace = true, features = ["net", "time", "fs", "io-util"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
 url = "2"
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 hyper = { version = "1", features = ["server", "http1", "http2"] }

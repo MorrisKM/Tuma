@@ -1,0 +1,8 @@
+variables:
+- name: baseUrl
+  value: https://staging.example.com
+- name: token
+  secret: true
+- name: unused
+  value: x
+  enabled: false

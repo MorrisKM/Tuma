@@ -1,0 +1,11 @@
+{
+  "id": "00000000-0000-0000-0000-000000000001",
+  "name": "Staging",
+  "values": [
+    { "key": "baseUrl", "value": "https://staging.example.com", "type": "default", "enabled": true },
+    { "key": "token", "value": "staging-token", "type": "secret", "enabled": true },
+    { "key": "unused", "value": "x", "type": "default", "enabled": false }
+  ],
+  "_postman_variable_scope": "environment",
+  "_postman_exported_using": "Postman/11.0.0"
+}

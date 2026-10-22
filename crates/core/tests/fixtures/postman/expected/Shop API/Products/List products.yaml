@@ -1,0 +1,8 @@
+method: GET
+url: "{{baseUrl}}/products?page=1&limit=20"
+headers:
+- name: Accept
+  value: application/json
+- name: X-Debug
+  value: "1"
+  enabled: false

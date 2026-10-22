@@ -1,0 +1,142 @@
+{
+  "info": {
+    "_postman_id": "00000000-0000-0000-0000-000000000000",
+    "name": "Shop API",
+    "description": "Hand-made fixture covering the shapes real exports use.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "retries", "value": 3, "type": "number" },
+    { "key": "old", "value": "x", "disabled": true }
+  ],
+  "event": [
+    { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [""] } }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": "{{baseUrl}}/health"
+    },
+    {
+      "name": "Products",
+      "description": { "content": "Product catalogue", "type": "text/markdown" },
+      "auth": { "type": "noauth" },
+      "item": [
+        {
+          "name": "List products",
+          "request": {
+            "method": "get",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "X-Debug", "value": "1", "disabled": true }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "sort", "value": "price", "disabled": true }
+              ]
+            }
+          },
+          "response": [{ "name": "OK", "code": 200, "body": "[]" }]
+        },
+        {
+          "name": "Get product",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/products/:id",
+              "variable": [{ "key": "id", "value": "42" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Create order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test(\"created\", function () {", "    pm.response.to.have.status(201);", "});"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                { "key": "key", "value": "X-Api-Key" },
+                { "key": "value", "value": "{{apiKey}}" },
+                { "key": "in", "value": "header" }
+              ]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": 42,\n  \"quantity\": 2\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/orders",
+            "description": "Places an order."
+          }
+        },
+        {
+          "name": "Upload receipt",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "orderId", "value": "7", "type": "text" },
+                { "key": "receipt", "type": "file", "src": "/tmp/receipt.pdf" }
+              ]
+            },
+            "url": "{{baseUrl}}/orders/7/receipt"
+          }
+        },
+        {
+          "name": "Login: form / urlencoded",
+          "request": {
+            "auth": { "type": "basic", "basic": [{ "key": "password", "value": "secret" }, { "key": "username", "value": "ann" }] },
+            "method": "POST",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [{ "key": "grant_type", "value": "password" }, { "key": "scope", "value": "all", "disabled": true }]
+            },
+            "url": "{{baseUrl}}/login"
+          }
+        },
+        {
+          "name": "Search",
+          "request": {
+            "method": "POST",
+            "body": { "mode": "graphql", "graphql": { "query": "{ orders { id } }", "variables": "{\"first\": 5}" } },
+            "url": "{{baseUrl}}/graphql"
+          }
+        },
+        {
+          "name": "Signed",
+          "request": {
+            "auth": { "type": "awsv4", "awsv4": [{ "key": "region", "value": "eu-west-1" }] },
+            "method": "DELETE",
+            "url": "{{baseUrl}}/orders/7"
+          }
+        }
+      ]
+    }
+  ]
+}

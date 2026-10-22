@@ -3,6 +3,10 @@
 
 pub mod history;
 pub mod http;
+pub mod import;
+pub mod secrets;
+pub mod vars;
+pub mod workspace;
 
 /// The version of this build, shown in the app.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

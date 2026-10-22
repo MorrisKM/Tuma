@@ -1,0 +1,10 @@
+method: POST
+url: "{{baseUrl}}/orders/7/receipt"
+body:
+  type: multipart
+  parts:
+  - name: orderId
+    value: "7"
+  - name: receipt
+    value: /tmp/receipt.pdf
+    file: true

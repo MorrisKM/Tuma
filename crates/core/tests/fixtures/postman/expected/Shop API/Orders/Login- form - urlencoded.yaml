@@ -1,0 +1,14 @@
+method: POST
+url: "{{baseUrl}}/login"
+body:
+  type: form
+  fields:
+  - name: grant_type
+    value: password
+  - name: scope
+    value: all
+    enabled: false
+auth:
+  type: basic
+  username: ann
+  password: secret

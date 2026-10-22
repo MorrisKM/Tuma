@@ -1,0 +1,6 @@
+description: Product catalogue
+order:
+- List products
+- Get product
+auth:
+  type: none

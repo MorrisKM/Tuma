@@ -1,0 +1,16 @@
+description: Hand-made fixture covering the shapes real exports use.
+order:
+- Health
+- Products
+- Orders
+auth:
+  type: bearer
+  token: "{{token}}"
+variables:
+- name: baseUrl
+  value: http://localhost:3000
+- name: retries
+  value: "3"
+- name: old
+  value: x
+  enabled: false

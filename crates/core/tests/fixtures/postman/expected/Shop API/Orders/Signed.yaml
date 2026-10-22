@@ -1,0 +1,4 @@
+method: DELETE
+url: "{{baseUrl}}/orders/7"
+auth:
+  type: none
