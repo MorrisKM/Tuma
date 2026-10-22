@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1f2530"/>
+      <stop offset="1" stop-color="#11141a"/>
+    </linearGradient>
+    <linearGradient id="wing" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5ee0b5"/>
+      <stop offset="1" stop-color="#22a67d"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square, inset as macOS and the other platforms expect. -->
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#bg)"/>
+  <!-- A paper plane: "tuma" means "send". -->
+  <g transform="translate(512 520) rotate(-12) translate(-512 -520)">
+    <path d="M250 520 L780 300 L640 760 L520 600 Z" fill="url(#wing)"/>
+    <path d="M520 600 L780 300 L560 640 Z" fill="#127a5b"/>
+    <path d="M520 600 L560 640 L500 720 Z" fill="#0d5c45"/>
+  </g>
+  <!-- Motion lines. -->
+  <g stroke="#34c79a" stroke-width="34" stroke-linecap="round" opacity="0.55">
+    <line x1="190" y1="660" x2="330" y2="660"/>
+    <line x1="230" y1="740" x2="400" y2="740"/>
+  </g>
+</svg>
