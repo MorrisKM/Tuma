@@ -119,6 +119,7 @@ fn options<'a>(
         history: None,
         source: "test",
         allow_host: None,
+        network: None,
         iterations: 1,
         data,
         delay: Duration::ZERO,

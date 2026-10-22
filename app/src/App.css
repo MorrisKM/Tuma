@@ -1656,3 +1656,66 @@ iframe.visualizer {
   border-bottom: 1px solid var(--border);
   word-break: break-all;
 }
+
+/* Settings */
+
+.settings {
+  max-width: 820px;
+}
+
+.settings h3 {
+  font-size: 14px;
+  margin: 22px 0 8px;
+}
+
+.settings h3:first-child {
+  margin-top: 0;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 6px 12px;
+  align-items: center;
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.cert-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.cert-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cookie-manager {
+  margin-top: 12px;
+}
+
+.cookie-manager h4 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.cookie-manager details {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 0;
+}
+
+.cookie-manager summary {
+  cursor: pointer;
+  font-size: 13px;
+}

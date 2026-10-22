@@ -29,7 +29,9 @@ export type View =
   /** How to connect a coding agent over MCP. */
   | { kind: "agents" }
   /** The collection runner, for a collection or folder. */
-  | { kind: "runner"; path: string };
+  | { kind: "runner"; path: string }
+  /** This machine's settings: proxy, certificates, cookies. */
+  | { kind: "settings" };
 
 export interface Notice {
   tone: "info" | "error";

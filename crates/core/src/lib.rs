@@ -14,6 +14,7 @@ pub mod runner;
 pub mod runs;
 pub mod script;
 pub mod secrets;
+pub mod settings;
 pub mod vars;
 pub mod workspace;
 

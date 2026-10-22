@@ -51,6 +51,13 @@ export function Sidebar() {
           >
             Connect an agent
           </button>
+          <button
+            className="button small"
+            onClick={() => useStore.setState({ view: { kind: "settings" } })}
+            title="Proxy, certificates and cookies"
+          >
+            Settings
+          </button>
         </div>
       </div>
       <div className="sidebar-tabs" role="tablist">

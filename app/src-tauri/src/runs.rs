@@ -87,6 +87,7 @@ pub async fn run_collection(
         Some(file) => runs::read_data_file(file)?,
         None => vec![],
     };
+    let network = tuma_core::settings::network_for(Some(&ws), secrets())?;
     let stop = Arc::new(AtomicBool::new(false));
     running
         .0
@@ -105,6 +106,7 @@ pub async fn run_collection(
             history: Some(&history),
             source: "",
             allow_host: None,
+            network: Some(network.clone()),
             iterations,
             data,
             delay: Duration::from_millis(delay_ms),
@@ -123,6 +125,7 @@ pub async fn run_collection(
     )
     .await;
     running.0.lock().unwrap().remove(&run_id);
+    let _ = tuma_core::settings::keep_cookies(&network, Some(&ws));
     let report = report.map_err(|e| e.to_string())?;
 
     // Saving is a convenience; a run that could not be saved still shows its results.

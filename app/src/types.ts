@@ -270,3 +270,41 @@ export interface HistoryEntry {
   /** Who sent it when not the app: "cli", or "mcp:<agent name>". */
   source?: string | null;
 }
+
+/** This machine's network settings. */
+export interface MachineSettings {
+  proxy: {
+    mode: "system" | "none" | "custom";
+    http: string;
+    https: string;
+    bypass: string[];
+    username: string;
+  };
+  clientCertificates: CertificateSetting[];
+  caCertificates: string[];
+  cookies: { enabled: boolean; scriptDomains: string[] };
+}
+
+export interface CertificateSetting {
+  host: string;
+  cert?: string;
+  key?: string;
+  pfx?: string;
+}
+
+export interface SettingsView {
+  settings: MachineSettings;
+  proxyPasswordSet: boolean;
+  passphrasesSet: string[];
+  systemProxy: string | null;
+}
+
+export interface CookieView {
+  domain: string;
+  path: string;
+  name: string;
+  value: string;
+  expires?: number;
+  secure: boolean;
+  httpOnly: boolean;
+}

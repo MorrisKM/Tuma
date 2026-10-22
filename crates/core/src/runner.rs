@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -148,6 +149,9 @@ pub struct Job<'a> {
     /// variables are resolved.
     pub allow_host: Option<AllowHost>,
     pub scripting: Scripting<'a>,
+    /// Proxy, certificates and cookie jar, from [`crate::settings::MachineSettings::network`]. `None` sends
+    /// directly, with no cookies.
+    pub network: Option<Arc<http::Network>>,
 }
 
 /// How scripts run for a job.
@@ -404,6 +408,7 @@ pub async fn execute(job: Job<'_>) -> Execution {
                 scripts,
                 &input,
                 job.allow_host.clone(),
+                job.network.clone(),
                 job.scripting.timeout,
             )
         });
@@ -533,7 +538,10 @@ pub async fn execute(job: Job<'_>) -> Execution {
     }
 
     // The request
-    let result = http::send(&prepared.request).await;
+    let result = match &job.network {
+        Some(network) => http::send_with(&prepared.request, network).await,
+        None => http::send(&prepared.request).await,
+    };
     execution.sent = Some(prepared.request.clone());
     if let Some(history) = job.history {
         let entry = Entry {

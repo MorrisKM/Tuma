@@ -517,8 +517,25 @@
       return Object.fromEntries(this._cookies.map((c) => [c.name, c.value]));
     }
     jar() {
-      const unsupported = (cb) => cb && cb(new Error("pm.cookies.jar() is not supported in Tuma yet"));
-      return { get: (_u, _n, cb) => unsupported(cb), getAll: (_u, cb) => unsupported(cb), set: (_u, _n, _v, cb) => unsupported(cb), unset: (_u, _n, cb) => unsupported(cb), clear: (_u, cb) => unsupported(cb) };
+      // As in Postman: callbacks, and only for domains the user allowed (Settings > Cookies).
+      const call = (op, args, cb, pick = (v) => v) => {
+        const result = JSON.parse(native.jar(op, JSON.stringify(args)));
+        const error = result.error ? new Error(result.error) : null;
+        if (typeof cb === "function") track(Promise.resolve().then(() => cb(error, error ? undefined : pick(result.value))));
+        else if (error) throw error;
+      };
+      const url = (u) => (u instanceof Url ? u.toString() : String(u));
+      return {
+        get: (u, name, cb) => call("get", { url: url(u), name }, cb),
+        getAll: (u, cb) => call("getAll", { url: url(u) }, cb),
+        set: (u, name, value, cb) => {
+          if (typeof value === "function") [value, cb] = ["", value];
+          const cookie = typeof name === "object" ? name : { name, value };
+          call("set", { url: url(u), name: cookie.name, value: String(cookie.value ?? ""), path: cookie.path }, cb, () => cookie);
+        },
+        unset: (u, name, cb) => call("unset", { url: url(u), name }, cb),
+        clear: (u, cb) => call("clear", { url: url(u) }, cb),
+      };
     }
   }
 

@@ -1,6 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AgentSetup,
+  CookieView,
+  MachineSettings,
+  SettingsView,
   CurrentValues,
   PastRun,
   RunReport,
@@ -98,3 +101,13 @@ export const currentValues = () => invoke<CurrentValues>("current_values");
 /** Resets one scope, or every scope with no argument. */
 export const resetCurrentValues = (scope?: { kind: "environment" | "collection" | "globals"; name?: string }) =>
   invoke<void>("reset_current_values", { scope: scope ?? null });
+
+export const settingsRead = () => invoke<SettingsView>("settings_read");
+/** Secrets: undefined leaves one as it is, "" removes it. */
+export const settingsWrite = (
+  settings: MachineSettings,
+  secretsIn: { proxyPassword?: string; passphrases: Record<string, string> },
+) => invoke<void>("settings_write", { settings, secretsIn });
+export const cookiesList = () => invoke<Record<string, CookieView[]>>("cookies_list");
+export const cookiesRemove = (domain: string | null, path: string | null, name: string | null) =>
+  invoke<void>("cookies_remove", { domain, path, name });

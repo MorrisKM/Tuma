@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use bytes::Bytes;
 use http::header::{
     AUTHORIZATION, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE, COOKIE, HOST, LOCATION,
+    PROXY_AUTHORIZATION, SET_COOKIE,
 };
 use http::{HeaderMap, HeaderValue, Method, StatusCode, Version};
 use http_body_util::{BodyExt, Full};
@@ -20,20 +21,28 @@ use url::{Host, Position, Url};
 
 use super::Error;
 use super::model::{Header, Redirect, Request, Response, SentRequest, Timing};
+use super::network::Network;
 use super::prepare::prepare;
 use super::tls;
 
-/// Sends `request` and reads the whole response. Dropping the future cancels the request.
+/// Sends `request` directly, with no cookie jar, and reads the whole response. Dropping the future cancels it.
 pub async fn send(request: &Request) -> Result<Response, Error> {
+    send_with(request, &Network::default()).await
+}
+
+/// Sends `request` the way `network` says: through its proxy, with its certificates and cookie jar.
+pub async fn send_with(request: &Request, network: &Network) -> Result<Response, Error> {
     match request.settings.timeout_ms {
-        Some(ms) if ms > 0 => tokio::time::timeout(Duration::from_millis(ms), send_inner(request))
-            .await
-            .map_err(|_| Error::Timeout(ms))?,
-        _ => send_inner(request).await,
+        Some(ms) if ms > 0 => {
+            tokio::time::timeout(Duration::from_millis(ms), send_inner(request, network))
+                .await
+                .map_err(|_| Error::Timeout(ms))?
+        }
+        _ => send_inner(request, network).await,
     }
 }
 
-async fn send_inner(request: &Request) -> Result<Response, Error> {
+async fn send_inner(request: &Request, network: &Network) -> Result<Response, Error> {
     let start = Instant::now();
     let prepared = prepare(request).await?;
     let (mut method, mut url, mut headers, mut body) = (
@@ -43,16 +52,49 @@ async fn send_inner(request: &Request) -> Result<Response, Error> {
         prepared.body,
     );
     let mut redirects = Vec::new();
+    // A Cookie header set on the request is sent as is, with the jar's cookies after it.
+    let own_cookies = headers.get(COOKIE).cloned();
 
     loop {
+        let mut hop_headers = headers.clone();
+        if let Some(jar) = &network.cookies {
+            let from_jar: Vec<String> = jar
+                .lock()
+                .unwrap()
+                .get_request_values(&url)
+                .map(|(name, value)| format!("{name}={value}"))
+                .collect();
+            if !from_jar.is_empty() {
+                let mut value = own_cookies
+                    .as_ref()
+                    .filter(|_| headers.contains_key(COOKIE))
+                    .and_then(|v| v.to_str().ok())
+                    .map(|v| format!("{v}; "))
+                    .unwrap_or_default();
+                value.push_str(&from_jar.join("; "));
+                if let Ok(value) = HeaderValue::from_str(&value) {
+                    hop_headers.insert(COOKIE, value);
+                }
+            }
+        }
         let exchange = exchange(
             &method,
             &url,
-            &headers,
+            &hop_headers,
             body.clone(),
             request.settings.verify_tls,
+            network,
         )
         .await?;
+        if let Some(jar) = &network.cookies {
+            let cookies = exchange
+                .headers
+                .get_all(SET_COOKIE)
+                .iter()
+                .filter_map(|v| v.to_str().ok())
+                .filter_map(|v| cookie_store::RawCookie::parse(v.to_string()).ok());
+            jar.lock().unwrap().store_response_cookies(cookies, &url);
+        }
         let status = exchange.status;
         let location = exchange.headers.get(LOCATION).and_then(|l| l.to_str().ok());
 
@@ -125,11 +167,95 @@ async fn exchange(
     headers: &HeaderMap,
     body: Bytes,
     verify_tls: bool,
+    network: &Network,
 ) -> Result<Exchange, Error> {
     let host = url.host_str().unwrap_or_default().to_string();
     let port = url.port_or_known_default().unwrap_or(80);
     let mut timing = Timing::default();
+    let proxy = network.proxy.as_ref().and_then(|p| p.for_url(url));
 
+    // Through a proxy, DNS and connect times are the proxy's.
+    let target = proxy.unwrap_or(url);
+    let mut stream = connect_to(target, &mut timing).await?;
+    let remote_addr = stream.peer_addr().ok();
+    let mut headers = headers.clone();
+    let mut absolute_form = false;
+    if let Some(proxy) = proxy {
+        let auth = proxy_authorization(proxy);
+        if url.scheme() == "https" {
+            tunnel(&mut stream, &host, port, auth.as_deref()).await?;
+        } else {
+            // A plain HTTP request goes to the proxy with the full URL.
+            absolute_form = true;
+            if let Some(auth) = auth {
+                headers.insert(
+                    PROXY_AUTHORIZATION,
+                    HeaderValue::from_str(&auth)
+                        .map_err(|_| Error::InvalidHeader("Proxy-Authorization".into()))?,
+                );
+            }
+        }
+    }
+    let headers = &headers;
+
+    if url.scheme() == "https" {
+        let started = Instant::now();
+        let server_name = match url.host() {
+            Some(Host::Ipv4(ip)) => ServerName::IpAddress(std::net::IpAddr::from(ip).into()),
+            Some(Host::Ipv6(ip)) => ServerName::IpAddress(std::net::IpAddr::from(ip).into()),
+            _ => ServerName::try_from(host.clone()).map_err(|e| Error::InvalidUrl {
+                url: url.to_string(),
+                reason: e.to_string(),
+            })?,
+        };
+        let connector = TlsConnector::from(tls::config(tls::Options {
+            verify: verify_tls,
+            client_certificate: network.client_certificate(&host, Some(port)),
+            ca_certificates: &network.ca_certificates,
+            http1_only: false,
+        })?);
+        let stream = connector
+            .connect(server_name, stream)
+            .await
+            .map_err(|source| Error::Tls { host, source })?;
+        timing.tls = Some(started.elapsed());
+        let http2 = stream.get_ref().1.alpn_protocol() == Some(b"h2");
+        exchange_over(
+            TokioIo::new(stream),
+            http2,
+            false,
+            method,
+            url,
+            headers,
+            body,
+            remote_addr,
+            timing,
+        )
+        .await
+    } else {
+        exchange_over(
+            TokioIo::new(stream),
+            false,
+            absolute_form,
+            method,
+            url,
+            headers,
+            body,
+            remote_addr,
+            timing,
+        )
+        .await
+    }
+}
+
+/// Resolves and connects to a URL's host, recording DNS and connect times.
+pub(crate) async fn connect_to(url: &Url, timing: &mut Timing) -> Result<TcpStream, Error> {
+    let host = url
+        .host_str()
+        .unwrap_or_default()
+        .trim_matches(['[', ']'])
+        .to_string();
+    let port = url.port_or_known_default().unwrap_or(80);
     let addrs: Vec<SocketAddr> = match url.host() {
         Some(Host::Ipv4(ip)) => vec![SocketAddr::new(ip.into(), port)],
         Some(Host::Ipv6(ip)) => vec![SocketAddr::new(ip.into(), port)],
@@ -145,54 +271,91 @@ async fn exchange(
             found.collect()
         }
     };
-
     let started = Instant::now();
     let stream = connect(&addrs, &host).await?;
     timing.connect = started.elapsed();
-    let remote_addr = stream.peer_addr().ok();
     // Nagle's algorithm would delay small request bodies.
     let _ = stream.set_nodelay(true);
+    Ok(stream)
+}
 
-    if url.scheme() == "https" {
-        let started = Instant::now();
-        let server_name = match url.host() {
-            Some(Host::Ipv4(ip)) => ServerName::IpAddress(std::net::IpAddr::from(ip).into()),
-            Some(Host::Ipv6(ip)) => ServerName::IpAddress(std::net::IpAddr::from(ip).into()),
-            _ => ServerName::try_from(host.clone()).map_err(|e| Error::InvalidUrl {
-                url: url.to_string(),
-                reason: e.to_string(),
-            })?,
-        };
-        let connector = TlsConnector::from(tls::config(verify_tls)?);
-        let stream = connector
-            .connect(server_name, stream)
-            .await
-            .map_err(|source| Error::Tls { host, source })?;
-        timing.tls = Some(started.elapsed());
-        let http2 = stream.get_ref().1.alpn_protocol() == Some(b"h2");
-        exchange_over(
-            TokioIo::new(stream),
-            http2,
-            method,
-            url,
-            headers,
-            body,
-            remote_addr,
-            timing,
-        )
-        .await
+/// `Basic ...` for a proxy URL with a user name, such as `http://user:pass@proxy:3128`.
+pub(crate) fn proxy_authorization(proxy: &Url) -> Option<String> {
+    use base64::Engine;
+    if proxy.username().is_empty() {
+        return None;
+    }
+    let decode = |s: &str| {
+        percent_encoding::percent_decode_str(s)
+            .decode_utf8_lossy()
+            .into_owned()
+    };
+    let pair = format!(
+        "{}:{}",
+        decode(proxy.username()),
+        decode(proxy.password().unwrap_or_default())
+    );
+    Some(format!(
+        "Basic {}",
+        base64::engine::general_purpose::STANDARD.encode(pair)
+    ))
+}
+
+/// Asks an HTTP proxy for a tunnel to `host:port` (`CONNECT`), for TLS (and WebSockets) through it.
+pub(crate) async fn tunnel(
+    stream: &mut TcpStream,
+    host: &str,
+    port: u16,
+    auth: Option<&str>,
+) -> Result<(), Error> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let authority = if host.contains(':') {
+        format!("[{host}]:{port}")
     } else {
-        exchange_over(
-            TokioIo::new(stream),
-            false,
-            method,
-            url,
-            headers,
-            body,
-            remote_addr,
-            timing,
-        )
+        format!("{host}:{port}")
+    };
+    let mut request = format!("CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\n");
+    if let Some(auth) = auth {
+        request.push_str(&format!("Proxy-Authorization: {auth}\r\n"));
+    }
+    request.push_str("\r\n");
+    let proxy_error = |message: String| Error::Proxy(message);
+    stream
+        .write_all(request.as_bytes())
         .await
+        .map_err(|e| proxy_error(e.to_string()))?;
+    // Read the proxy's answer up to the blank line; nothing else is sent before the tunnel is open.
+    let mut answer = Vec::new();
+    let mut byte = [0u8; 1];
+    while !answer.ends_with(b"\r\n\r\n") {
+        if answer.len() > 16 * 1024 {
+            return Err(proxy_error(
+                "the proxy's answer to CONNECT is too long".into(),
+            ));
+        }
+        let n = stream
+            .read(&mut byte)
+            .await
+            .map_err(|e| proxy_error(e.to_string()))?;
+        if n == 0 {
+            return Err(proxy_error("the proxy closed the connection".into()));
+        }
+        answer.push(byte[0]);
+    }
+    let status_line = String::from_utf8_lossy(&answer)
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .to_string();
+    let code = status_line.split_whitespace().nth(1).unwrap_or_default();
+    match code {
+        "200" => Ok(()),
+        "407" => Err(proxy_error(format!(
+            "the proxy wants credentials ({status_line}); add them to its URL or settings"
+        ))),
+        _ => Err(proxy_error(format!(
+            "the proxy refused the tunnel to {authority}: {status_line}"
+        ))),
     }
 }
 
@@ -220,6 +383,8 @@ async fn connect(addrs: &[SocketAddr], host: &str) -> Result<TcpStream, Error> {
 async fn exchange_over<T>(
     io: T,
     http2: bool,
+    // Send the full URL as the request target, for a plain HTTP proxy.
+    absolute_form: bool,
     method: &Method,
     url: &Url,
     headers: &HeaderMap,
@@ -244,7 +409,11 @@ where
                     .map_err(|_| Error::InvalidHeader(authority.into()))?,
             );
         }
-        url[Position::BeforePath..Position::AfterQuery].to_string()
+        if absolute_form {
+            url[..Position::AfterQuery].to_string()
+        } else {
+            url[Position::BeforePath..Position::AfterQuery].to_string()
+        }
     };
 
     let sent = SentRequest {

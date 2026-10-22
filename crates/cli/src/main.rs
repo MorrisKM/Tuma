@@ -14,6 +14,7 @@ use tuma_core::http::Settings;
 use tuma_core::runner::{self, Detail, Job};
 use tuma_core::runs;
 use tuma_core::secrets::EnvThenKeychain;
+use tuma_core::settings;
 use tuma_core::workspace::Workspace;
 use tuma_core::workspace::files::{Auth, Body, KeyValue, RequestFile};
 
@@ -355,6 +356,8 @@ async fn send(start: &Path, args: SendArgs) -> anyhow::Result<bool> {
     };
     let history = History::default_location();
     let detail = args.common.detail();
+    let network =
+        settings::network_for(workspace.as_ref(), &EnvThenKeychain).map_err(anyhow::Error::msg)?;
     let outcome = runner::send(
         Job {
             workspace: workspace.as_ref(),
@@ -369,10 +372,12 @@ async fn send(start: &Path, args: SendArgs) -> anyhow::Result<bool> {
             source: "cli",
             allow_host: None,
             scripting: Default::default(),
+            network: Some(network.clone()),
         },
         &detail,
     )
     .await;
+    settings::keep_cookies(&network, workspace.as_ref()).map_err(anyhow::Error::msg)?;
 
     let mut saved = None;
     if let (Some(path), Some(workspace)) = (&args.save, &workspace)
@@ -480,6 +485,8 @@ async fn run_saved(start: &Path, args: RunArgs, only_tests: bool) -> anyhow::Res
         None => vec![],
     };
     let history = History::default_location();
+    let network =
+        settings::network_for(Some(&workspace), &EnvThenKeychain).map_err(anyhow::Error::msg)?;
     let json = args.common.json;
     let several = args.iterations.max(data.len()) > 1;
     let mut printed_iteration = None;
@@ -493,6 +500,7 @@ async fn run_saved(start: &Path, args: RunArgs, only_tests: bool) -> anyhow::Res
             history: history.as_ref(),
             source: "cli",
             allow_host: None,
+            network: Some(network.clone()),
             iterations: args.iterations,
             data,
             delay: std::time::Duration::from_millis(args.delay),
@@ -520,6 +528,7 @@ async fn run_saved(start: &Path, args: RunArgs, only_tests: bool) -> anyhow::Res
     )
     .await?;
 
+    settings::keep_cookies(&network, Some(&workspace)).map_err(anyhow::Error::msg)?;
     if let Some(path) = &args.junit {
         let name = args.path.as_deref().unwrap_or(workspace.name());
         std::fs::write(path, runs::junit(&report, name))

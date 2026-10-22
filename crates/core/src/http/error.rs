@@ -29,6 +29,8 @@ pub enum Error {
     Timeout(u64),
     #[error("stopped after {0} redirects")]
     TooManyRedirects(u32),
+    #[error("proxy: {0}")]
+    Proxy(String),
     #[error("could not decode the {encoding} response body: {source}")]
     Decode { encoding: String, source: io::Error },
 }
@@ -45,6 +47,7 @@ impl Error {
             Error::TlsConfig(_) | Error::Tls { .. } => "tls",
             Error::Http(_) => "http",
             Error::Timeout(_) => "timeout",
+            Error::Proxy(_) => "proxy",
             Error::TooManyRedirects(_) => "redirects",
             Error::Decode { .. } => "decode",
         }

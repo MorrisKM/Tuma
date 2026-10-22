@@ -11,6 +11,7 @@ authors.workspace = true
 [dependencies]
 base64 = "0.23"
 brotli = "9"
+cookie_store = { version = "0.22", default-features = false, features = ["serde_json"] }
 bytes = "1"
 dirs = "6"
 flate2 = "1"
@@ -20,7 +21,10 @@ hyper = { version = "1", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 jsonschema = { version = "0.60", default-features = false }
 keyring = "4"
+md-5 = "0.11"
 mime_guess = "2"
+p12-keystore = "=0.3.2"
+percent-encoding = "2"
 regex = "1"
 rquickjs = "0.14"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
@@ -39,3 +43,4 @@ uuid = { version = "1", features = ["v4"] }
 hyper = { version = "1", features = ["server", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["tokio", "server", "http1", "http2", "server-auto"] }
 rcgen = "0.14"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }

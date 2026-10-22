@@ -292,6 +292,10 @@ impl Server {
             all_headers: false,
         };
         let history = History::default_location();
+        let network = match tuma_core::settings::network_for(Some(&workspace), &EnvThenKeychain) {
+            Ok(network) => Some(network),
+            Err(e) => return error(&format!("network settings: {e}")),
+        };
         let report = tuma_core::runs::run(
             tuma_core::runs::RunOptions {
                 workspace: &workspace,
@@ -302,6 +306,7 @@ impl Server {
                 history: history.as_ref(),
                 source: &source_name(&peer),
                 allow_host: Some(self.host_policy(Some(&workspace), environment)),
+                network: network.clone(),
                 iterations: 1,
                 data: vec![],
                 delay: Duration::ZERO,
@@ -318,6 +323,9 @@ impl Server {
             Ok(report) => report,
             Err(e) => return error(&e.to_string()),
         };
+        if let Some(network) = &network {
+            let _ = tuma_core::settings::keep_cookies(network, Some(&workspace));
+        }
         let outcomes: Vec<runner::Outcome> = report.steps.into_iter().map(|s| s.outcome).collect();
         let summary = Summary::of(&outcomes);
         let failures: Vec<_> = outcomes.iter().filter(|o| !o.passed).collect();
@@ -465,6 +473,8 @@ impl Server {
                         enabled: false,
                         ..Default::default()
                     },
+                    network: tuma_core::settings::network_for(workspace.as_ref(), &EnvThenKeychain)
+                        .ok(),
                 },
                 &Detail::default(),
             )
@@ -719,7 +729,18 @@ impl Server {
     ) -> runner::Outcome {
         let source = source_name(peer);
         let history = History::default_location();
-        runner::send(
+        let network = match tuma_core::settings::network_for(workspace, &EnvThenKeychain) {
+            Ok(network) => network,
+            Err(e) => {
+                return runner::Outcome {
+                    method: request.method.clone(),
+                    url: request.url.clone(),
+                    error: Some(format!("network settings: {e}")),
+                    ..Default::default()
+                };
+            }
+        };
+        let outcome = runner::send(
             Job {
                 workspace,
                 request,
@@ -733,10 +754,13 @@ impl Server {
                 source: &source,
                 allow_host: Some(self.host_policy(workspace, environment)),
                 scripting: Default::default(),
+                network: Some(network.clone()),
             },
             detail,
         )
-        .await
+        .await;
+        let _ = tuma_core::settings::keep_cookies(&network, workspace);
+        outcome
     }
 }
 

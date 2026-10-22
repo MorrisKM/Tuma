@@ -26,6 +26,8 @@ pub struct RunOptions<'a> {
     pub history: Option<&'a History>,
     pub source: &'a str,
     pub allow_host: Option<AllowHost>,
+    /// See [`Job::network`]. Shared by every request, so cookies carry over.
+    pub network: Option<std::sync::Arc<crate::http::Network>>,
     /// How many times to run everything. With a data file, at least once per row.
     pub iterations: usize,
     /// Rows of a data file (see [`read_data_file`]): row N is `pm.iterationData` in iteration N.
@@ -136,6 +138,7 @@ pub async fn run(
                 history: options.history,
                 source: options.source,
                 allow_host: options.allow_host.clone(),
+                network: options.network.clone(),
                 scripting: Scripting {
                     enabled: options.scripts,
                     iteration,

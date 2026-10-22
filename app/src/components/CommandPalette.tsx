@@ -55,6 +55,7 @@ export function CommandPalette() {
             })),
           ]
         : []),
+      { id: "settings", label: "Settings: proxy, certificates, cookies", run: () => useStore.setState({ view: { kind: "settings" } }) },
       { id: "agents", label: "Connect a coding agent (MCP)", run: () => useStore.setState({ view: { kind: "agents" } }) },
       theme("light", "Light theme"),
       theme("dark", "Dark theme"),

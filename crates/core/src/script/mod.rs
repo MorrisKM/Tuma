@@ -202,6 +202,7 @@ pub fn run(
     scripts: &[Script],
     input: &Input,
     allow: Option<AllowHost>,
+    network: Option<Arc<http::Network>>,
     timeout: Duration,
 ) -> Output {
     let scripts: Vec<&Script> = scripts
@@ -230,7 +231,9 @@ pub fn run(
         std::thread::Builder::new()
             .name("tuma-script".into())
             .stack_size(THREAD_STACK)
-            .spawn_scoped(scope, || run_scripts(&scripts, &input, allow, timeout))
+            .spawn_scoped(scope, || {
+                run_scripts(&scripts, &input, allow, network, timeout)
+            })
             .map_err(|e| e.to_string())
             .and_then(|t| {
                 t.join()
@@ -260,6 +263,7 @@ fn run_scripts(
     scripts: &[&Script],
     input: &Input,
     allow: Option<AllowHost>,
+    network: Option<Arc<http::Network>>,
     timeout: Duration,
 ) -> Result<Output, String> {
     let runtime = Runtime::new().map_err(|e| e.to_string())?;
@@ -296,11 +300,21 @@ fn run_scripts(
             ),
             &ctx,
         )?;
+        let jar_network = network.clone();
         js(
             native.set(
                 "send",
                 Function::new(ctx.clone(), move |spec: String| {
-                    send_blocking(&spec, allow.as_ref(), deadline).to_string()
+                    send_blocking(&spec, allow.as_ref(), network.clone(), deadline).to_string()
+                }),
+            ),
+            &ctx,
+        )?;
+        js(
+            native.set(
+                "jar",
+                Function::new(ctx.clone(), move |op: String, args: String| {
+                    cookie_jar(jar_network.as_deref(), &op, &args).to_string()
                 }),
             ),
             &ctx,
@@ -441,9 +455,96 @@ pub fn syntax_error(source: &str) -> Option<(String, Option<usize>)> {
     })
 }
 
+/// `pm.cookies.jar()`: reads and changes the cookie jar, for allowed domains only. Returns `{value}` or `{error}`.
+fn cookie_jar(network: Option<&http::Network>, op: &str, args: &str) -> Value {
+    let args: Value = serde_json::from_str(args).unwrap_or_default();
+    let Some(url) = args["url"].as_str().and_then(|u| {
+        let u = if u.contains("://") {
+            u.to_string()
+        } else {
+            format!("https://{u}")
+        };
+        url::Url::parse(&u).ok()
+    }) else {
+        return json!({ "error": "pm.cookies.jar(): a URL is needed, such as https://example.com" });
+    };
+    let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
+    let Some(network) = network else {
+        return json!({ "error": "pm.cookies.jar(): cookies are turned off" });
+    };
+    let allowed = network
+        .script_cookie_domains
+        .iter()
+        .map(|d| d.trim().trim_start_matches('.').to_ascii_lowercase())
+        .any(|d| !d.is_empty() && (host == d || host.ends_with(&format!(".{d}"))));
+    if !allowed {
+        return json!({ "error": format!(
+            "pm.cookies.jar(): {host} is not in the domains scripts may use; add it in Settings > Cookies"
+        ) });
+    }
+    let Some(jar) = &network.cookies else {
+        return json!({ "error": "pm.cookies.jar(): cookies are turned off" });
+    };
+    let name = args["name"].as_str().unwrap_or_default();
+    let cookie_json = |c: &cookie_store::Cookie| {
+        json!({
+            "name": c.name(), "value": c.value(), "domain": String::from(&c.domain),
+            "path": String::from(&c.path), "secure": c.secure().unwrap_or(false),
+            "httpOnly": c.http_only().unwrap_or(false),
+        })
+    };
+    let mut store = jar.lock().unwrap();
+    match op {
+        "get" => {
+            let value = store
+                .matches(&url)
+                .into_iter()
+                .find(|c| c.name() == name)
+                .map(|c| c.value().to_string());
+            json!({ "value": value })
+        }
+        "getAll" => {
+            json!({ "value": store.matches(&url).into_iter().map(cookie_json).collect::<Vec<_>>() })
+        }
+        "set" => {
+            let value = args["value"].as_str().unwrap_or_default();
+            let path = args["path"].as_str().unwrap_or("/");
+            let header = format!("{name}={value}; Path={path}");
+            match store.parse(&header, &url) {
+                Ok(_) => json!({ "value": null }),
+                Err(e) => json!({ "error": format!("pm.cookies.jar().set: {e}") }),
+            }
+        }
+        "unset" | "clear" => {
+            let found: Vec<(String, String, String)> = store
+                .matches(&url)
+                .into_iter()
+                .filter(|c| op == "clear" || c.name() == name)
+                .map(|c| {
+                    (
+                        String::from(&c.domain),
+                        String::from(&c.path),
+                        c.name().to_string(),
+                    )
+                })
+                .collect();
+            for (d, p, n) in found {
+                store.remove(&d, &p, &n);
+            }
+            json!({ "value": null })
+        }
+        other => json!({ "error": format!("pm.cookies.jar(): unknown operation {other}") }),
+    }
+}
+
 /// `pm.sendRequest`: sends a request described by the sandbox and returns `{response}` or `{error}`. It runs on its own
 /// thread with its own async runtime, so it works whatever the calling thread is doing.
-fn send_blocking(spec: &str, allow: Option<&AllowHost>, deadline: Instant) -> Value {
+fn send_blocking(
+    spec: &str,
+    allow: Option<&AllowHost>,
+    network: Option<Arc<http::Network>>,
+    deadline: Instant,
+) -> Value {
     let spec: Value = match serde_json::from_str(spec) {
         Ok(spec) => spec,
         Err(e) => return json!({ "error": e.to_string() }),
@@ -468,7 +569,12 @@ fn send_blocking(spec: &str, allow: Option<&AllowHost>, deadline: Instant) -> Va
             .enable_all()
             .build()
             .map_err(|e| e.to_string())?
-            .block_on(http::send(&request))
+            .block_on(async {
+                match &network {
+                    Some(network) => http::send_with(&request, network).await,
+                    None => http::send(&request).await,
+                }
+            })
             .map_err(|e| e.to_string())
     })
     .join()

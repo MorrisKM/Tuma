@@ -1,6 +1,7 @@
 //! The desktop shell: Tauri commands that call into `tuma_core`. Keep logic out of here.
 
 mod runs;
+mod settings;
 mod visualizer;
 mod workspace;
 
@@ -104,6 +105,8 @@ async fn send_request(
 ) -> Result<ResponseView, ErrorView> {
     // A copy, so the workspace is not locked while the request is out.
     let ws = open.0.lock().unwrap().clone();
+    let network = tuma_core::settings::network_for(ws.as_ref(), workspace::secrets())
+        .map_err(|e| ErrorView::new("settings", format!("network settings: {e}")))?;
     let (cancel, cancelled) = oneshot::channel();
     in_flight.0.lock().unwrap().insert(id.clone(), cancel);
     let job = Job {
@@ -119,12 +122,16 @@ async fn send_request(
         source: "",
         allow_host: None,
         scripting: Default::default(),
+        network: Some(network.clone()),
     };
     let execution = tokio::select! {
         execution = runner::execute(job) => Some(execution),
         _ = cancelled => None,
     };
     in_flight.0.lock().unwrap().remove(&id);
+    if let Err(e) = tuma_core::settings::keep_cookies(&network, ws.as_ref()) {
+        eprintln!("could not save cookies: {e}");
+    }
     // A cancelled request is not worth remembering.
     let Some(execution) = execution else {
         return Err(ErrorView::new("cancelled", "Request cancelled"));
@@ -245,6 +252,10 @@ pub fn run() {
             workspace::current_values,
             workspace::reset_current_values,
             runs::run_collection,
+            settings::settings_read,
+            settings::settings_write,
+            settings::cookies_list,
+            settings::cookies_remove,
             runs::stop_run,
             runs::runs_list,
             runs::run_read,

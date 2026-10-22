@@ -58,6 +58,7 @@ fn test(source: &str) -> Output {
         }],
         &input(Some(response())),
         None,
+        None,
         DEFAULT_TIMEOUT,
     )
 }
@@ -193,7 +194,14 @@ fn pre_request_scripts_change_the_request() {
         },
     ];
     let input = input(None);
-    let output = run(Event::Prerequest, &scripts, &input, None, DEFAULT_TIMEOUT);
+    let output = run(
+        Event::Prerequest,
+        &scripts,
+        &input,
+        None,
+        None,
+        DEFAULT_TIMEOUT,
+    );
     assert!(output.errors.is_empty(), "{:?}", output.errors);
     let mut file = RequestFile {
         method: "POST".into(),
@@ -242,6 +250,7 @@ fn unchanged_requests_stay_as_they_were() {
         }],
         &input,
         None,
+        None,
         DEFAULT_TIMEOUT,
     );
     let original = RequestFile {
@@ -266,6 +275,7 @@ fn execution_control_and_visualizer() {
             source: "pm.execution.skipRequest(); postman.setNextRequest('Login');".into(),
         }],
         &input(None),
+        None,
         None,
         DEFAULT_TIMEOUT,
     );
@@ -344,6 +354,7 @@ fn errors_and_limits() {
         }],
         &input(Some(response())),
         None,
+        None,
         Duration::from_millis(300),
     );
     assert!(started.elapsed() < Duration::from_secs(5));
@@ -376,6 +387,7 @@ fn send_request_respects_allowed_hosts() {
         }],
         &input(Some(response())),
         Some(allow),
+        None,
         DEFAULT_TIMEOUT,
     );
     assert!(output.errors.is_empty(), "{:?}", output.errors);
@@ -399,4 +411,52 @@ fn syntax_errors_are_found_without_running() {
             .1,
         Some(3)
     );
+}
+
+#[test]
+fn cookie_jar_for_allowed_domains() {
+    let jar = http::network::CookieJar::default();
+    jar.lock()
+        .unwrap()
+        .parse(
+            "session=abc; Path=/",
+            &url::Url::parse("https://api.example.com/").unwrap(),
+        )
+        .unwrap();
+    let network = Arc::new(http::Network {
+        cookies: Some(jar.clone()),
+        script_cookie_domains: vec!["example.com".into()],
+        ..Default::default()
+    });
+    let output = run(
+        Event::Test,
+        &[Script {
+            label: "request".into(),
+            source: r#"
+                const jar = pm.cookies.jar();
+                jar.get("https://api.example.com/x", "session", (err, value) => {
+                    pm.test("get", () => pm.expect(value).to.equal("abc"));
+                });
+                jar.set("https://api.example.com", "theme", "dark", (err) => pm.test("set", () => pm.expect(err).to.equal(null)));
+                jar.getAll("https://api.example.com", (err, all) => pm.test("getAll", () => pm.expect(all.map((c) => c.name)).to.have.members(["session", "theme"])));
+                jar.get("https://other.test", "x", (err) => pm.test("not allowed", () => pm.expect(err.message).to.include("not in the domains")));
+                jar.unset("https://api.example.com", "session", () => {});
+            "#
+            .into(),
+        }],
+        &input(Some(response())),
+        None,
+        Some(network),
+        DEFAULT_TIMEOUT,
+    );
+    assert!(output.errors.is_empty(), "{:?}", output.errors);
+    assert!(output.tests.iter().all(|t| t.passed), "{:?}", output.tests);
+    assert_eq!(output.tests.len(), 4);
+    let left: Vec<String> = jar
+        .lock()
+        .unwrap()
+        .iter_any()
+        .map(|c| c.name().to_string())
+        .collect();
+    assert_eq!(left, ["theme"]);
 }
