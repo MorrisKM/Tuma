@@ -128,6 +128,8 @@ interface State {
   exportWorkspace: () => Promise<void>;
   /** Whether the New workspace dialog is open. */
   creatingWorkspace: boolean;
+  /** The cookie manager, open on a domain when one is given. */
+  cookies: { domain: string | null } | null;
   /** The Generate docs dialog, for a request's or folder's path, or the whole workspace (null scope). */
   docs: { scope: string | null } | null;
   closeWorkspace: () => Promise<void>;
@@ -328,6 +330,7 @@ export const useStore = create<State>((set, get) => {
     paletteOpen: false,
     creatingWorkspace: false,
     docs: null,
+    cookies: null,
     snippetOpen: false,
     history: [],
     notice: null,

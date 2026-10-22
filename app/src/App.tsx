@@ -1,4 +1,4 @@
-import { Columns2, PanelLeft, Rows2, SquareTerminal } from "lucide-react";
+import { Columns2, Cookie, PanelLeft, Rows2, SquareTerminal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { appVersion, type MockEvent } from "./api";
 import { AgentsView } from "./components/AgentsView";
@@ -14,6 +14,7 @@ import { NoticeBar } from "./components/NoticeBar";
 import { RequestBar } from "./components/RequestBar";
 import { RequestPanel } from "./components/RequestPanel";
 import { ResponsePanel } from "./components/ResponsePanel";
+import { CookiesDialog } from "./components/CookiesDialog";
 import { DocsDialog } from "./components/DocsDialog";
 import { NewWorkspaceDialog } from "./components/NewWorkspaceDialog";
 import { SaveDialog } from "./components/SaveDialog";
@@ -74,6 +75,7 @@ function App() {
   const savingAs = useStore((s) => s.savingAs);
   const creatingWorkspace = useStore((s) => s.creatingWorkspace);
   const docs = useStore((s) => s.docs);
+  const cookies = useStore((s) => s.cookies);
   const paletteOpen = useStore((s) => s.paletteOpen);
   const snippetOpen = useStore((s) => s.snippetOpen);
   const workspace = useStore((s) => s.workspace);
@@ -165,6 +167,7 @@ function App() {
       {savingAs && <SaveDialog />}
       {creatingWorkspace && <NewWorkspaceDialog />}
       {docs && <DocsDialog scope={docs.scope} />}
+      {cookies && <CookiesDialog domain={cookies.domain} />}
       {paletteOpen && <CommandPalette />}
       {snippetOpen && <SnippetDialog />}
     </div>
@@ -288,6 +291,14 @@ function StatusBar({ version, environment }: { version?: string; environment?: s
         <SquareTerminal size={14} />
         Console
         {unseen > 0 && <span className={`badge${unseenErrors ? " fail" : ""}`}>{unseen > 99 ? "99+" : unseen}</span>}
+      </button>
+      <button
+        className="status-button labelled"
+        onClick={() => useStore.setState({ cookies: { domain: null } })}
+        title="See and manage the workspace's cookies"
+      >
+        <Cookie size={14} />
+        Cookies
       </button>
       <span className="status-hints">
         <span><kbd>Ctrl</kbd><kbd>K</kbd> commands</span>

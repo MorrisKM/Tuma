@@ -13,7 +13,7 @@ import { ConsoleView, TestsView, testsLabel, VisualizerView } from "./ScriptResu
 import { Logo } from "./ui";
 import { Tabs } from "./Tabs";
 
-type Tab = "body" | "events" | "tests" | "console" | "visualize" | "headers" | "timing" | "request";
+type Tab = "body" | "events" | "tests" | "console" | "visualize" | "headers" | "cookies" | "timing" | "request";
 type View = "pretty" | "raw" | "preview";
 
 export function ResponsePanel() {
@@ -115,12 +115,14 @@ export function ResponsePanel() {
     );
   }
   const tests = testsLabel(response.checks, response.tests, response.scriptErrors);
+  const setCookies = response.headers.filter((h) => h.name === "set-cookie").map((h) => parseSetCookie(h.value));
   // A tab that this response doesn't have shows the body instead.
   const shown: Tab =
     (tab === "events" && !response.events) ||
     (tab === "tests" && !tests) ||
     (tab === "console" && !response.console.length && !response.scriptErrors.length) ||
-    (tab === "visualize" && !response.visualizer)
+    (tab === "visualize" && !response.visualizer) ||
+    (tab === "cookies" && !setCookies.length)
       ? "body"
       : tab;
 
@@ -138,6 +140,7 @@ export function ResponsePanel() {
             : []),
           ...(response.visualizer ? [{ id: "visualize" as Tab, label: "Visualize" }] : []),
           { id: "headers", label: "Headers", count: response.headers.length },
+          ...(setCookies.length ? [{ id: "cookies" as Tab, label: "Cookies", count: setCookies.length }] : []),
           { id: "timing", label: "Timing" },
           { id: "request", label: "Request" },
         ]}
@@ -159,10 +162,79 @@ export function ResponsePanel() {
           <VisualizerView url={response.visualizer.url} error={response.visualizer.error} />
         )}
         {shown === "headers" && <HeaderTable headers={response.headers} />}
+        {shown === "cookies" && <CookiesView cookies={setCookies} url={response.url} />}
         {shown === "timing" && <TimingView response={response} />}
         {shown === "request" && <SentView response={response} />}
       </div>
     </section>
+  );
+}
+
+interface SetCookie {
+  name: string;
+  value: string;
+  attributes: Record<string, string | true>;
+}
+
+/** "a=1; Path=/; HttpOnly" → name, value and attributes (lower-case names). */
+function parseSetCookie(header: string): SetCookie {
+  const [pair, ...rest] = header.split(";");
+  const eq = pair.indexOf("=");
+  const attributes: Record<string, string | true> = {};
+  for (const part of rest) {
+    const [k, ...v] = part.trim().split("=");
+    if (k) attributes[k.toLowerCase()] = v.length ? v.join("=") : true;
+  }
+  return { name: pair.slice(0, eq).trim(), value: pair.slice(eq + 1).trim(), attributes };
+}
+
+/** The cookies this response set, and a way to the cookie manager. */
+function CookiesView({ cookies, url }: { cookies: SetCookie[]; url: string }) {
+  let host: string | null = null;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    host = null;
+  }
+  return (
+    <div className="response-cookies">
+      <table className="header-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Value</th>
+            <th>Domain</th>
+            <th>Path</th>
+            <th>Expires</th>
+            <th>Flags</th>
+          </tr>
+        </thead>
+        <tbody>
+          {cookies.map((c, i) => (
+            <tr key={i}>
+              <td className="mono">{c.name}</td>
+              <td className="mono cookie-cell">{c.value}</td>
+              <td className="mono">{String(c.attributes.domain ?? host ?? "")}</td>
+              <td className="mono">{String(c.attributes.path ?? "/")}</td>
+              <td>
+                {c.attributes["max-age"]
+                  ? `in ${c.attributes["max-age"]} s`
+                  : c.attributes.expires
+                    ? String(c.attributes.expires)
+                    : "Session"}
+              </td>
+              <td className="muted small">
+                {["secure", "httponly"].filter((f) => c.attributes[f]).map((f) => (f === "httponly" ? "HttpOnly" : "Secure")).join(", ")}
+                {c.attributes.samesite ? ` SameSite=${c.attributes.samesite}` : ""}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button className="link-button" onClick={() => useStore.setState({ cookies: { domain: host } })}>
+        Open the cookie manager
+      </button>
+    </div>
   );
 }
 

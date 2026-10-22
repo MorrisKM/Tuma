@@ -152,6 +152,8 @@ export const settingsWrite = (
   secretsIn: { proxyPassword?: string; passphrases: Record<string, string> },
 ) => invoke<void>("settings_write", { settings, secretsIn });
 export const cookiesList = () => invoke<Record<string, CookieView[]>>("cookies_list");
+export const cookiesSet = (domain: string, raw: string, replacing: [string, string] | null) =>
+  invoke<void>("cookies_set", { domain, raw, replacing });
 export const cookiesRemove = (domain: string | null, path: string | null, name: string | null) =>
   invoke<void>("cookies_remove", { domain, path, name });
 

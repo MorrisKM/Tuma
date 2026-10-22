@@ -339,6 +339,7 @@ pub fn run() {
             settings::settings_write,
             settings::cookies_list,
             settings::cookies_remove,
+            settings::cookies_set,
             runs::stop_run,
             runs::runs_list,
             runs::run_read,

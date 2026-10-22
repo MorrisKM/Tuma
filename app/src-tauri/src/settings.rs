@@ -103,6 +103,28 @@ pub fn cookies_list(open: tauri::State<'_, Open>) -> Result<BTreeMap<String, Vec
     Ok(settings::list_cookies(&jar))
 }
 
+/// Adds a cookie for `domain` from Set-Cookie text, first removing `replacing` (the path and name of the cookie being
+/// edited).
+#[tauri::command]
+pub fn cookies_set(
+    open: tauri::State<'_, Open>,
+    domain: String,
+    raw: String,
+    replacing: Option<(String, String)>,
+) -> Result<()> {
+    let (id, jar) = jar(&open)?;
+    if let Some((path, name)) = &replacing {
+        settings::remove_cookies(
+            &jar,
+            Some(domain.trim_start_matches('.')),
+            Some(path),
+            Some(name),
+        );
+    }
+    settings::set_cookie(&jar, &domain, &raw)?;
+    settings::save_cookies(&id, &jar)
+}
+
 /// Deletes one cookie, a domain's cookies (no `name`), or all of them (no `domain`).
 #[tauri::command]
 pub fn cookies_remove(

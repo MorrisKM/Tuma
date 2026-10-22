@@ -233,11 +233,16 @@ export function SettingsView() {
           <div className="cookie-manager">
             <div className="toolbar spaced">
               <h4>{domains.length ? `Cookies in ${workspace.name}` : `No cookies in ${workspace.name} yet`}</h4>
-              {domains.length > 0 && (
-                <button className="link-button danger" onClick={() => void removeCookies()}>
-                  Delete all
+              <span className="actions">
+                <button className="link-button" onClick={() => useStore.setState({ cookies: { domain: null } })}>
+                  Open the cookie manager
                 </button>
-              )}
+                {domains.length > 0 && (
+                  <button className="link-button danger" onClick={() => void removeCookies()}>
+                    Delete all
+                  </button>
+                )}
+              </span>
             </div>
             {domains.map(([domain, list]) => (
               <details key={domain} open={domains.length < 4}>

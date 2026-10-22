@@ -453,4 +453,7 @@ export interface CookieView {
   expires?: number;
   secure: boolean;
   httpOnly: boolean;
+  sameSite?: string;
+  /** As Set-Cookie text, for editing. */
+  raw: string;
 }

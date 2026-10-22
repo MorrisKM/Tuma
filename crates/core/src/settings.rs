@@ -230,6 +230,11 @@ pub struct CookieView {
     pub expires: Option<i64>,
     pub secure: bool,
     pub http_only: bool,
+    /// Strict, Lax or None, when the server said.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub same_site: Option<String>,
+    /// The cookie as a Set-Cookie header would write it, for editing.
+    pub raw: String,
 }
 
 /// The cookies in a jar, by domain.
@@ -238,14 +243,40 @@ pub fn list_cookies(jar: &CookieJar) -> BTreeMap<String, Vec<CookieView>> {
     for c in jar.lock().unwrap().iter_unexpired() {
         // Host-only cookies (no Domain attribute) are stored under their host.
         let domain = String::from(&c.domain).trim_start_matches('.').to_string();
+        // From Expires or Max-Age; the store keeps it apart from the raw cookie.
+        let expires = match &c.expires {
+            cookie_store::CookieExpiration::AtUtc(t) => Some(t.unix_timestamp()),
+            cookie_store::CookieExpiration::SessionEnd => None,
+        };
+        let same_site = c.same_site().map(|s| s.to_string());
+        let mut raw = format!("{}={}; Path={}", c.name(), c.value(), String::from(&c.path));
+        if let Some(t) = expires {
+            // Max-Age, which needs no date format and is what the manager writes back.
+            let left = t - std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0);
+            raw.push_str(&format!("; Max-Age={}", left.max(0)));
+        }
+        if c.secure().unwrap_or(false) {
+            raw.push_str("; Secure");
+        }
+        if c.http_only().unwrap_or(false) {
+            raw.push_str("; HttpOnly");
+        }
+        if let Some(s) = &same_site {
+            raw.push_str(&format!("; SameSite={s}"));
+        }
         out.entry(domain.clone()).or_default().push(CookieView {
             domain,
             path: String::from(&c.path),
             name: c.name().to_string(),
             value: c.value().to_string(),
-            expires: c.expires_datetime().map(|t| t.unix_timestamp()),
+            expires,
             secure: c.secure().unwrap_or(false),
             http_only: c.http_only().unwrap_or(false),
+            same_site,
+            raw,
         });
     }
     out
@@ -283,6 +314,33 @@ pub fn remove_cookies(
     }
 }
 
+/// Adds or replaces a cookie for `domain` from Set-Cookie text, such as `session=abc; Path=/; Secure; HttpOnly`,
+/// as Postman's cookie manager does. Without a Domain attribute it is sent to `domain` only.
+pub fn set_cookie(jar: &CookieJar, domain: &str, raw: &str) -> Result<(), String> {
+    let domain = domain.trim().trim_start_matches('.');
+    if domain.is_empty() || domain.contains('/') {
+        return Err("a domain is a host name, such as api.example.com".into());
+    }
+    let cookie = cookie_store::RawCookie::parse(raw.trim().to_string())
+        .map_err(|e| format!("not a cookie ({e}); write it as name=value; Path=/"))?;
+    if cookie.name().is_empty() {
+        return Err("the cookie needs a name: name=value".into());
+    }
+    let path = cookie.path().unwrap_or("/").to_string();
+    let scheme = if cookie.secure().unwrap_or(false) {
+        "https"
+    } else {
+        "http"
+    };
+    let url = url::Url::parse(&format!("{scheme}://{domain}{path}"))
+        .map_err(|e| format!("{domain}: {e}"))?;
+    jar.lock()
+        .unwrap()
+        .insert_raw(&cookie, &url)
+        .map(|_| ())
+        .map_err(|e| format!("the cookie was refused: {e}"))
+}
+
 /// The network for requests in `workspace`, from this machine's settings: what the CLI, the MCP server and the app
 /// use. Save the cookies afterwards with [`keep_cookies`].
 pub fn network_for(
@@ -302,5 +360,48 @@ pub fn keep_cookies(
     match (&network.cookies, workspace) {
         (Some(jar), Some(ws)) => save_cookies(ws.id(), jar),
         _ => Ok(()),
+    }
+}
+
+#[cfg(test)]
+mod cookie_tests {
+    use super::*;
+
+    #[test]
+    fn cookies_are_set_listed_and_removed() {
+        let jar: CookieJar = Arc::new(Mutex::new(cookie_store::CookieStore::default()));
+        set_cookie(
+            &jar,
+            "api.example.com",
+            "session=abc; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=3600",
+        )
+        .unwrap();
+        set_cookie(&jar, ".api.example.com", "theme=dark").unwrap();
+        set_cookie(&jar, "other.test", "x=1; Path=/admin").unwrap();
+        assert!(set_cookie(&jar, "api.example.com", "=nameless").is_err());
+        assert!(set_cookie(&jar, "", "a=b").is_err());
+
+        let all = list_cookies(&jar);
+        let api = &all["api.example.com"];
+        assert_eq!(api.len(), 2);
+        let session = api.iter().find(|c| c.name == "session").unwrap();
+        assert!(session.secure && session.http_only && session.expires.is_some());
+        assert_eq!(session.same_site.as_deref(), Some("Lax"));
+        assert!(
+            session.raw.starts_with("session=abc; Path=/; Max-Age="),
+            "{}",
+            session.raw
+        );
+        // The raw text sets the same cookie again.
+        set_cookie(&jar, "api.example.com", &session.raw).unwrap();
+        assert_eq!(list_cookies(&jar)["api.example.com"].len(), 2);
+        assert_eq!(all["other.test"][0].path, "/admin");
+
+        remove_cookies(&jar, Some("api.example.com"), Some("/"), Some("theme"));
+        assert_eq!(list_cookies(&jar)["api.example.com"].len(), 1);
+        remove_cookies(&jar, Some("other.test"), None, None);
+        assert!(!list_cookies(&jar).contains_key("other.test"));
+        remove_cookies(&jar, None, None, None);
+        assert!(list_cookies(&jar).is_empty());
     }
 }
