@@ -114,3 +114,23 @@ export function EditableName({
     </button>
   );
 }
+
+/** A row that overflows sideways: the mouse wheel scrolls it, and the element matching `active` is kept in view. */
+export function useScrollRow<T extends HTMLElement>(active: string, deps: unknown[] = []) {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      el.scrollLeft += e.deltaY;
+      e.preventDefault();
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+  useEffect(() => {
+    ref.current?.querySelector(active)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, deps);
+  return ref;
+}

@@ -4,7 +4,7 @@ import { javascript } from "@codemirror/lang-javascript";
 import { json, jsonLanguage } from "@codemirror/lang-json";
 import { xml } from "@codemirror/lang-xml";
 import { bracketMatching, foldGutter, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
+import { highlightSelectionMatches, openSearchPanel, search, searchKeymap } from "@codemirror/search";
 import { Annotation, Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, placeholder as placeholderExt } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
@@ -86,8 +86,8 @@ export function CodeEditor({ value, onChange, language = "text", readOnly = fals
         syntaxHighlighting(highlight),
         keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
         EditorView.lineWrapping,
+        // Read-only, but still focusable: otherwise Ctrl+F (search) and selection with the keyboard don't work.
         EditorState.readOnly.of(readOnly),
-        EditorView.editable.of(!readOnly),
         placeholder ? placeholderExt(placeholder) : [],
         languageSlot.current.of(languages[language]()),
         extensionSlot.current.of(extension ?? []),
@@ -120,4 +120,13 @@ export function CodeEditor({ value, onChange, language = "text", readOnly = fals
   }, [extension]);
 
   return <div className="code-editor" ref={host} />;
+}
+
+/** Opens the search (and replace) panel of the editor inside `container`, if there is one. */
+export function openSearchIn(container: Element | null): boolean {
+  const dom = container?.querySelector<HTMLElement>(".cm-editor");
+  const view = dom ? EditorView.findFromDOM(dom) : null;
+  if (!view) return false;
+  openSearchPanel(view);
+  return true;
 }

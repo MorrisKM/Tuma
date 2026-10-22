@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { isGrpc, isWebSocket } from "../draft";
 import { tabDirty, useStore } from "../store";
-import { Menu, MethodTag } from "./ui";
+import { Menu, MethodTag, useScrollRow } from "./ui";
 import { EnvironmentPicker } from "./TopBar";
 
 /** Open requests. A preview tab (italic) is replaced by the next request opened from the tree until it is edited. */
@@ -12,6 +12,7 @@ export function TabStrip() {
   useStore(useShallow((s) => [s.tabs, s.activeTab, s.draft, s.saved, s.preview, s.sending, s.view.kind]));
   const { allTabs, activeTab, switchTab, closeTab, newTab, pin } = useStore.getState();
   const tabs = allTabs();
+  const strip = useScrollRow<HTMLDivElement>(".request-tab.active", [activeTab, tabs.length]);
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   // One at a time, so each unsaved one asks in turn.
   const closeAll = async (ids: string[]) => {
@@ -20,7 +21,7 @@ export function TabStrip() {
 
   return (
     <div className="tab-bar">
-      <div className="tab-strip" role="tablist" aria-label="Open requests">
+      <div className="tab-strip" role="tablist" aria-label="Open requests" ref={strip}>
         {tabs.map((tab) => {
           // Another view (settings, a folder) has the workbench: no tab is shown as active.
           const active = tab.id === activeTab && useStore.getState().view.kind === "request";

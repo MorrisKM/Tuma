@@ -1,10 +1,10 @@
-import { BookmarkPlus } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { BookmarkPlus, Copy, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../store";
 import type { Example, Header, Response, Timing } from "../types";
 import { uniqueName } from "./ExamplesEditor";
 import { select } from "../jsonpath";
-import { CodeEditor, type Language } from "./CodeEditor";
+import { CodeEditor, type Language, openSearchIn } from "./CodeEditor";
 import { isGrpc, isWebSocket } from "../draft";
 import { GrpcLog } from "./GrpcViews";
 import { EventsView } from "./EventsView";
@@ -248,7 +248,11 @@ function BodyView({ response }: { response: Response }) {
   const previewable = type.startsWith("image/") || type === "text/html";
   const [view, setView] = useState<View>("pretty");
   const [filter, setFilter] = useState("");
+  // A copy changed in the viewer (with find and replace); the response itself is kept as it came.
+  const [edited, setEdited] = useState<string | null>(null);
+  const frame = useRef<HTMLDivElement>(null);
   const language = languageFor(type);
+  useEffect(() => setEdited(null), [response, view, filter]);
 
   const json = useMemo(() => {
     if (response.bodyBase64 || language !== "json") return undefined;
@@ -301,14 +305,48 @@ function BodyView({ response }: { response: Response }) {
           />
         )}
         <span className="muted">{type || "no content type"}</span>
+        {shown !== "preview" && !response.bodyBase64 && (
+          <span className="body-actions">
+            {edited !== null && (
+              <>
+                <span className="pill neutral" title="Changed here only; the response is kept as it came">
+                  Edited
+                </span>
+                <button className="link-button" onClick={() => setEdited(null)}>
+                  Reset
+                </button>
+              </>
+            )}
+            <button
+              className="button ghost small"
+              onClick={() => openSearchIn(frame.current)}
+              title="Find and replace (Ctrl+F)"
+            >
+              <Search size={13} />
+              Find
+            </button>
+            <button
+              className="button ghost small"
+              onClick={() => void navigator.clipboard.writeText(edited ?? (shown === "pretty" ? pretty : response.body))}
+              title="Copy the body"
+            >
+              <Copy size={13} />
+              Copy
+            </button>
+          </span>
+        )}
       </div>
       {shown === "preview" ? (
         <Preview response={response} type={type} />
       ) : response.bodyBase64 ? (
         <p className="hint">Binary data ({formatBytes(response.size)}).</p>
       ) : (
-        <div className="editor-frame">
-          <CodeEditor value={shown === "pretty" ? pretty : response.body} language={shown === "pretty" ? language : "text"} readOnly />
+        <div className="editor-frame response-body" ref={frame}>
+          <CodeEditor
+            value={edited ?? (shown === "pretty" ? pretty : response.body)}
+            onChange={setEdited}
+            language={shown === "pretty" ? language : "text"}
+          />
         </div>
       )}
     </div>

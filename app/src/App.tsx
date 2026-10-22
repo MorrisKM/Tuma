@@ -23,6 +23,7 @@ import { Splitter } from "./components/Splitter";
 import { TabStrip } from "./components/TabStrip";
 import { TopBar } from "./components/TopBar";
 import { focusUrl } from "./components/UrlEditor";
+import { openSearchIn } from "./components/CodeEditor";
 import { VariablesEditor } from "./components/VariablesEditor";
 import { layout, useLayout } from "./layout";
 import { consoleLog, grpcTarget, useStore } from "./store";
@@ -53,6 +54,10 @@ function onKey(e: KeyboardEvent) {
     else if (key === "w") void s.closeTab(s.activeTab);
     else if (key === "tab") s.cycleTab(e.shiftKey ? -1 : 1);
     else if (key === "b") layout.toggleSidebar();
+    // Outside an editor, Ctrl+F searches the response body (inside one, the editor's own search opens).
+    else if (key === "f" && !(e.target as HTMLElement).closest?.(".cm-editor")) {
+      if (!openSearchIn(document.querySelector(".response-body"))) return false;
+    }
     else if (key === "`") layout.toggleConsole();
     else if (key === "l") {
       useStore.setState({ view: { kind: "request" } });
