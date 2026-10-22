@@ -2,7 +2,10 @@
 // so switching tabs or body types never loses what was typed, and it carries fields the editor does not show yet
 // (description, checks, scripts) so saving never drops them.
 
-import type { Auth, Body, KeyValue, Part, RequestFile, Scripts, Settings } from "./types";
+import type { Auth, Body, KeyValue, Part, RequestFile, SavedMessage, Scripts, Settings } from "./types";
+
+/** A WebSocket request: its URL starts with ws:// or wss://. */
+export const isWebSocket = (url: string) => /^\s*wss?:\/\//i.test(url);
 
 export type BodyMode =
   | "none"
@@ -44,6 +47,8 @@ export interface Draft {
   operation: string | null;
   expect: Record<string, unknown>;
   scripts: Scripts;
+  /** WebSocket requests: saved messages. */
+  messages: SavedMessage[];
 }
 
 // Must match tuma_core's defaults, or every saved request would get a `settings:` block.
@@ -74,6 +79,7 @@ export const newDraft = (): Draft => ({
   operation: null,
   expect: {},
   scripts: {},
+  messages: [],
 });
 
 const kv = (rows: Partial<KeyValue>[] | undefined): KeyValue[] =>
@@ -81,7 +87,8 @@ const kv = (rows: Partial<KeyValue>[] | undefined): KeyValue[] =>
 
 export function toRequestFile(d: Draft): RequestFile {
   return {
-    method: d.method,
+    // A WebSocket has no method; "WS" labels it in the tree.
+    method: isWebSocket(d.url) ? "WS" : d.method,
     url: d.url,
     description: d.description,
     operation: d.operation,
@@ -91,6 +98,7 @@ export function toRequestFile(d: Draft): RequestFile {
     settings: d.settings,
     expect: d.expect,
     scripts: d.scripts,
+    ...(d.messages.length ? { messages: d.messages } : {}),
   };
 }
 
@@ -136,6 +144,7 @@ export function fromRequestFile(r: RequestFile, path: string | null, name: strin
     operation: r.operation ?? null,
     expect: r.expect ?? {},
     scripts: r.scripts ?? {},
+    messages: r.messages ?? [],
   };
   d.params = parseQuery(d.url);
   const body = r.body ?? { type: "none" };

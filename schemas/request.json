@@ -52,6 +52,13 @@
     "scripts": {
       "description": "Pre-request and test scripts (JavaScript, Postman's `pm.*` API). Collections and folders can have them too.",
       "$ref": "#/$defs/Scripts"
+    },
+    "messages": {
+      "description": "For a WebSocket request (a `ws://` or `wss://` URL): messages to send with a click.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SavedMessage"
+      }
     }
   },
   "$defs": {
@@ -874,6 +881,21 @@
         },
         "test": {
           "type": "string"
+        }
+      }
+    },
+    "SavedMessage": {
+      "description": "A WebSocket message kept with its request.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "default": ""
+        },
+        "content": {
+          "description": "Text; `{{variables}}` are resolved when it is sent.",
+          "type": "string",
+          "default": ""
         }
       }
     }

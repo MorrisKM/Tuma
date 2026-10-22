@@ -83,6 +83,11 @@ enum Command {
     /// Import an OpenAPI or Swagger spec as a collection, find one, or sync a collection with its spec.
     #[command(subcommand)]
     Openapi(OpenapiCommand),
+    /// Open a WebSocket, send messages, and print what comes back.
+    ///
+    ///   tuma ws wss://echo.example.com -m '{"type":"ping"}' --wait 3
+    #[command(verbatim_doc_comment)]
+    Ws(WsArgs),
     /// OAuth 2.0 tokens: log in for a request, folder or collection, list tokens, or forget them.
     #[command(subcommand)]
     Auth(AuthCommand),
@@ -92,6 +97,31 @@ enum Command {
         #[arg(long)]
         name: Option<String>,
     },
+}
+
+#[derive(Args)]
+struct WsArgs {
+    /// A ws:// or wss:// URL, or a saved WebSocket request.
+    target: String,
+    /// A header for the handshake, as "Name: value". Repeat for more.
+    #[arg(short = 'H', long = "header")]
+    headers: Vec<String>,
+    /// A message to send once connected. Repeat for more; they are sent in order. {{variables}} work.
+    #[arg(short = 'm', long = "message")]
+    messages: Vec<String>,
+    /// Also send these saved messages of a saved request, by name.
+    #[arg(long = "saved")]
+    saved: Vec<String>,
+    /// How long to keep listening after the last message, in seconds; 0 waits until the server closes.
+    #[arg(long, default_value_t = 2.0)]
+    wait: f64,
+    /// Send "Authorization: Bearer <token>".
+    #[arg(long)]
+    bearer: Option<String>,
+    #[arg(long, value_name = "FOLDER")]
+    r#in: Option<String>,
+    #[command(flatten)]
+    common: Common,
 }
 
 #[derive(Subcommand)]
@@ -344,6 +374,7 @@ async fn run(cli: Cli) -> anyhow::Result<bool> {
             Ok(true)
         }
         Command::Auth(command) => auth(&start, command).await,
+        Command::Ws(args) => websocket(&start, args).await,
         Command::Init { name } => {
             if let Some(root) = runner::find_workspace(&start) {
                 bail!("there is already a workspace at {}", root.display());
@@ -607,6 +638,149 @@ async fn run_saved(start: &Path, args: RunArgs, only_tests: bool) -> anyhow::Res
             .stopped
             .as_deref()
             .is_none_or(|s| !s.contains("loop")))
+}
+
+async fn websocket(start: &Path, args: WsArgs) -> anyhow::Result<bool> {
+    use tuma_core::http::websocket::{Outgoing, WsEvent};
+    let workspace = find_workspace(start)?;
+    // A saved request, or a URL.
+    let saved = workspace.as_ref().and_then(|ws| {
+        let path = args.target.trim_matches('/');
+        let path = if path.ends_with(".yaml") {
+            path.to_string()
+        } else {
+            format!("{path}.yaml")
+        };
+        ws.read_request(&path).ok().map(|r| (path, r))
+    });
+    let (path, mut request) = match saved {
+        Some((path, request)) => (Some(path), request),
+        None => (
+            None,
+            RequestFile {
+                url: args.target.clone(),
+                ..RequestFile::default()
+            },
+        ),
+    };
+    if !request.is_websocket() {
+        bail!(
+            "\"{}\" is not a WebSocket: use a ws:// or wss:// URL",
+            request.url
+        );
+    }
+    for h in &args.headers {
+        let (name, value) = h
+            .split_once(':')
+            .with_context(|| format!("header \"{h}\" should be \"Name: value\""))?;
+        request.headers.push(KeyValue {
+            name: name.trim().into(),
+            value: value.trim().into(),
+            enabled: true,
+        });
+    }
+    if let Some(token) = &args.bearer {
+        request.auth = Some(Auth::Bearer {
+            token: token.clone(),
+        });
+    }
+    let mut messages = Vec::new();
+    for name in &args.saved {
+        let m = request
+            .messages
+            .iter()
+            .find(|m| &m.name == name)
+            .with_context(|| format!("no saved message \"{name}\""))?;
+        messages.push(m.content.clone());
+    }
+    messages.extend(args.messages.iter().cloned());
+
+    let network =
+        settings::network_for(workspace.as_ref(), &EnvThenKeychain).map_err(anyhow::Error::msg)?;
+    let job = || Job {
+        workspace: workspace.as_ref(),
+        request: &request,
+        path: path.as_deref(),
+        context: args.r#in.as_deref(),
+        environment: args.common.environment.as_deref(),
+        overrides: &args.common.vars,
+        extra_checks: None,
+        secrets: &EnvThenKeychain,
+        history: None,
+        source: "cli",
+        allow_host: None,
+        scripting: Default::default(),
+        network: Some(network.clone()),
+        observer: None,
+    };
+    let json = args.common.json;
+    let (closed_tx, mut closed_rx) = tokio::sync::mpsc::unbounded_channel::<bool>();
+    let sink: tuma_core::http::websocket::EventSink = std::sync::Arc::new(move |event: WsEvent| {
+        if json {
+            println!("{}", serde_json::to_string(&event).unwrap_or_default());
+        } else {
+            match &event {
+                WsEvent::Open { url, status, .. } => eprintln!("Connected to {url} ({status})"),
+                WsEvent::Message {
+                    incoming,
+                    text,
+                    binary,
+                    size,
+                    ..
+                } => {
+                    let arrow = if *incoming { "<" } else { ">" };
+                    match (text, binary) {
+                        (Some(text), _) => println!("{arrow} {text}"),
+                        (_, Some(_)) => println!("{arrow} ({size} bytes of binary data)"),
+                        _ => {}
+                    }
+                }
+                WsEvent::Closed {
+                    code,
+                    reason,
+                    by_server,
+                } => eprintln!(
+                    "Closed{} {}{}",
+                    if *by_server { " by the server" } else { "" },
+                    code.map(|c| c.to_string()).unwrap_or_default(),
+                    if reason.is_empty() {
+                        String::new()
+                    } else {
+                        format!(": {reason}")
+                    }
+                ),
+                WsEvent::Error { message } => eprintln!("Error: {message}"),
+            }
+        }
+        if let WsEvent::Closed { by_server, .. } = event {
+            let _ = closed_tx.send(by_server);
+        }
+    });
+    let socket = runner::open_websocket(job(), sink)
+        .await
+        .map_err(|f| anyhow::anyhow!(f.message))?;
+    for message in &messages {
+        let text = runner::resolve_text(&job(), message).map_err(|f| anyhow::anyhow!(f.message))?;
+        socket
+            .send(Outgoing::Text(text))
+            .map_err(anyhow::Error::msg)?;
+    }
+    let waited = if args.wait > 0.0 {
+        tokio::time::timeout(
+            std::time::Duration::from_secs_f64(args.wait),
+            closed_rx.recv(),
+        )
+        .await
+        .ok()
+    } else {
+        Some(closed_rx.recv().await)
+    };
+    if waited.is_none() {
+        socket.close();
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(2), closed_rx.recv()).await;
+    }
+    settings::keep_cookies(&network, workspace.as_ref()).map_err(anyhow::Error::msg)?;
+    Ok(true)
 }
 
 async fn auth(start: &Path, command: AuthCommand) -> anyhow::Result<bool> {

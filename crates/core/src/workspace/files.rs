@@ -72,6 +72,26 @@ pub struct RequestFile {
     /// Pre-request and test scripts (JavaScript, Postman's `pm.*` API). Collections and folders can have them too.
     #[serde(skip_serializing_if = "Scripts::is_empty")]
     pub scripts: Scripts,
+    /// For a WebSocket request (a `ws://` or `wss://` URL): messages to send with a click.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub messages: Vec<SavedMessage>,
+}
+
+/// A WebSocket message kept with its request.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SavedMessage {
+    pub name: String,
+    /// Text; `{{variables}}` are resolved when it is sent.
+    pub content: String,
+}
+
+impl RequestFile {
+    /// A WebSocket request: its URL starts with `ws://` or `wss://`.
+    pub fn is_websocket(&self) -> bool {
+        let url = self.url.trim_start().to_ascii_lowercase();
+        url.starts_with("ws://") || url.starts_with("wss://")
+    }
 }
 
 impl Default for RequestFile {
@@ -87,6 +107,7 @@ impl Default for RequestFile {
             settings: http::Settings::default(),
             expect: Expectations::default(),
             scripts: Scripts::default(),
+            messages: Vec::new(),
         }
     }
 }

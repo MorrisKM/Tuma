@@ -3,6 +3,7 @@
 mod oauth;
 mod runs;
 mod settings;
+mod sockets;
 mod visualizer;
 mod workspace;
 
@@ -257,6 +258,7 @@ pub fn run() {
         .manage(workspace::Open::default())
         .manage(visualizer::Store::default())
         .manage(runs::Running::default())
+        .manage(sockets::Sockets::default())
         .register_uri_scheme_protocol(visualizer::SCHEME, visualizer::serve)
         .setup(|app| {
             app.manage(History::new(app.path().app_data_dir()?));
@@ -304,6 +306,9 @@ pub fn run() {
             oauth::oauth2_tokens,
             oauth::oauth2_forget,
             oauth::graphql_schema,
+            sockets::ws_connect,
+            sockets::ws_send,
+            sockets::ws_close,
             settings::settings_read,
             settings::settings_write,
             settings::cookies_list,

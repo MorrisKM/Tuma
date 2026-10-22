@@ -7,6 +7,7 @@ mod model;
 pub mod network;
 mod prepare;
 mod tls;
+pub mod websocket;
 
 pub use client::{Observer, StreamEvent, send, send_observed, send_with};
 pub use error::Error;

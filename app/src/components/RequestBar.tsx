@@ -1,3 +1,4 @@
+import { isWebSocket } from "../draft";
 import { useStore } from "../store";
 import { UrlEditor } from "./UrlEditor";
 
@@ -8,15 +9,18 @@ export function RequestBar() {
   const url = useStore((s) => s.draft.url);
   const sending = useStore((s) => s.sending);
   const scope = useStore((s) => s.scope);
-  const { update, setUrl, send, cancel, importCurl } = useStore.getState();
+  const socket = useStore((s) => s.sockets[s.activeTab]?.status);
+  const { update, setUrl, send, cancel, importCurl, connect, disconnect } = useStore.getState();
+  const ws = isWebSocket(url);
 
   return (
     <div className="request-bar">
       {/* A text input with suggestions, so custom methods such as PURGE work too. */}
       <input
-        className={`method method-${method.toLowerCase()}`}
+        className={`method method-${ws ? "ws" : method.toLowerCase()}`}
         list="methods"
-        value={method}
+        value={ws ? "WS" : method}
+        disabled={ws}
         spellCheck={false}
         aria-label="Method"
         onChange={(e) => update({ method: e.target.value.toUpperCase() })}
@@ -34,7 +38,17 @@ export function RequestBar() {
         scope={scope}
         placeholder="URL, /path with {{baseUrl}}, or paste a cURL command"
       />
-      {sending ? (
+      {ws ? (
+        socket === "open" || socket === "connecting" ? (
+          <button type="button" className="button" onClick={disconnect}>
+            Disconnect
+          </button>
+        ) : (
+          <button type="button" className="button primary" disabled={!url.trim()} onClick={() => void connect()}>
+            Connect
+          </button>
+        )
+      ) : sending ? (
         <button type="button" className="button" onClick={cancel}>
           Cancel
         </button>

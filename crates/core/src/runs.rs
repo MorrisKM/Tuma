@@ -87,7 +87,8 @@ pub async fn run(
     let mut requests = Vec::new();
     for path in runner::requests_under(ws, options.path)? {
         let file = ws.read_request(&path)?;
-        if options.only_tests && !tests_something(ws, &path, &file) {
+        // WebSockets are opened, not sent; a run has nothing to do with them.
+        if file.is_websocket() || (options.only_tests && !tests_something(ws, &path, &file)) {
             continue;
         }
         requests.push((path, file));

@@ -119,6 +119,28 @@ export interface RequestFile {
   /** Checks on the response (status, headers, JSON paths); kept as is, the editor does not show them yet. */
   expect?: Record<string, unknown>;
   scripts?: Scripts;
+  /** WebSocket requests: messages to send with a click. */
+  messages?: SavedMessage[];
+}
+
+export interface SavedMessage {
+  name: string;
+  content: string;
+}
+
+/** What happens on a WebSocket connection. Binary data is base64. */
+export type WsEvent =
+  | { kind: "open"; url: string; status: number; headers: Header[]; protocol: string | null }
+  | { kind: "message"; incoming: boolean; text?: string; binary?: string; size: number; at: number }
+  | { kind: "closed"; code: number | null; reason: string; byServer: boolean }
+  | { kind: "error"; message: string };
+
+/** A tab's WebSocket connection. */
+export interface SocketState {
+  status: "connecting" | "open" | "closed";
+  events: WsEvent[];
+  /** Why connecting failed. */
+  error?: string;
 }
 
 export interface Variable {

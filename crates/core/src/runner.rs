@@ -926,6 +926,89 @@ impl Summary {
     }
 }
 
+/// Opens a WebSocket for a `ws://` or `wss://` request, resolving variables and auth as [`execute`] does (no scripts).
+pub async fn open_websocket(
+    job: Job<'_>,
+    events: http::websocket::EventSink,
+) -> Result<http::websocket::Socket, Failure> {
+    let (prepared, _) = resolve(&job, job.request).await?;
+    let network = job.network.clone().unwrap_or_default();
+    http::websocket::connect(&prepared, &network, events)
+        .await
+        .map_err(|e| Failure::new(e.kind(), e.to_string()))
+}
+
+/// A text with `{{variables}}` resolved as they would be in the job's request, such as a WebSocket message.
+pub fn resolve_text(job: &Job<'_>, text: &str) -> Result<String, Failure> {
+    let file = RequestFile {
+        url: "http://localhost/".into(),
+        body: files::Body::Text {
+            content: text.to_string(),
+        },
+        auth: Some(files::Auth::None),
+        ..RequestFile::default()
+    };
+    let location = location_of(job);
+    let prepared = match job.workspace {
+        Some(ws) => ws
+            .prepare(
+                &file,
+                location.as_deref(),
+                job.environment,
+                job.overrides,
+                job.secrets,
+            )
+            .map_err(|e| Failure::new("workspace", e.to_string()))?,
+        None => workspace::prepare_standalone(&file, job.overrides),
+    };
+    match prepared.request.body {
+        http::Body::Raw { content, .. } => Ok(content),
+        _ => Ok(text.to_string()),
+    }
+}
+
+fn location_of(job: &Job<'_>) -> Option<String> {
+    match (job.path, job.context, job.workspace) {
+        (Some(path), _, _) => Some(path.to_string()),
+        (None, Some(folder), _) => Some(format!("{}/request.yaml", folder.trim_matches('/'))),
+        (None, None, Some(ws)) => implicit_location(ws, &job.request.url),
+        _ => None,
+    }
+}
+
+/// Variables, inherited auth and an OAuth 2.0 token for a request, without sending it.
+async fn resolve(
+    job: &Job<'_>,
+    file: &RequestFile,
+) -> Result<(http::Request, BTreeSet<String>), Failure> {
+    let location = location_of(job);
+    let prepared = match job.workspace {
+        Some(ws) => ws
+            .prepare(
+                file,
+                location.as_deref(),
+                job.environment,
+                job.overrides,
+                job.secrets,
+            )
+            .map_err(|e| Failure::new("workspace", e.to_string()))?,
+        None => workspace::prepare_standalone(file, job.overrides),
+    };
+    let mut request = prepared.request;
+    if let http::Auth::OAuth2(oauth) = &mut request.auth {
+        let token = crate::oauth2::token_for(
+            oauth,
+            job.workspace.map(|w| w.id()),
+            job.secrets,
+            job.network.as_deref(),
+        )
+        .await
+        .map_err(|e| Failure::new("auth", e))?;
+        oauth.access_token = Some(token.access_token);
+    }
+    Ok((request, prepared.unresolved))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

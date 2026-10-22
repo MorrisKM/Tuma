@@ -125,3 +125,10 @@ export const oauth2Forget = (key: string) => invoke<void>("oauth2_forget", { key
 /** The server's schema by introspection: the `data` of the answer, for graphql-js's buildClientSchema. */
 export const graphqlSchema = (request: RequestFile, path: string | null, environment: string | null) =>
   invoke<unknown>("graphql_schema", { request, path, environment });
+
+/** Opens the WebSocket of a ws:// request; events arrive as "ws-event". */
+export const wsConnect = (id: string, request: RequestFile, path: string | null, environment: string | null) =>
+  invoke<void>("ws_connect", { id, request, path, environment });
+export const wsSend = (id: string, text: string, request: RequestFile, path: string | null, environment: string | null) =>
+  invoke<void>("ws_send", { id, text, request, path, environment });
+export const wsClose = (id: string) => invoke<void>("ws_close", { id });

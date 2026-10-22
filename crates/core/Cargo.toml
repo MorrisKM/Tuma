@@ -15,6 +15,7 @@ cookie_store = { version = "0.22", default-features = false, features = ["serde_
 bytes = "1"
 dirs = "6"
 flate2 = "1"
+futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 http = "1"
 http-body-util = "0.1"
 hyper = { version = "1", features = ["client", "http1", "http2"] }
@@ -35,7 +36,8 @@ serde.workspace = true
 serde-saphyr = "2"
 serde_json.workspace = true
 thiserror = "2"
-tokio = { workspace = true, features = ["net", "time", "fs", "io-util"] }
+tokio = { workspace = true, features = ["net", "time", "fs", "io-util", "sync"] }
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
 url = "2"
 uuid = { version = "1", features = ["v4"] }
@@ -44,4 +46,6 @@ uuid = { version = "1", features = ["v4"] }
 hyper = { version = "1", features = ["server", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["tokio", "server", "http1", "http2", "server-auto"] }
 rcgen = "0.14"
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }

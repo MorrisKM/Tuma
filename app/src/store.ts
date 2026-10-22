@@ -4,6 +4,7 @@ import * as api from "./api";
 import {
   type Draft,
   fromRequestFile,
+  isWebSocket,
   nameFromPath,
   newDraft,
   parseQuery,
@@ -15,6 +16,7 @@ import type {
   KeyValue,
   RequestError,
   Response,
+  SocketState,
   SseEvent,
   TreeNode,
   VariableHint,
@@ -86,6 +88,11 @@ interface State {
   notice: Notice | null;
   /** Server-sent events arriving for requests in flight, by send id. */
   live: Record<string, SseEvent[]>;
+  /** WebSocket connections, by tab id. */
+  sockets: Record<string, SocketState>;
+  connect: () => Promise<void>;
+  disconnect: () => void;
+  sendMessage: (text: string) => Promise<void>;
 
   init: () => Promise<void>;
   openWorkspace: () => Promise<void>;
@@ -283,6 +290,32 @@ export const useStore = create<State>((set, get) => {
     history: [],
     notice: null,
     live: {},
+    sockets: {},
+
+    connect: async () => {
+      const { draft, environment, activeTab } = get();
+      set((s) => ({ sockets: { ...s.sockets, [activeTab]: { status: "connecting", events: [] } } }));
+      try {
+        await api.wsConnect(activeTab, toRequestFile(draft), draft.path, environment);
+        set((s) => {
+          const current = s.sockets[activeTab];
+          // The open event may already have come; a close may have come too.
+          return current?.status === "connecting"
+            ? { sockets: { ...s.sockets, [activeTab]: { ...current, status: "open" } } }
+            : {};
+        });
+      } catch (e) {
+        set((s) => ({ sockets: { ...s.sockets, [activeTab]: { status: "closed", events: [], error: message(e) } } }));
+      }
+    },
+
+    disconnect: () => void api.wsClose(get().activeTab),
+
+    sendMessage: (text) =>
+      attempt(async () => {
+        const { draft, environment, activeTab } = get();
+        await api.wsSend(activeTab, text, toRequestFile(draft), draft.path, environment);
+      }),
 
     init: () =>
       attempt(async () => {
@@ -392,6 +425,7 @@ export const useStore = create<State>((set, get) => {
         if (!tab) return;
         if (tabDirty(tab) && !(await ask_(`"${tab.draft.name}" has unsaved changes. Discard them?`))) return;
         if (tab.sending) void api.cancelRequest(tab.sending);
+        if (get().sockets[id]?.status === "open") void api.wsClose(id);
         const rest = tabs.filter((t) => t.id !== id);
         if (rest.length === 0) {
           resetTabs();
@@ -560,6 +594,10 @@ export const useStore = create<State>((set, get) => {
     send: async () => {
       const { draft, sending, environment, activeTab } = get();
       if (sending || !draft.url.trim()) return;
+      if (isWebSocket(draft.url)) {
+        if (get().sockets[activeTab]?.status !== "open") await get().connect();
+        return;
+      }
       const id = crypto.randomUUID();
       set({ sending: id, error: null, view: { kind: "request" }, preview: false });
       try {

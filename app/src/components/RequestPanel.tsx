@@ -1,12 +1,13 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
-import { type BodyMode, isTextMode, toRequestFile } from "../draft";
+import { type BodyMode, isTextMode, isWebSocket, toRequestFile } from "../draft";
 import { useStore } from "../store";
 import type { KeyValue } from "../types";
 import { AuthForm } from "./AuthForm";
 import { CodeEditor, type Language } from "./CodeEditor";
 import { blankPart, blankRow, KeyValueEditor } from "./KeyValueEditor";
 import { GraphqlEditor } from "./GraphqlEditor";
+import { MessageComposer } from "./WebSocketViews";
 import { ScriptsEditor } from "./ScriptsEditor";
 import { Tabs } from "./Tabs";
 
@@ -17,6 +18,7 @@ const active = (rows: KeyValue[]) => rows.filter((r) => r.enabled && r.name).len
 export function RequestPanel() {
   const [tab, setTab] = useState<Tab>("params");
   const draft = useStore((s) => s.draft);
+  if (isWebSocket(draft.url)) return <WebSocketPanel />;
 
   return (
     <section className="request-panel">
@@ -262,5 +264,35 @@ function SettingsEditor() {
         <p className="hint">Any certificate is accepted. Only turn this off for development servers you trust.</p>
       )}
     </div>
+  );
+}
+
+type WsTab = "message" | "params" | "headers" | "auth" | "settings";
+
+/** A WebSocket request: messages instead of a body; the handshake has params, headers and auth. */
+function WebSocketPanel() {
+  const [tab, setTab] = useState<WsTab>("message");
+  const draft = useStore((s) => s.draft);
+  return (
+    <section className="request-panel">
+      <Tabs
+        active={tab}
+        onChange={setTab}
+        tabs={[
+          { id: "message", label: "Message", count: draft.messages.length },
+          { id: "params", label: "Params", count: active(draft.params) },
+          { id: "headers", label: "Headers", count: active(draft.headers) },
+          { id: "auth", label: "Auth" },
+          { id: "settings", label: "Settings" },
+        ]}
+      />
+      <div className="panel-body">
+        {tab === "message" && <MessageComposer />}
+        {tab === "params" && <Params />}
+        {tab === "headers" && <Headers />}
+        {tab === "auth" && <AuthEditor />}
+        {tab === "settings" && <SettingsEditor />}
+      </div>
+    </section>
   );
 }

@@ -33,6 +33,8 @@ pub enum Error {
     TooManyRedirects(u32),
     #[error("{0}")]
     Auth(String),
+    #[error("WebSocket: {0}")]
+    WebSocket(String),
     #[error("proxy: {0}")]
     Proxy(String),
     #[error("could not decode the {encoding} response body: {source}")]
@@ -55,6 +57,7 @@ impl Error {
             Error::Timeout(_) => "timeout",
             Error::Proxy(_) => "proxy",
             Error::Auth(_) => "auth",
+            Error::WebSocket(_) => "websocket",
             Error::TooManyRedirects(_) => "redirects",
             Error::Decode { .. } => "decode",
         }
