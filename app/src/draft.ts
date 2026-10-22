@@ -5,6 +5,7 @@
 import type {
   Auth,
   Body,
+  CryptoSettings,
   Example,
   GrpcSettings,
   KeyValue,
@@ -72,6 +73,8 @@ export interface Draft {
   messages: SavedMessage[];
   /** Responses saved as examples. */
   examples: Example[];
+  /** Encryption settings, when the request uses them. */
+  crypto: CryptoSettings | null;
   /** gRPC requests: the method and its .proto files. The message is `raw`. */
   grpc: GrpcSettings;
 }
@@ -106,6 +109,7 @@ export const newDraft = (): Draft => ({
   scripts: {},
   messages: [],
   examples: [],
+  crypto: null,
   grpc: { method: "" },
 });
 
@@ -127,6 +131,7 @@ export function toRequestFile(d: Draft): RequestFile {
     scripts: d.scripts,
     ...(d.messages.length ? { messages: d.messages } : {}),
     ...(d.examples.length ? { examples: d.examples } : {}),
+    ...(d.crypto && (d.crypto.encrypt?.length || d.crypto.decrypt?.length) ? { crypto: d.crypto } : {}),
     ...(isGrpc(d.url) ? { grpc: cleanGrpc(d.grpc) } : {}),
   };
 }
@@ -175,6 +180,7 @@ export function fromRequestFile(r: RequestFile, path: string | null, name: strin
     scripts: r.scripts ?? {},
     messages: r.messages ?? [],
     examples: r.examples ?? [],
+    crypto: r.crypto ?? null,
     grpc: r.grpc ?? { method: "" },
   };
   d.params = parseQuery(d.url);

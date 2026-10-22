@@ -237,6 +237,8 @@ pub struct Execution {
     pub locals: BTreeMap<String, String>,
     /// Secret values the request could use, so output can mask them.
     pub secrets: Vec<String>,
+    /// The response's decrypted fields, and its body as it came; or why decrypting failed.
+    pub decryption: Option<Result<crate::crypto::Decryption, String>>,
 }
 
 impl Execution {
@@ -347,6 +349,7 @@ pub async fn execute(job: Job<'_>) -> Execution {
         next_request: None,
         locals: job.scripting.locals.cloned().unwrap_or_default(),
         secrets,
+        decryption: None,
     };
     let request_name = job
         .path
@@ -557,6 +560,39 @@ pub async fn execute(job: Job<'_>) -> Execution {
         }
     }
 
+    // Encryption: chosen body fields are encrypted now, after variables and just before sending.
+    let cipher = match prepared.crypto.as_ref().map(|c| c.cipher()) {
+        Some(Ok(cipher)) => Some(cipher),
+        Some(Err(e)) => {
+            execution.response = Err(Failure::new("crypto", e));
+            return execution;
+        }
+        None => None,
+    };
+    if let (Some(cipher), Some(crypto)) = (&cipher, &prepared.crypto)
+        && !crypto.settings.encrypt.is_empty()
+    {
+        let encrypted = match &prepared.request.body {
+            http::Body::Raw {
+                content,
+                content_type,
+            } => crate::crypto::encrypt_body(content, &crypto.settings.encrypt, cipher).map(
+                |content| http::Body::Raw {
+                    content,
+                    content_type: content_type.clone(),
+                },
+            ),
+            _ => Err("only a JSON or text body can be encrypted".to_string()),
+        };
+        match encrypted {
+            Ok(body) => prepared.request.body = body,
+            Err(e) => {
+                execution.response = Err(Failure::new("crypto", e));
+                return execution;
+            }
+        }
+    }
+
     // The request
     let direct = http::Network::default();
     let network = job.network.as_deref().unwrap_or(&direct);
@@ -584,13 +620,28 @@ pub async fn execute(job: Job<'_>) -> Execution {
         // History is a convenience; failing to write it must not fail the request.
         let _ = history.append(&entry);
     }
-    let response = match result {
+    let mut response = match result {
         Ok(response) => response,
         Err(e) => {
             execution.response = Err(Failure::new(e.kind(), e.to_string()));
             return execution;
         }
     };
+
+    // Decryption: checks and test scripts see the decrypted body.
+    if let (Some(cipher), Some(crypto)) = (&cipher, &prepared.crypto)
+        && !crypto.settings.decrypt.is_empty()
+    {
+        let original = String::from_utf8_lossy(&response.body).into_owned();
+        execution.decryption = Some(
+            crate::crypto::decrypt_body(&original, &crypto.settings.decrypt, cipher).map(
+                |(plain, fields)| {
+                    response.body = plain.into_bytes().into();
+                    crate::crypto::Decryption { original, fields }
+                },
+            ),
+        );
+    }
 
     // Checks
     let mut expect = file.expect.clone();

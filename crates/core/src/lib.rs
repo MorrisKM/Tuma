@@ -3,6 +3,7 @@
 
 pub mod check;
 pub mod codegen;
+pub mod crypto;
 pub mod curl;
 pub mod docs;
 pub mod expect;

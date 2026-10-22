@@ -144,6 +144,7 @@ fn request(item: &Value, name: &str, warnings: &mut Warnings) -> RequestFile {
         messages: Vec::new(),
         grpc: None,
         examples,
+        crypto: None,
     }
 }
 

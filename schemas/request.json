@@ -77,6 +77,17 @@
       "items": {
         "$ref": "#/$defs/Example"
       }
+    },
+    "crypto": {
+      "description": "Body fields to encrypt before sending and response fields to decrypt.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CryptoSettings"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "$defs": {
@@ -967,6 +978,72 @@
           "type": "string"
         }
       }
+    },
+    "CryptoSettings": {
+      "description": "A request's encryption settings, as written in its file. `key` and `iv` may use `{{variables}}`.",
+      "type": "object",
+      "properties": {
+        "algorithm": {
+          "$ref": "#/$defs/Algorithm",
+          "default": "aes-256-gcm"
+        },
+        "key": {
+          "description": "The key, such as `{{encryptionKey}}` (a secret variable).",
+          "type": "string",
+          "default": ""
+        },
+        "keyEncoding": {
+          "$ref": "#/$defs/Encoding"
+        },
+        "iv": {
+          "description": "A fixed IV; empty means a random one for every value, written before the ciphertext.",
+          "type": "string"
+        },
+        "output": {
+          "description": "How the ciphertext is written: base64 or hex.",
+          "$ref": "#/$defs/Encoding"
+        },
+        "encrypt": {
+          "description": "JSON paths of the body fields to encrypt before sending; `$` is the whole body.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "decrypt": {
+          "description": "JSON paths of the response fields to decrypt; `$` is the whole body.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Algorithm": {
+      "type": "string",
+      "enum": [
+        "aes-256-gcm",
+        "aes-128-gcm",
+        "aes-256-cbc",
+        "aes-128-cbc"
+      ]
+    },
+    "Encoding": {
+      "description": "How bytes are written as text: the key and IV as given, and the ciphertext.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "base64",
+            "hex"
+          ]
+        },
+        {
+          "description": "The text's own bytes (keys and IVs only).",
+          "type": "string",
+          "const": "utf8"
+        }
+      ]
     }
   }
 }

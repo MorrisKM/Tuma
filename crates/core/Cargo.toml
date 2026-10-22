@@ -9,7 +9,10 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+aes = "=0.9.3"
+aes-gcm = { version = "=0.11.1", default-features = false, features = ["aes", "alloc"] }
 base64 = "0.23"
+cbc = { version = "=0.2.1", features = ["alloc"] }
 brotli = "9"
 cookie_store = { version = "0.22", default-features = false, features = ["serde_json"] }
 bytes = "1"

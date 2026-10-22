@@ -125,6 +125,23 @@ export interface RequestFile {
   grpc?: GrpcSettings | null;
   /** Saved responses, for documentation and mock servers. */
   examples?: Example[];
+  /** Body fields to encrypt before sending and response fields to decrypt. */
+  crypto?: CryptoSettings | null;
+}
+
+export type CryptoAlgorithm = "aes-256-gcm" | "aes-128-gcm" | "aes-256-cbc" | "aes-128-cbc";
+export type CryptoEncoding = "base64" | "hex" | "utf8";
+
+export interface CryptoSettings {
+  algorithm?: CryptoAlgorithm;
+  /** Such as {{encryptionKey}}. */
+  key?: string;
+  keyEncoding?: CryptoEncoding;
+  iv?: string;
+  output?: CryptoEncoding;
+  /** JSON paths; "$" is the whole body. */
+  encrypt?: string[];
+  decrypt?: string[];
 }
 
 export interface Example {
@@ -269,6 +286,8 @@ export interface Response extends ScriptResults {
   checks: CheckResult[];
   /** For a text/event-stream response: its events. */
   events?: SseEvent[] | null;
+  /** What was decrypted, and the body as it came; or why it could not be decrypted. */
+  decryption?: { original: string | null; fields: [string, number][]; error: string | null } | null;
 }
 
 /** A server-sent event. `at` is when it arrived (Unix ms), for live ones. */

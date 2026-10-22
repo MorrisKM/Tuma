@@ -5,6 +5,7 @@ import { formatJsonc } from "../jsonc";
 import { useStore } from "../store";
 import type { KeyValue } from "../types";
 import { AuthForm } from "./AuthForm";
+import { CryptoEditor } from "./CryptoEditor";
 import { ExamplesEditor } from "./ExamplesEditor";
 import { CodeEditor, type Language } from "./CodeEditor";
 import { blankPart, blankRow, KeyValueEditor } from "./KeyValueEditor";
@@ -14,7 +15,7 @@ import { MessageComposer } from "./WebSocketViews";
 import { ScriptsEditor } from "./ScriptsEditor";
 import { Tabs } from "./Tabs";
 
-type Tab = "params" | "headers" | "body" | "auth" | "scripts" | "examples" | "settings";
+type Tab = "params" | "headers" | "body" | "auth" | "scripts" | "crypto" | "examples" | "settings";
 
 const active = (rows: KeyValue[]) => rows.filter((r) => r.enabled && r.name).length;
 
@@ -39,11 +40,17 @@ export function RequestPanel() {
             label: "Scripts",
             count: [draft.scripts.preRequest, draft.scripts.test].filter((s) => s?.trim()).length,
           },
+          {
+            id: "crypto",
+            label: "Crypto",
+            count: (draft.crypto?.encrypt?.length ?? 0) + (draft.crypto?.decrypt?.length ?? 0),
+          },
           { id: "examples", label: "Examples", count: draft.examples.length },
           { id: "settings", label: "Settings" },
         ]}
       />
       <div className="panel-body">
+        {tab === "crypto" && <CryptoEditor key={draft.path ?? ""} />}
         {tab === "examples" && <ExamplesEditor />}
         {tab === "params" && <Params />}
         {tab === "headers" && <Headers />}

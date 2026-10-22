@@ -6087,9 +6087,12 @@ dependencies = [
 name = "tuma-core"
 version = "1.0.0"
 dependencies = [
+ "aes",
+ "aes-gcm",
  "base64 0.23.1",
  "brotli",
  "bytes",
+ "cbc",
  "cookie_store",
  "dirs 6.0.0",
  "flate2",

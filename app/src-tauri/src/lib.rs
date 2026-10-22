@@ -59,8 +59,18 @@ struct ResponseView {
     checks: Vec<CheckResult>,
     /// For a `text/event-stream` response: its events.
     events: Option<Vec<tuma_core::sse::Event>>,
+    /// With decryption settings: what was decrypted and the body as it came, or why it could not be decrypted.
+    decryption: Option<DecryptionView>,
     #[serde(flatten)]
     scripts: ScriptsView,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DecryptionView {
+    original: Option<String>,
+    fields: Vec<(String, usize)>,
+    error: Option<String>,
 }
 
 /// A server-sent event as it arrives, for the request with this id.
@@ -189,6 +199,18 @@ async fn send_request(
         console: execution.console,
     };
     let unresolved: Vec<String> = execution.unresolved.into_iter().collect();
+    let decryption = execution.decryption.map(|d| match d {
+        Ok(d) => DecryptionView {
+            original: Some(d.original),
+            fields: d.fields,
+            error: None,
+        },
+        Err(e) => DecryptionView {
+            original: None,
+            fields: vec![],
+            error: Some(e),
+        },
+    });
     let response = match execution.response {
         Ok(response) => response,
         Err(failure) => {
@@ -232,6 +254,7 @@ async fn send_request(
         unresolved,
         checks: execution.checks,
         events,
+        decryption,
         scripts,
     })
 }

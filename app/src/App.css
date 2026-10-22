@@ -3830,3 +3830,69 @@ td.mock-method {
   max-width: 320px;
   word-break: break-all;
 }
+
+/* Crypto */
+
+.crypto {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 820px;
+}
+
+.crypto-intro {
+  margin: 0;
+}
+
+.crypto-intro svg {
+  vertical-align: -2px;
+}
+
+.crypto-pair {
+  display: flex;
+  gap: 6px;
+}
+
+.crypto-pair input {
+  flex: 1;
+}
+
+.crypto-pair select {
+  width: 96px;
+}
+
+.crypto-paths {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.crypto-paths label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.crypto-paths textarea {
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.crypto-paths textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.pill.decrypt-failed {
+  color: var(--fail);
+  background: color-mix(in srgb, var(--fail) 12%, transparent);
+  cursor: help;
+}

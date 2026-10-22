@@ -130,6 +130,35 @@ pub struct ScopedVariable {
 pub struct Prepared {
     pub request: http::Request,
     pub unresolved: BTreeSet<String>,
+    /// The request's encryption settings with the key and IV's variables filled in.
+    pub crypto: Option<PreparedCrypto>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PreparedCrypto {
+    pub settings: crate::crypto::CryptoSettings,
+    pub key: String,
+    pub iv: String,
+}
+
+impl PreparedCrypto {
+    pub fn cipher(&self) -> std::result::Result<crate::crypto::Cipher, String> {
+        crate::crypto::Cipher::new(&self.settings, &self.key, &self.iv)
+    }
+}
+
+/// The key and IV of `request`'s encryption settings, resolved with `scopes`.
+fn prepare_crypto(
+    request: &RequestFile,
+    scopes: &Scopes,
+    unresolved: &mut BTreeSet<String>,
+) -> Option<PreparedCrypto> {
+    let settings = request.crypto.as_ref().filter(|c| !c.is_empty())?;
+    Some(PreparedCrypto {
+        key: scopes.resolve(&settings.key, unresolved),
+        iv: scopes.resolve(&settings.iv, unresolved),
+        settings: settings.clone(),
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -942,10 +971,13 @@ impl Workspace {
             .as_ref()
             .or_else(|| folders.iter().find_map(|f| f.auth.as_ref()));
         let inherited: Vec<&KeyValue> = folders.iter().rev().flat_map(|f| &f.headers).collect();
-        let (request, unresolved) = scopes.resolve_request(&to_http(request, auth, &inherited));
+        let (http_request, mut unresolved) =
+            scopes.resolve_request(&to_http(request, auth, &inherited));
+        let crypto = prepare_crypto(request, &scopes, &mut unresolved);
         Ok(Prepared {
-            request,
+            request: http_request,
             unresolved,
+            crypto,
         })
     }
 }
@@ -955,11 +987,13 @@ impl Workspace {
 pub fn prepare_standalone(request: &RequestFile, overrides: &[(String, String)]) -> Prepared {
     let mut scopes = Scopes::default();
     scopes.push(overrides.iter().cloned());
-    let (request, unresolved) =
+    let (http_request, mut unresolved) =
         scopes.resolve_request(&to_http(request, request.auth.as_ref(), &[]));
+    let crypto = prepare_crypto(request, &scopes, &mut unresolved);
     Prepared {
-        request,
+        request: http_request,
         unresolved,
+        crypto,
     }
 }
 

@@ -82,6 +82,9 @@ pub struct RequestFile {
     /// Responses saved as examples: they document the request, and mock servers answer with them.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub examples: Vec<Example>,
+    /// Body fields to encrypt before sending and response fields to decrypt.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crypto: Option<crate::crypto::CryptoSettings>,
 }
 
 /// A response kept with its request, for documentation and mock servers.
@@ -156,6 +159,7 @@ impl Default for RequestFile {
             messages: Vec::new(),
             grpc: None,
             examples: Vec::new(),
+            crypto: None,
         }
     }
 }

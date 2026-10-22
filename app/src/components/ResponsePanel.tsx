@@ -322,22 +322,26 @@ function BodyView({ response }: { response: Response }) {
   const [filter, setFilter] = useState("");
   // A copy changed in the viewer (with find and replace); the response itself is kept as it came.
   const [edited, setEdited] = useState<string | null>(null);
+  // With decryption: the body as it came over the wire, instead of decrypted.
+  const [received, setReceived] = useState(false);
+  const decrypted = response.decryption?.original != null;
+  const bodyText = received && decrypted ? response.decryption!.original! : response.body;
   const frame = useRef<HTMLDivElement>(null);
   const language = languageFor(type);
-  useEffect(() => setEdited(null), [response, view, filter]);
+  useEffect(() => setEdited(null), [response, view, filter, received]);
 
   const json = useMemo(() => {
     if (response.bodyBase64 || language !== "json") return undefined;
     try {
-      return JSON.parse(response.body) as unknown;
+      return JSON.parse(bodyText) as unknown;
     } catch {
       return undefined;
     }
-  }, [response, language]);
+  }, [bodyText, response.bodyBase64, language]);
 
   // With a filter, Pretty shows only the selected values.
   const [pretty, filterError] = useMemo((): [string, string | null] => {
-    if (json === undefined) return [response.body, null];
+    if (json === undefined) return [bodyText, null];
     if (!filter.trim()) return [JSON.stringify(json, null, 2), null];
     try {
       const found = select(json, filter);
@@ -345,7 +349,7 @@ function BodyView({ response }: { response: Response }) {
     } catch (e) {
       return [JSON.stringify(json, null, 2), (e as Error).message];
     }
-  }, [json, filter, response.body]);
+  }, [json, filter, bodyText]);
 
   if (response.size === 0) return <p className="hint">The response has no body.</p>;
 
@@ -377,6 +381,21 @@ function BodyView({ response }: { response: Response }) {
           />
         )}
         <span className="muted">{type || "no content type"}</span>
+        {response.decryption?.error && (
+          <span className="pill decrypt-failed" title={response.decryption.error}>
+            Not decrypted
+          </span>
+        )}
+        {decrypted && (
+          <span className="segmented decrypt-toggle" title="The response's encrypted fields, decrypted with the request's Crypto settings">
+            <button className={received ? "" : "active"} onClick={() => setReceived(false)}>
+              Decrypted
+            </button>
+            <button className={received ? "active" : ""} onClick={() => setReceived(true)}>
+              As received
+            </button>
+          </span>
+        )}
         {shown !== "preview" && !response.bodyBase64 && (
           <span className="body-actions">
             {edited !== null && (
@@ -399,7 +418,7 @@ function BodyView({ response }: { response: Response }) {
             </button>
             <button
               className="button ghost small"
-              onClick={() => void navigator.clipboard.writeText(edited ?? (shown === "pretty" ? pretty : response.body))}
+              onClick={() => void navigator.clipboard.writeText(edited ?? (shown === "pretty" ? pretty : bodyText))}
               title="Copy the body"
             >
               <Copy size={13} />
@@ -415,7 +434,7 @@ function BodyView({ response }: { response: Response }) {
       ) : (
         <div className="editor-frame response-body" ref={frame}>
           <CodeEditor
-            value={edited ?? (shown === "pretty" ? pretty : response.body)}
+            value={edited ?? (shown === "pretty" ? pretty : bodyText)}
             onChange={setEdited}
             language={shown === "pretty" ? language : "text"}
           />
