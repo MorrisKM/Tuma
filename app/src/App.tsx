@@ -32,8 +32,14 @@ applyTheme(loadTheme());
 
 /** Keyboard shortcuts. Ctrl is Cmd on macOS. */
 function onKey(e: KeyboardEvent) {
-  if (!(e.ctrlKey || e.metaKey)) return;
   const s = useStore.getState();
+  // F2 renames the open request, in the sidebar.
+  if (e.key === "F2" && s.view.kind === "request" && s.draft.path) {
+    useStore.setState({ renaming: s.draft.path });
+    e.preventDefault();
+    return;
+  }
+  if (!(e.ctrlKey || e.metaKey)) return;
   const key = e.key.toLowerCase();
   const handled = (() => {
     if (key === "enter") void s.send();

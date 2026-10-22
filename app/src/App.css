@@ -1729,6 +1729,45 @@ label.check {
   text-overflow: ellipsis;
 }
 
+.editable-name,
+.crumb-link {
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  padding: 1px 5px;
+  margin: 0 -5px;
+  font: inherit;
+  color: inherit;
+  cursor: text;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crumb-link {
+  cursor: pointer;
+}
+
+.editable-name:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-input);
+}
+
+.crumb-link:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.name-input {
+  height: 26px;
+  font: inherit;
+  font-weight: 600;
+  padding: 0 6px;
+  margin: 0 -6px;
+  min-width: 120px;
+}
+
 .dirty-dot {
   width: 7px;
   height: 7px;

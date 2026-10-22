@@ -1,13 +1,13 @@
 import { Check, ChevronDown, Code2, Eye, EyeOff, Layers, Plus, Save } from "lucide-react";
 import { Fragment, useState } from "react";
 import { useStore } from "../store";
-import { Menu } from "./ui";
+import { EditableName, Menu } from "./ui";
 
 /** Above the URL: where the request lives, whether it has unsaved changes, the code snippet and Save. */
 export function TopBar() {
   const draft = useStore((s) => s.draft);
   const dirty = useStore((s) => s.isDirty());
-  const { save } = useStore.getState();
+  const { save, rename, update, openFolder } = useStore.getState();
 
   const crumbs = draft.path ? draft.path.split("/").slice(0, -1) : [];
 
@@ -16,11 +16,23 @@ export function TopBar() {
       <div className="crumbs" title={draft.path ?? "Not saved"}>
         {crumbs.map((c, i) => (
           <span key={i} className="crumb">
-            {c}
+            <button
+              className="crumb-link"
+              onClick={() => void openFolder(crumbs.slice(0, i + 1).join("/"))}
+              title={`${c}'s settings`}
+            >
+              {c}
+            </button>
             <span className="crumb-sep">/</span>
           </span>
         ))}
-        <span className="crumb current">{draft.name}</span>
+        <span className="crumb current">
+          <EditableName
+            key={draft.path ?? draft.name}
+            name={draft.name}
+            onRename={(name) => (draft.path ? void rename(draft.path, name) : update({ name }))}
+          />
+        </span>
         {dirty && <span className="dirty-dot" title="Unsaved changes" />}
         {!draft.path && <span className="pill neutral">Not saved</span>}
       </div>

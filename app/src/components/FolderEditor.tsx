@@ -8,6 +8,7 @@ import { AuthForm } from "./AuthForm";
 import { blankRow, KeyValueEditor } from "./KeyValueEditor";
 import { ScriptsEditor } from "./ScriptsEditor";
 import { Tabs } from "./Tabs";
+import { EditableName } from "./ui";
 import { VariableTable } from "./VariableTable";
 
 type Tab = "auth" | "headers" | "variables" | "scripts" | "description";
@@ -52,7 +53,9 @@ export function FolderEditor({ path }: { path: string }) {
     <section className="folder-editor" onKeyDown={(e) => e.key === "s" && (e.ctrlKey || e.metaKey) && save()}>
       <div className="top-bar">
         <div className="crumbs">
-          <span className="crumb current">{name}</span>
+          <span className="crumb current">
+            <EditableName name={name ?? ""} onRename={(next) => void useStore.getState().rename(path, next)} />
+          </span>
           <span className="muted small">{isCollection ? "Collection settings" : "Folder settings"}</span>
           {dirty && <span className="dirty-dot" title="Unsaved changes" />}
         </div>

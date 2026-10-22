@@ -331,7 +331,9 @@ function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
         className={`tree-row${active ? " active" : ""}${menu ? " menu-open" : ""}`}
         style={{ paddingLeft: 8 + depth * 14 }}
         onClick={select}
-        onDoubleClick={() => !isRequest && void openFolder(node.path)}
+        // Double-clicking the name renames, as in a file manager.
+        onDoubleClick={() => useStore.setState({ renaming: node.path })}
+        title={isRequest ? undefined : "Double-click to rename"}
         onContextMenu={(e) => {
           e.preventDefault();
           setMenu({ x: e.clientX, y: e.clientY });

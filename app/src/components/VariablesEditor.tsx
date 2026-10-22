@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import * as api from "../api";
 import { useStore } from "../store";
 import type { VariableValue } from "../types";
+import { EditableName } from "./ui";
 import { VariableTable } from "./VariableTable";
 
 /** Global variables, or one environment's. `environment` null means globals. */
@@ -10,7 +11,6 @@ export function VariablesEditor({ environment }: { environment: string | null })
   const active = useStore((s) => s.environment);
   const [variables, setVariables] = useState<VariableValue[] | null>(null);
   const [saved, setSaved] = useState("");
-  const [renaming, setRenaming] = useState(false);
   const { notify, openVariables, refresh, setEnvironment } = useStore.getState();
   const fail = (e: unknown) => notify({ tone: "error", text: String(e) });
 
@@ -34,7 +34,6 @@ export function VariablesEditor({ environment }: { environment: string | null })
     }
   };
   const rename = async (newName: string) => {
-    setRenaming(false);
     if (!environment || !newName.trim() || newName === environment) return;
     try {
       const name = await api.environmentRename(environment, newName);
@@ -72,20 +71,18 @@ export function VariablesEditor({ environment }: { environment: string | null })
             {environment === null ? "Variables" : "Environments"}
             <span className="crumb-sep">/</span>
           </span>
-          {renaming && environment ? (
-            <input
-              autoFocus
-              className="rename"
-              defaultValue={environment}
-              onBlur={(e) => void rename(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void rename(e.currentTarget.value);
-                if (e.key === "Escape") setRenaming(false);
-              }}
-            />
-          ) : (
-            <span className="crumb current">{environment ?? "Globals"}</span>
-          )}
+          <span className="crumb current">
+            {environment ? (
+              // A new environment opens ready to be named.
+              <EditableName
+                name={environment}
+                onRename={(name) => void rename(name)}
+                editing={/^New environment( \(\d+\))?$/.test(environment)}
+              />
+            ) : (
+              "Globals"
+            )}
+          </span>
           {environment && environment === active && <span className="pill">Active</span>}
           {dirty && <span className="dirty-dot" title="Unsaved changes" />}
         </div>
@@ -94,15 +91,10 @@ export function VariablesEditor({ environment }: { environment: string | null })
             Use this environment
           </button>
         )}
-        {environment && !renaming && (
-          <>
-            <button className="button ghost" onClick={() => setRenaming(true)}>
-              Rename
-            </button>
-            <button className="button ghost danger" onClick={() => void remove()}>
-              Delete
-            </button>
-          </>
+        {environment && (
+          <button className="button ghost danger" onClick={() => void remove()}>
+            Delete
+          </button>
         )}
         <button className="button primary" disabled={!dirty} onClick={() => void save()}>
           Save

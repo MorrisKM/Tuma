@@ -1,6 +1,6 @@
 // Small pieces used across the app.
 
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /** The paper plane of the app icon. */
 export function Logo({ size = 22 }: { size?: number }) {
@@ -65,5 +65,52 @@ export function Menu({
     >
       <div onClick={onClose}>{children}</div>
     </div>
+  );
+}
+
+/** A name that becomes a text field when clicked; Enter or leaving the field keeps the new name, Escape cancels. */
+export function EditableName({
+  name,
+  onRename,
+  title = "Click to rename",
+  editing: startEditing = false,
+}: {
+  name: string;
+  onRename: (name: string) => void;
+  title?: string;
+  /** Opens as a text field, as for something just created. */
+  editing?: boolean;
+}) {
+  const [editing, setEditing] = useState(startEditing);
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (editing) input.current?.select();
+  }, [editing]);
+  const finish = (value: string) => {
+    setEditing(false);
+    const next = value.trim();
+    if (next && next !== name) onRename(next);
+  };
+  if (editing) {
+    return (
+      <input
+        ref={input}
+        className="name-input"
+        defaultValue={name}
+        aria-label="Name"
+        spellCheck={false}
+        size={Math.max(8, name.length + 2)}
+        onBlur={(e) => finish(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") finish(e.currentTarget.value);
+          if (e.key === "Escape") setEditing(false);
+        }}
+      />
+    );
+  }
+  return (
+    <button className="editable-name" onClick={() => setEditing(true)} title={title}>
+      {name}
+    </button>
   );
 }
