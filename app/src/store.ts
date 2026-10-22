@@ -172,7 +172,8 @@ interface State {
   duplicate: (path: string) => Promise<void>;
   /** A saved request without changes is copied on disk; otherwise the tab's request opens again in a new, unsaved tab. */
   duplicateTab: (id: string) => Promise<void>;
-  importFile: () => Promise<void>;
+  /** Imports a file; `environments` when started from the Environments section, which then shows the result. */
+  importFile: (into?: "environments") => Promise<void>;
   exportCollection: (path: string) => Promise<void>;
   /** Replaces the active request with a cURL command's. */
   importCurl: (command: string) => Promise<void>;
@@ -729,7 +730,7 @@ export const useStore = create<State>((set, get) => {
         await get().refresh();
       }),
 
-    importFile: () =>
+    importFile: (into) =>
       attempt(async () => {
         if (!get().workspace) {
           set({
@@ -739,7 +740,10 @@ export const useStore = create<State>((set, get) => {
           return;
         }
         const file = await openDialog({
-          title: "Import collections or environments",
+          title:
+            into === "environments"
+              ? "Import environments: a Postman, Insomnia or Bruno export, or a JSON file of names and values"
+              : "Import: Postman, Insomnia or Bruno exports, OpenAPI or Swagger, HAR, or a JSON environment",
           filters: [
             { name: "Postman, Insomnia, Bruno, OpenAPI, HAR or JSON", extensions: ["json", "yaml", "yml", "har"] },
             { name: "Any file", extensions: ["*"] },
@@ -762,6 +766,13 @@ export const useStore = create<State>((set, get) => {
                 : "global variables";
         if (result.kind === "collection") get().toggle(result.path, true);
         if (result.kind === "several") result.collections.forEach((c) => get().toggle(c, true));
+        // From the Environments section: open what was imported there.
+        if (into === "environments") {
+          const environment =
+            result.kind === "environment" ? result.name : result.kind === "several" ? result.environments[0] : undefined;
+          if (environment) await get().openVariables(environment);
+          else if (result.kind === "globals") await get().openVariables(null);
+        }
         set({
           notice: {
             tone: "info",

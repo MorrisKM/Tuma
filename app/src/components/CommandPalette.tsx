@@ -64,7 +64,8 @@ export function CommandPalette() {
       ...(workspace
         ? [
             { id: "collection", label: "New collection", run: () => void s.addFolder(null) },
-            { id: "import", label: "Import a file (OpenAPI, Postman, HAR)…", run: () => void s.importFile() },
+            { id: "import", label: "Import a file (Postman, Insomnia, Bruno, OpenAPI, HAR, JSON)…", run: () => void s.importFile() },
+            { id: "import-env", label: "Import environments (Postman, Insomnia, Bruno, JSON)…", hint: "Environment", run: () => void s.importFile("environments") },
             { id: "vars", label: "Edit variables and environments", run: () => void s.openVariables(s.environment) },
             { id: "env-none", label: "Use no environment", hint: "Environment", run: () => s.setEnvironment(null) },
             ...environments.map((name) => ({

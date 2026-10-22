@@ -318,7 +318,10 @@ function Collections() {
         <IconButton label="New collection" onClick={() => void addFolder(null)}>
           <FolderPlus size={16} />
         </IconButton>
-        <IconButton label="Import OpenAPI, Postman or cURL" onClick={() => void importFile()}>
+        <IconButton
+          label="Import: Postman, Insomnia or Bruno exports, OpenAPI or Swagger, HAR, or a JSON environment (paste cURL into the URL bar)"
+          onClick={() => void importFile()}
+        >
           <Download size={16} />
         </IconButton>
       </SectionHead>
@@ -343,8 +346,12 @@ function Collections() {
               New collection
             </button>
             <button className="button" onClick={() => void importFile()}>
-              Import OpenAPI or Postman
+              Import collections
             </button>
+            <p className="muted small import-formats">
+              Postman, Insomnia and Bruno exports, OpenAPI or Swagger (JSON or YAML), HAR recordings, or a JSON file of
+              names and values as an environment. Paste a cURL command into the URL bar.
+            </p>
           </div>
         ) : q ? (
           <ul className="tree" role="listbox">
@@ -544,6 +551,12 @@ function Environments() {
         <IconButton label="New environment" onClick={() => void add()}>
           <Plus size={16} />
         </IconButton>
+        <IconButton
+          label="Import environments: Postman, Insomnia or Bruno exports, or a JSON file of names and values"
+          onClick={() => void useStore.getState().importFile("environments")}
+        >
+          <Download size={16} />
+        </IconButton>
       </SectionHead>
       <div className="sidebar-body">
         <ul className="tree">
@@ -592,9 +605,16 @@ function Environments() {
               An environment is a set of variables, such as the base URL and keys of staging or production. Switch
               between them above the request.
             </p>
-            <button className="button" onClick={() => void add()}>
+            <button className="button primary" onClick={() => void add()}>
               New environment
             </button>
+            <button className="button" onClick={() => void useStore.getState().importFile("environments")}>
+              Import environments
+            </button>
+            <p className="muted small import-formats">
+              A Postman environment or globals export, an Insomnia or Bruno export (its environments come too), or a JSON
+              file such as {'{"baseUrl": "https://…", "token": "…"}'}, named after the file.
+            </p>
           </div>
         )}
       </div>

@@ -4086,3 +4086,9 @@ td.mock-method {
 .cm-content {
   caret-color: var(--text) !important;
 }
+
+.sidebar-empty .import-formats {
+  font-size: 11.5px;
+  line-height: 1.5;
+  text-align: left;
+}
