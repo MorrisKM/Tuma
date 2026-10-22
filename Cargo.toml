@@ -13,5 +13,11 @@ authors = ["The Tuma Contributors"]
 [workspace.dependencies]
 tuma-core = { path = "crates/core" }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# preserve_order everywhere, so JSON output (CLI, schemas) has the same key order whatever is being built.
+serde_json = { version = "1", features = ["preserve_order"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+# Dependencies are built without debug info: it is most of the size of target/ (tens of GB for this workspace) and
+# rarely needed. Tuma's own crates keep it.
+[profile.dev.package."*"]
+debug = false

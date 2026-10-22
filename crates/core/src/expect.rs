@@ -23,7 +23,7 @@ use serde_json::Value;
 
 use crate::http::Response;
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Expectations {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -47,7 +47,7 @@ impl Expectations {
 }
 
 /// An exact status code, or a class such as `2xx`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(untagged)]
 pub enum Status {
     Code(u16),
@@ -78,7 +78,7 @@ impl fmt::Display for Status {
 }
 
 /// A check on a response header. Names are case-insensitive. With no condition, the header must exist.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", default)]
 pub struct HeaderCheck {
     pub name: String,
@@ -93,7 +93,7 @@ pub struct HeaderCheck {
 
 /// A check on the body. `path` is a JSON path such as `$.items[0].id`; without one, the check applies to the whole
 /// body as text (`contains`, `matches`) or as JSON (`equals`).
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", default)]
 pub struct BodyCheck {
     #[serde(skip_serializing_if = "Option::is_none")]

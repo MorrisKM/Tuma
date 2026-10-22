@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tuma collection or folder settings (_folder.yaml)",
+  "description": "`_folder.yaml` in a collection or folder directory. Everything is optional.",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string"
+    },
+    "order": {
+      "description": "Children in display order, by folder name or request name. Children not listed come after, sorted by name.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "auth": {
+      "description": "Applies to requests inside that inherit auth. Absent means inherit from the parent.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Auth"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "headers": {
+      "description": "Sent with every request inside, unless a request sets the same header.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/KeyValue"
+      }
+    },
+    "variables": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Variable"
+      }
+    },
+    "scripts": {
+      "$ref": "#/$defs/Scripts"
+    },
+    "openapi": {
+      "description": "For a collection made from an OpenAPI spec: where the spec comes from (a URL, or a path relative to the\nworkspace), so the collection can be synced.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "$defs": {
+    "Auth": {
+      "description": "Auth as written in files. Same shapes as [`http::Auth`].",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "none"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "bearer"
+            },
+            "token": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "token"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "basic"
+            },
+            "username": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "username",
+            "password"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "apiKey"
+            },
+            "key": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "location": {
+              "$ref": "#/$defs/ApiKeyLocation",
+              "default": "header"
+            }
+          },
+          "required": [
+            "type",
+            "key",
+            "value"
+          ]
+        }
+      ]
+    },
+    "ApiKeyLocation": {
+      "type": "string",
+      "enum": [
+        "header",
+        "query"
+      ]
+    },
+    "KeyValue": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "default": ""
+        },
+        "value": {
+          "type": "string",
+          "default": ""
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Variable": {
+      "description": "A variable. A secret's value lives in the OS keychain, never in the file.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "default": ""
+        },
+        "value": {
+          "type": "string"
+        },
+        "secret": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Scripts": {
+      "type": "object",
+      "properties": {
+        "preRequest": {
+          "type": "string"
+        },
+        "test": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

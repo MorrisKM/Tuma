@@ -1,6 +1,7 @@
 //! Tuma's engine. Everything that is not UI lives here (HTTP, `{{var}}` templating, storage, importers) so the
 //! desktop app, the CLI and the tests all share it. See docs/PLAN.md.
 
+pub mod check;
 pub mod expect;
 pub mod history;
 pub mod http;

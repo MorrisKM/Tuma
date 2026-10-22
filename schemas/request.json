@@ -1,0 +1,536 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tuma request",
+  "description": "`<name>.yaml`: one request. The file name (without `.yaml`) is the request's name.",
+  "type": "object",
+  "properties": {
+    "method": {
+      "type": "string",
+      "default": "GET"
+    },
+    "url": {
+      "type": "string",
+      "default": ""
+    },
+    "description": {
+      "type": "string"
+    },
+    "operation": {
+      "description": "The OpenAPI operation this request calls, as `METHOD /path/{param}`, for sync and contract checks.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "headers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/KeyValue"
+      }
+    },
+    "body": {
+      "$ref": "#/$defs/Body"
+    },
+    "auth": {
+      "description": "Absent means inherit from the folder; `type: none` means send no auth.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Auth"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "settings": {
+      "$ref": "#/$defs/Settings"
+    },
+    "expect": {
+      "description": "Checks that `tuma test` and `tuma run` apply to the response.",
+      "$ref": "#/$defs/Expectations"
+    },
+    "scripts": {
+      "description": "Kept from Postman imports; they run once scripting arrives (milestone M5).",
+      "$ref": "#/$defs/Scripts"
+    }
+  },
+  "$defs": {
+    "KeyValue": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "default": ""
+        },
+        "value": {
+          "type": "string",
+          "default": ""
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Body": {
+      "description": "A request body. Text bodies name their language (`type: json`) instead of a content type, because that is what\npeople pick in the UI.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "none"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "json"
+            },
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "xml"
+            },
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "html"
+            },
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "text"
+            },
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "javascript"
+            },
+            "content": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "description": "Text with any other content type.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "raw"
+            },
+            "content": {
+              "type": "string"
+            },
+            "contentType": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "content",
+            "contentType"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "form"
+            },
+            "fields": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/KeyValue"
+              }
+            }
+          },
+          "required": [
+            "type",
+            "fields"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "multipart"
+            },
+            "parts": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Part"
+              }
+            }
+          },
+          "required": [
+            "type",
+            "parts"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "file"
+            },
+            "path": {
+              "type": "string"
+            },
+            "contentType": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "path"
+          ]
+        }
+      ]
+    },
+    "Part": {
+      "description": "A multipart field. With `file: true`, `value` is a file path.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "default": ""
+        },
+        "value": {
+          "type": "string",
+          "default": ""
+        },
+        "file": {
+          "type": "boolean"
+        },
+        "contentType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Auth": {
+      "description": "Auth as written in files. Same shapes as [`http::Auth`].",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "none"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "bearer"
+            },
+            "token": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "token"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "basic"
+            },
+            "username": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "username",
+            "password"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "apiKey"
+            },
+            "key": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "location": {
+              "$ref": "#/$defs/ApiKeyLocation",
+              "default": "header"
+            }
+          },
+          "required": [
+            "type",
+            "key",
+            "value"
+          ]
+        }
+      ]
+    },
+    "ApiKeyLocation": {
+      "type": "string",
+      "enum": [
+        "header",
+        "query"
+      ]
+    },
+    "Settings": {
+      "type": "object",
+      "properties": {
+        "timeoutMs": {
+          "description": "Give up after this long, for the whole exchange including redirects. `None` waits forever.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0,
+          "default": null
+        },
+        "followRedirects": {
+          "type": "boolean",
+          "default": true
+        },
+        "maxRedirects": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 10
+        },
+        "verifyTls": {
+          "description": "Check the server's certificate against the operating system's trust store.",
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "Expectations": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Status"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maxTimeMs": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "headers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HeaderCheck"
+          }
+        },
+        "body": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BodyCheck"
+          }
+        },
+        "schema": {
+          "description": "The response must match the OpenAPI spec for its operation and status (a contract check). Needs a collection\nimported from a spec.",
+          "type": "boolean"
+        }
+      }
+    },
+    "Status": {
+      "description": "An exact status code, or a class such as `2xx`.",
+      "anyOf": [
+        {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "HeaderCheck": {
+      "description": "A check on a response header. Names are case-insensitive. With no condition, the header must exist.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "default": ""
+        },
+        "equals": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "contains": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exists": {
+          "description": "`false` checks that the header is absent.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "BodyCheck": {
+      "description": "A check on the body. `path` is a JSON path such as `$.items[0].id`; without one, the check applies to the whole\nbody as text (`contains`, `matches`) or as JSON (`equals`).",
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exists": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "equals": {
+          "description": "Any JSON value. `1` and `\"1\"` are different."
+        },
+        "contains": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "matches": {
+          "description": "A regular expression the value (as text) must match.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "length": {
+          "description": "Number of items in an array or object, or characters in a string.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
+        },
+        "type": {
+          "description": "`string`, `number`, `integer`, `boolean`, `array`, `object` or `null`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "Scripts": {
+      "type": "object",
+      "properties": {
+        "preRequest": {
+          "type": "string"
+        },
+        "test": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

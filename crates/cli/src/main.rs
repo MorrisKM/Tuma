@@ -62,6 +62,12 @@ enum Command {
         #[arg(long)]
         read_only: bool,
     },
+    /// Check every file in the workspace: YAML syntax, unknown keys (typos), and checks that can't work.
+    Check {
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+    },
     /// Import an OpenAPI or Swagger spec as a collection, find one, or sync a collection with its spec.
     #[command(subcommand)]
     Openapi(OpenapiCommand),
@@ -206,6 +212,39 @@ async fn run(cli: Cli) -> anyhow::Result<bool> {
         Command::Run(args) => run_saved(&start, args, false).await,
         Command::Test(args) => run_saved(&start, args, true).await,
         Command::Openapi(command) => openapi(&start, command).await,
+        Command::Check { json } => {
+            let Some(root) = runner::find_workspace(&start) else {
+                bail!(
+                    "no workspace here or above {}; create one with `tuma init`",
+                    start.display()
+                );
+            };
+            let problems = tuma_core::check::check_workspace(&root);
+            let errors = problems.iter().filter(|p| !p.warning).count();
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({ "problems": problems }))?
+                );
+            } else if problems.is_empty() {
+                println!("{}: no problems", root.display());
+            } else {
+                for p in &problems {
+                    let at = p.line.map(|l| format!(":{l}")).unwrap_or_default();
+                    let kind = if p.warning { "warning" } else { "error" };
+                    println!("{}{at}: {kind}: {}", p.file, p.message);
+                }
+                let warnings = problems.len() - errors;
+                let plural =
+                    |n: usize, word: &str| format!("{n} {word}{}", if n == 1 { "" } else { "s" });
+                println!(
+                    "\n{}, {}",
+                    plural(errors, "error"),
+                    plural(warnings, "warning")
+                );
+            }
+            Ok(errors == 0)
+        }
         Command::Mcp {
             environment,
             allow_hosts,

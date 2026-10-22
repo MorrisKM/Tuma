@@ -235,6 +235,9 @@ fn mcp_agent_loop() {
         "set_variables",
         "list_requests",
         "read_request",
+        "check_workspace",
+        "import_openapi",
+        "sync_openapi",
     ] {
         assert!(names.contains(&tool), "{tool} missing from {names:?}");
     }

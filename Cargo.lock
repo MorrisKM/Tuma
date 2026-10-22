@@ -5055,6 +5055,7 @@ dependencies = [
  "regex",
  "rustls",
  "rustls-platform-verifier",
+ "schemars 1.2.3",
  "serde",
  "serde-saphyr",
  "serde_json",

@@ -9,7 +9,7 @@ use crate::expect::Expectations;
 use crate::http::{self, ApiKeyLocation};
 
 /// `workspace.yaml` at the workspace root.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", default)]
 pub struct WorkspaceFile {
     pub name: String,
@@ -21,7 +21,7 @@ pub struct WorkspaceFile {
 }
 
 /// `_folder.yaml` in a collection or folder directory. Everything is optional.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", default)]
 pub struct FolderFile {
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -46,7 +46,7 @@ pub struct FolderFile {
 }
 
 /// `<name>.yaml`: one request. The file name (without `.yaml`) is the request's name.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", default)]
 pub struct RequestFile {
     pub method: String,
@@ -95,7 +95,7 @@ fn is_default_settings(settings: &http::Settings) -> bool {
 }
 
 /// `environments/<name>.yaml`.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", default)]
 pub struct EnvironmentFile {
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -103,7 +103,7 @@ pub struct EnvironmentFile {
 }
 
 /// A variable. A secret's value lives in the OS keychain, never in the file.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Variable {
     pub name: String,
@@ -137,7 +137,7 @@ impl Variable {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", default)]
 pub struct KeyValue {
     pub name: String,
@@ -178,7 +178,7 @@ impl From<&http::KeyValue> for KeyValue {
 
 /// A request body. Text bodies name their language (`type: json`) instead of a content type, because that is what
 /// people pick in the UI.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Body {
     #[default]
@@ -315,7 +315,7 @@ impl From<&http::Body> for Body {
 }
 
 /// A multipart field. With `file: true`, `value` is a file path.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Part {
     pub name: String,
@@ -365,7 +365,7 @@ impl From<&http::Part> for Part {
 }
 
 /// Auth as written in files. Same shapes as [`http::Auth`].
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Auth {
     None,
@@ -422,7 +422,7 @@ impl From<&http::Auth> for Auth {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Scripts {
     #[serde(skip_serializing_if = "String::is_empty")]

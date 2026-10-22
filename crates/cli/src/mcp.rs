@@ -356,6 +356,18 @@ impl Server {
         }))
     }
 
+    #[tool(
+        description = "Check every workspace file after editing YAML by hand: syntax, unknown keys (typos that \
+        would be ignored), invalid JSON paths and regular expressions. The JSON Schemas of the files are in \
+        Tuma's repository under schemas/."
+    )]
+    async fn check_workspace(&self) -> CallToolResult {
+        match runner::find_workspace(&self.start) {
+            Some(root) => ok(&json!({ "problems": tuma_core::check::check_workspace(&root) })),
+            None => error("There is no workspace yet."),
+        }
+    }
+
     #[tool(description = "Show a saved request's file (YAML), including its checks.")]
     async fn read_request(&self, Parameters(p): Parameters<PathParams>) -> CallToolResult {
         let workspace = match self.workspace() {

@@ -120,7 +120,9 @@ pub enum Auth {
     },
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
 #[serde(rename_all = "camelCase")]
 pub enum ApiKeyLocation {
     #[default]
@@ -128,7 +130,7 @@ pub enum ApiKeyLocation {
     Query,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     /// Give up after this long, for the whole exchange including redirects. `None` waits forever.

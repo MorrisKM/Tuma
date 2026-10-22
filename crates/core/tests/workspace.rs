@@ -92,6 +92,9 @@ fn postman_import_matches_golden_files() {
         ]
     );
 
+    // What the importer writes is valid by `tuma check`'s strict rules.
+    assert_eq!(tuma_core::check::check_workspace(&dir.0), vec![]);
+
     let expected_dir =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/postman/expected");
     let actual = files(&dir.0);
