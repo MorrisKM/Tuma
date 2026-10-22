@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use rmcp::handler::server::router::tool::ToolRouter;
@@ -15,7 +16,8 @@ use serde_json::{Value, json};
 use tuma_core::expect::{self, Expectations};
 use tuma_core::history::History;
 use tuma_core::http::Settings;
-use tuma_core::runner::{self, Detail, Job, Summary};
+use tuma_core::runner::{self, Detail, Job, Scripting, Summary};
+use tuma_core::script::AllowHost;
 use tuma_core::secrets::EnvThenKeychain;
 use tuma_core::workspace::files::{Auth, Body, KeyValue, RequestFile};
 use tuma_core::workspace::{VariableValue, Workspace};
@@ -281,10 +283,6 @@ impl Server {
             }
             Err(e) => return error(&e),
         };
-        let paths = match runner::requests_under(&workspace, &p.path) {
-            Ok(paths) => paths,
-            Err(e) => return error(&e.to_string()),
-        };
         let environment = p.environment.as_deref().or(self.environment.as_deref());
         let vars: Vec<(String, String)> = p.vars.into_iter().collect();
         let detail = Detail {
@@ -292,30 +290,34 @@ impl Server {
             select: None,
             all_headers: false,
         };
-        let mut outcomes = Vec::new();
-        for path in paths {
-            let request = match workspace.read_request(&path) {
-                Ok(r) => r,
-                Err(e) => return error(&e.to_string()),
-            };
-            if p.only_tests && request.expect.is_empty() {
-                continue;
-            }
-            outcomes.push(
-                self.send(
-                    Some(&workspace),
-                    &request,
-                    Some(&path),
-                    None,
-                    environment,
-                    &vars,
-                    None,
-                    &detail,
-                    &peer,
-                )
-                .await,
-            );
-        }
+        let history = History::default_location();
+        let report = tuma_core::runs::run(
+            tuma_core::runs::RunOptions {
+                workspace: &workspace,
+                path: &p.path,
+                environment,
+                overrides: &vars,
+                secrets: &EnvThenKeychain,
+                history: history.as_ref(),
+                source: &source_name(&peer),
+                allow_host: Some(self.host_policy(Some(&workspace), environment)),
+                iterations: 1,
+                data: vec![],
+                delay: Duration::ZERO,
+                only_tests: p.only_tests,
+                fail_fast: false,
+                scripts: true,
+                cancel: None,
+                detail,
+            },
+            &mut |_| {},
+        )
+        .await;
+        let report = match report {
+            Ok(report) => report,
+            Err(e) => return error(&e.to_string()),
+        };
+        let outcomes: Vec<runner::Outcome> = report.steps.into_iter().map(|s| s.outcome).collect();
         let summary = Summary::of(&outcomes);
         let failures: Vec<_> = outcomes.iter().filter(|o| !o.passed).collect();
         let passed: Vec<_> = outcomes
@@ -440,7 +442,7 @@ impl Server {
         };
         let timeout = Duration::from_millis(p.timeout_ms.unwrap_or(30_000));
         let started = Instant::now();
-        let allow = |host: &str| self.host_allowed(host, workspace.as_ref(), environment);
+        let allow = self.host_policy(workspace.as_ref(), environment);
         let mut last_error = String::new();
         while started.elapsed() < timeout {
             let outcome = runner::send(
@@ -456,7 +458,12 @@ impl Server {
                     // Polling would flood history.
                     history: None,
                     source: "mcp",
-                    allow_host: Some(&allow),
+                    allow_host: Some(allow.clone()),
+                    // Polling runs no scripts: they would run, and change variables, on every attempt.
+                    scripting: Scripting {
+                        enabled: false,
+                        ..Default::default()
+                    },
                 },
                 &Detail::default(),
             )
@@ -669,32 +676,31 @@ impl Server {
             .map_err(|e| e.to_string())
     }
 
-    /// Agents may call local servers, the hosts the environment points at, and hosts the user allowed.
-    fn host_allowed(
-        &self,
-        host: &str,
-        workspace: Option<&Workspace>,
-        environment: Option<&str>,
-    ) -> bool {
-        let local = matches!(host, "localhost" | "127.0.0.1" | "::1" | "0.0.0.0")
-            || host.ends_with(".localhost");
-        if local
-            || self.allow_hosts.iter().any(|a| {
-                a == "*" || a == host || host.ends_with(&format!(".{}", a.trim_start_matches("*.")))
-            })
-        {
-            return true;
-        }
-        let (Some(workspace), Some(environment)) = (workspace, environment) else {
-            return false;
+    /// Agents may call local servers, the hosts the environment points at, and hosts the user allowed. Applies to
+    /// requests and to `pm.sendRequest` in their scripts.
+    fn host_policy(&self, workspace: Option<&Workspace>, environment: Option<&str>) -> AllowHost {
+        let allowed = self.allow_hosts.clone();
+        let environment_hosts: Vec<String> = match (workspace, environment) {
+            (Some(workspace), Some(environment)) => workspace
+                .read_environment(environment, &EnvThenKeychain)
+                .unwrap_or_default()
+                .iter()
+                .filter(|v| !v.secret)
+                .filter_map(|v| runner::host_of(&v.value).filter(|_| v.value.contains("://")))
+                .collect(),
+            _ => vec![],
         };
-        workspace
-            .read_environment(environment, &EnvThenKeychain)
-            .unwrap_or_default()
-            .iter()
-            .filter(|v| !v.secret)
-            .filter_map(|v| runner::host_of(&v.value).filter(|_| v.value.contains("://")))
-            .any(|h| h == host)
+        Arc::new(move |host: &str| {
+            let local = matches!(host, "localhost" | "127.0.0.1" | "::1" | "0.0.0.0")
+                || host.ends_with(".localhost");
+            local
+                || allowed.iter().any(|a| {
+                    a == "*"
+                        || a == host
+                        || host.ends_with(&format!(".{}", a.trim_start_matches("*.")))
+                })
+                || environment_hosts.iter().any(|h| h == host)
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -710,12 +716,8 @@ impl Server {
         detail: &Detail,
         peer: &Peer<RoleServer>,
     ) -> runner::Outcome {
-        let source = match peer.peer_info() {
-            Some(info) => format!("mcp:{}", info.client_info.name),
-            None => "mcp".to_string(),
-        };
+        let source = source_name(peer);
         let history = History::default_location();
-        let allow = |host: &str| self.host_allowed(host, workspace, environment);
         runner::send(
             Job {
                 workspace,
@@ -728,11 +730,20 @@ impl Server {
                 secrets: &EnvThenKeychain,
                 history: history.as_ref(),
                 source: &source,
-                allow_host: Some(&allow),
+                allow_host: Some(self.host_policy(workspace, environment)),
+                scripting: Default::default(),
             },
             detail,
         )
         .await
+    }
+}
+
+/// How history names an agent: `mcp:<client name>`.
+fn source_name(peer: &Peer<RoleServer>) -> String {
+    match peer.peer_info() {
+        Some(info) => format!("mcp:{}", info.client_info.name),
+        None => "mcp".to_string(),
     }
 }
 

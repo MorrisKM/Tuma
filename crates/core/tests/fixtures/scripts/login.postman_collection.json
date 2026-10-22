@@ -1,0 +1,94 @@
+{
+  "info": {
+    "name": "Accounts",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.add({ key: 'X-Request-Id', value: require('uuid').v4() });",
+          "pm.variables.set('startedAt', Date.now());"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('responds quickly', function () { pm.expect(pm.response.responseTime).to.be.below(5000); });"]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = JSON.parse(responseBody);",
+                  "tests['has a token'] = !!jsonData.token;",
+                  "pm.environment.set('token', jsonData.token);",
+                  "postman.setNextRequest('Get profile');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"user\": \"{{user}}\"}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/login", "host": ["{{baseUrl}}"], "path": ["login"] }
+          }
+        },
+        {
+          "name": "Never runs",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/fail" } }
+        }
+      ]
+    },
+    {
+      "name": "Get profile",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const profile = pm.response.json();",
+              "pm.test('is the logged-in user', () => {",
+              "    pm.expect(profile.user).to.eql(pm.iterationData.get('user'));",
+              "    pm.response.to.have.jsonBody('user');",
+              "});",
+              "pm.sendRequest(pm.environment.get('baseUrl') + '/ping', function (err, res) {",
+              "    pm.test('ping works', function () {",
+              "        pm.expect(err).to.equal(null);",
+              "        pm.expect(res.text()).to.equal('pong');",
+              "    });",
+              "});",
+              "console.log('profile', profile.user, 'took', Date.now() - pm.variables.get('startedAt') >= 0);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/profile" }
+      }
+    }
+  ]
+}

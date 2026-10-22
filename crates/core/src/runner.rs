@@ -1,9 +1,9 @@
 //! What the CLI and the MCP server share: finding the workspace, sending a request with its checks, running folders,
 //! and a compact, secret-free summary of each result.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 use serde_json::Value;
@@ -12,9 +12,10 @@ use crate::expect::{self, CheckResult, Expectations};
 use crate::history::{Entry, History};
 use crate::http::{self, Header};
 use crate::openapi;
+use crate::script::{self, AllowHost, Event, LogLine, Script, ScriptError, TestResult};
 use crate::secrets::SecretStore;
-use crate::workspace::files::RequestFile;
-use crate::workspace::{self, Node, NodeKind, Workspace};
+use crate::workspace::files::{self, RequestFile};
+use crate::workspace::{self, Changes, Layers, Node, NodeKind, Scope, Workspace};
 
 /// The folder name for a workspace created inside a project.
 pub const HIDDEN_WORKSPACE: &str = ".tuma";
@@ -100,12 +101,24 @@ pub struct Outcome {
     /// Why the request could not be sent.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// True when a pre-request script skipped the request.
+    #[serde(skip_serializing_if = "is_false")]
+    pub skipped: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub checks: Vec<CheckResult>,
+    /// Results of `pm.test` in the collection's, folders' and request's scripts.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub tests: Vec<TestResult>,
+    /// Scripts that threw.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub script_errors: Vec<ScriptError>,
+    /// What scripts logged with `console.log`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub console: Vec<LogLine>,
     /// `{{variables}}` that had no value.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub unresolved: Vec<String>,
-    /// True when the request was sent and every check passed.
+    /// True when the request was sent, every check and test passed, and no script failed.
     pub passed: bool,
 }
 
@@ -129,10 +142,40 @@ pub struct Job<'a> {
     pub extra_checks: Option<&'a Expectations>,
     pub secrets: &'a dyn SecretStore,
     pub history: Option<&'a History>,
-    /// Recorded in history: `cli` or `mcp`.
+    /// Recorded in history: `cli`, `mcp` or `mcp:<agent>`; empty for the app.
     pub source: &'a str,
-    /// When set, only hosts it accepts may be called. Checked after variables are resolved.
-    pub allow_host: Option<&'a (dyn Fn(&str) -> bool + Sync)>,
+    /// When set, only hosts it accepts may be called, by the request and by `pm.sendRequest`. Checked after
+    /// variables are resolved.
+    pub allow_host: Option<AllowHost>,
+    pub scripting: Scripting<'a>,
+}
+
+/// How scripts run for a job.
+#[derive(Debug, Clone, Copy)]
+pub struct Scripting<'a> {
+    /// Run the collection's, folders' and request's pre-request and test scripts.
+    pub enabled: bool,
+    /// For `pm.info` in a collection run: which iteration, counting from 0, of how many.
+    pub iteration: usize,
+    pub iteration_count: usize,
+    /// The current row of a collection run's data file (`pm.iterationData`).
+    pub data: Option<&'a BTreeMap<String, String>>,
+    /// `pm.variables.set` values from earlier requests in a collection run.
+    pub locals: Option<&'a BTreeMap<String, String>>,
+    pub timeout: Duration,
+}
+
+impl Default for Scripting<'_> {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            iteration: 0,
+            iteration_count: 1,
+            data: None,
+            locals: None,
+            timeout: script::DEFAULT_TIMEOUT,
+        }
+    }
 }
 
 /// The host of a URL as Tuma sends it (`http://` is assumed), lower case.
@@ -149,8 +192,115 @@ pub fn host_of(url: &str) -> Option<String> {
         .map(|h| h.trim_matches(['[', ']']).to_ascii_lowercase())
 }
 
-/// Sends a request and checks the response. Failures to send become an [`Outcome`] with `error` set.
-pub async fn send(job: Job<'_>, detail: &Detail) -> Outcome {
+/// Why a request was not sent, or failed.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Failure {
+    /// The HTTP engine's error kind (`connect`, `timeout`, ...), or `workspace`, `script`, `blocked`, `skipped`.
+    pub kind: String,
+    pub message: String,
+}
+
+impl Failure {
+    fn new(kind: &str, message: impl Into<String>) -> Self {
+        Self {
+            kind: kind.into(),
+            message: message.into(),
+        }
+    }
+}
+
+/// Everything that happened when sending a request: what the app shows, and what [`send`] summarizes.
+#[derive(Debug)]
+pub struct Execution {
+    /// The request after pre-request scripts, before variables.
+    pub file: RequestFile,
+    /// Where the request was treated as saved, for inheritance.
+    pub location: Option<String>,
+    /// The request as sent, after variables.
+    pub sent: Option<http::Request>,
+    pub unresolved: BTreeSet<String>,
+    pub response: Result<http::Response, Failure>,
+    pub checks: Vec<CheckResult>,
+    pub tests: Vec<TestResult>,
+    pub script_errors: Vec<ScriptError>,
+    pub console: Vec<LogLine>,
+    pub visualizer: Option<Value>,
+    /// `pm.execution.setNextRequest`, for collection runs.
+    pub next_request: Option<Option<String>>,
+    /// `pm.variables` after the scripts, for the next request of a collection run.
+    pub locals: BTreeMap<String, String>,
+    /// Secret values the request could use, so output can mask them.
+    pub secrets: Vec<String>,
+}
+
+impl Execution {
+    /// The response arrived, every check and test passed, and no script failed.
+    pub fn passed(&self) -> bool {
+        self.response.is_ok()
+            && self.checks.iter().all(|c| c.passed)
+            && self.tests.iter().all(|t| t.passed || t.skipped)
+            && self.script_errors.is_empty()
+    }
+}
+
+/// Runs scripts without stalling the async runtime more than needed.
+fn blocking<T>(f: impl FnOnce() -> T) -> T {
+    match tokio::runtime::Handle::try_current() {
+        Ok(h) if h.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread => {
+            tokio::task::block_in_place(f)
+        }
+        _ => f(),
+    }
+}
+
+/// What changed between two variable maps.
+fn changes(before: &BTreeMap<String, String>, after: &BTreeMap<String, String>) -> Changes {
+    let mut out = Changes::new();
+    for (k, v) in after {
+        if before.get(k) != Some(v) {
+            out.insert(k.clone(), Some(v.clone()));
+        }
+    }
+    for k in before.keys().filter(|k| !after.contains_key(*k)) {
+        out.insert(k.clone(), None);
+    }
+    out
+}
+
+/// Stores what scripts did to variables. Environment changes without a selected environment are dropped, as in
+/// Postman.
+fn store_changes(
+    ws: &Workspace,
+    input: &script::Vars,
+    output: &script::VarsOut,
+    environment: Option<&str>,
+    collection: Option<&str>,
+    secrets: &dyn SecretStore,
+) -> Result<(), workspace::Error> {
+    if let Some(environment) = environment {
+        ws.store_current_values(
+            Scope::Environment(environment),
+            &changes(&input.environment.values, &output.environment),
+            secrets,
+        )?;
+    }
+    if let Some(collection) = collection {
+        ws.store_current_values(
+            Scope::Collection(collection),
+            &changes(&input.collection, &output.collection),
+            secrets,
+        )?;
+    }
+    ws.store_current_values(
+        Scope::Globals,
+        &changes(&input.globals, &output.globals),
+        secrets,
+    )
+}
+
+/// Sends a request: pre-request scripts, variables, the request, checks, test scripts. Variables scripts set are
+/// stored as current values.
+pub async fn execute(job: Job<'_>) -> Execution {
     let sent_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
@@ -158,55 +308,233 @@ pub async fn send(job: Job<'_>, detail: &Detail) -> Outcome {
     let mut file = job.request.clone();
     file.url = absolute_url(&file.url);
     // Inheritance works from a request file's location, so a folder context becomes a file inside it.
-    let inherit_from = match (job.path, job.context, job.workspace) {
+    let location = match (job.path, job.context, job.workspace) {
         (Some(path), _, _) => Some(path.to_string()),
         (None, Some(folder), _) => Some(format!("{}/request.yaml", folder.trim_matches('/'))),
         (None, None, Some(ws)) => implicit_location(ws, &job.request.url),
         _ => None,
     };
-
-    let (prepared, secrets) = match job.workspace {
-        Some(ws) => {
-            match ws.prepare(
-                &file,
-                inherit_from.as_deref(),
-                job.environment,
-                job.overrides,
-                job.secrets,
-            ) {
-                Ok(prepared) => (
-                    prepared,
-                    ws.secret_values(job.environment, job.secrets)
-                        .unwrap_or_default(),
-                ),
-                Err(e) => return failed(job.path, &file, e.to_string(), BTreeSet::new(), &[]),
-            }
-        }
-        None => (workspace::prepare_standalone(&file, job.overrides), vec![]),
+    let collection = location
+        .as_deref()
+        .and_then(|l| l.split('/').next())
+        .filter(|_| location.as_deref().is_some_and(|l| l.contains('/')))
+        .map(String::from);
+    let ancestors = match (job.workspace, &location) {
+        (Some(ws), Some(location)) => ws.ancestors(location).unwrap_or_default(),
+        _ => vec![],
     };
-    let mask = |text: &str| mask(text, &secrets);
-    let unresolved = prepared.unresolved;
-    if unresolved.contains("baseUrl") && job.request.url.starts_with('/') {
-        let message = format!(
-            "\"{}\" is a path, so it needs a baseUrl variable: set one in an environment, pass one for this call, send it \
-             in a collection that has one, or use a full URL",
-            job.request.url
-        );
-        return failed(job.path, &file, message, unresolved, &secrets);
+    let secrets = job
+        .workspace
+        .and_then(|ws| ws.secret_values(job.environment, job.secrets).ok())
+        .unwrap_or_default();
+    let mut execution = Execution {
+        file: file.clone(),
+        location: location.clone(),
+        sent: None,
+        unresolved: BTreeSet::new(),
+        response: Err(Failure::new("skipped", "not sent")),
+        checks: vec![],
+        tests: vec![],
+        script_errors: vec![],
+        console: vec![],
+        visualizer: None,
+        next_request: None,
+        locals: job.scripting.locals.cloned().unwrap_or_default(),
+        secrets,
+    };
+    let request_name = job
+        .path
+        .map(|p| {
+            p.rsplit('/')
+                .next()
+                .unwrap_or(p)
+                .trim_end_matches(".yaml")
+                .to_string()
+        })
+        .unwrap_or_else(|| "Untitled".into());
+    let scripts_of = |pick: fn(&files::Scripts) -> &String, file: &RequestFile| -> Vec<Script> {
+        ancestors
+            .iter()
+            .map(|a| Script {
+                label: format!(
+                    "{} {}",
+                    if a.collection { "collection" } else { "folder" },
+                    a.name
+                ),
+                source: pick(&a.folder.scripts).clone(),
+            })
+            .chain([Script {
+                label: "request".into(),
+                source: pick(&file.scripts).clone(),
+            }])
+            .filter(|s| !s.source.trim().is_empty())
+            .collect()
+    };
+    let script_input = |execution: &Execution| -> Result<script::Input, workspace::Error> {
+        let (vars, vault) = match job.workspace {
+            Some(ws) => ws.script_vars(location.as_deref(), job.environment, job.secrets)?,
+            None => Default::default(),
+        };
+        let mut vars = vars;
+        vars.data = job.scripting.data.cloned().unwrap_or_default();
+        vars.local = execution.locals.clone();
+        Ok(script::Input {
+            info: script::Info {
+                event_name: String::new(),
+                request_name: request_name.clone(),
+                request_id: job.path.unwrap_or_default().to_string(),
+                iteration: job.scripting.iteration,
+                iteration_count: job.scripting.iteration_count,
+                location: ancestors.iter().map(|a| a.name.clone()).collect(),
+            },
+            request: Value::Null,
+            response: None,
+            vars,
+            vault,
+        })
+    };
+    let run_scripts = |event: Event,
+                       scripts: &[Script],
+                       input: script::Input,
+                       execution: &mut Execution|
+     -> script::Output {
+        let output = blocking(|| {
+            script::run(
+                event,
+                scripts,
+                &input,
+                job.allow_host.clone(),
+                job.scripting.timeout,
+            )
+        });
+        if let Some(ws) = job.workspace
+            && let Err(e) = store_changes(
+                ws,
+                &input.vars,
+                &output.vars,
+                job.environment,
+                collection.as_deref(),
+                job.secrets,
+            )
+        {
+            execution.script_errors.push(ScriptError {
+                script: "variables".into(),
+                message: format!("could not store variables: {e}"),
+            });
+        }
+        execution.locals = output.vars.local.clone();
+        execution.tests.extend(output.tests.iter().cloned());
+        execution
+            .script_errors
+            .extend(output.errors.iter().cloned());
+        execution.console.extend(output.console.iter().cloned());
+        if output.next_request.is_some() {
+            execution.next_request = output.next_request.clone();
+        }
+        if output.visualizer.is_some() {
+            execution.visualizer = output.visualizer.clone();
+        }
+        output
+    };
+
+    // Pre-request scripts
+    let pre = if job.scripting.enabled {
+        scripts_of(|s| &s.pre_request, &file)
+    } else {
+        vec![]
+    };
+    if !pre.is_empty() {
+        let mut input = match script_input(&execution) {
+            Ok(input) => input,
+            Err(e) => {
+                execution.response = Err(Failure::new("workspace", e.to_string()));
+                return execution;
+            }
+        };
+        input.request = script::request_value(&file, &request_name, job.path.unwrap_or_default());
+        let before = input.request.clone();
+        let output = run_scripts(Event::Prerequest, &pre, input, &mut execution);
+        script::apply_request(&mut file, &before, &output.request);
+        file.url = absolute_url(&file.url);
+        execution.file = file.clone();
+        if !execution.script_errors.is_empty() {
+            let error = &execution.script_errors[0];
+            execution.response = Err(Failure::new(
+                "script",
+                format!(
+                    "the {} pre-request script failed: {}",
+                    error.script, error.message
+                ),
+            ));
+            return execution;
+        }
+        if output.skip_request {
+            execution.response = Err(Failure::new(
+                "skipped",
+                "skipped by pm.execution.skipRequest()",
+            ));
+            return execution;
+        }
     }
 
-    if let Some(allow) = job.allow_host {
+    // Variables
+    let layers = Layers {
+        overrides: job.overrides,
+        local: Some(&execution.locals),
+        data: job.scripting.data,
+    };
+    let prepared = match job.workspace {
+        Some(ws) => match ws.prepare_with(
+            &file,
+            location.as_deref(),
+            job.environment,
+            &layers,
+            job.secrets,
+        ) {
+            Ok(prepared) => prepared,
+            Err(e) => {
+                execution.response = Err(Failure::new("workspace", e.to_string()));
+                return execution;
+            }
+        },
+        None => {
+            let mut overrides: Vec<(String, String)> = job.overrides.to_vec();
+            overrides.extend(execution.locals.iter().map(|(k, v)| (k.clone(), v.clone())));
+            workspace::prepare_standalone(&file, &overrides)
+        }
+    };
+    execution.unresolved = prepared.unresolved.clone();
+    if prepared.unresolved.contains("baseUrl")
+        && file.url.starts_with("{{baseUrl}}")
+        && job.request.url.starts_with('/')
+    {
+        execution.response = Err(Failure::new(
+            "baseUrl",
+            format!(
+                "\"{}\" is a path, so it needs a baseUrl variable: set one in an environment, pass one for this call, send \
+                 it in a collection that has one, or use a full URL",
+                job.request.url
+            ),
+        ));
+        return execution;
+    }
+    if let Some(allow) = &job.allow_host {
         let host = host_of(&prepared.request.url).unwrap_or_default();
         if !allow(&host) {
-            let message = format!(
-                "{host} is not an allowed host. Agents may call localhost and the hosts in the selected environment; \
-                 the user can allow more with `tuma mcp --allow-host {host}`"
-            );
-            return failed(job.path, &file, message, unresolved, &secrets);
+            execution.response = Err(Failure::new(
+                "blocked",
+                format!(
+                    "{host} is not an allowed host. Agents may call localhost and the hosts in the selected environment; \
+                     the user can allow more with `tuma mcp --allow-host {host}`"
+                ),
+            ));
+            return execution;
         }
     }
 
+    // The request
     let result = http::send(&prepared.request).await;
+    execution.sent = Some(prepared.request.clone());
     if let Some(history) = job.history {
         let entry = Entry {
             id: uuid::Uuid::new_v4().to_string(),
@@ -220,35 +548,136 @@ pub async fn send(job: Job<'_>, detail: &Detail) -> Outcome {
                 .ok()
                 .map(|r| r.timing.total.as_secs_f64() * 1000.0),
             size: result.as_ref().ok().map(|r| r.body.len()),
-            source: Some(job.source.to_string()),
+            source: (!job.source.is_empty()).then(|| job.source.to_string()),
         };
         // History is a convenience; failing to write it must not fail the request.
         let _ = history.append(&entry);
     }
-
     let response = match result {
         Ok(response) => response,
         Err(e) => {
-            let mut outcome = failed(job.path, &file, e.to_string(), unresolved, &secrets);
-            outcome.url = mask(&prepared.request.url);
-            return outcome;
+            execution.response = Err(Failure::new(e.kind(), e.to_string()));
+            return execution;
         }
     };
 
+    // Checks
     let mut expect = file.expect.clone();
     if let Some(extra) = job.extra_checks {
         expect.merge(extra.clone());
     }
-    let mut checks = expect::evaluate(&expect, &response);
+    execution.checks = expect::evaluate(&expect, &response);
     if expect.schema {
-        checks.push(contract_check(
+        execution.checks.push(contract_check(
             job.workspace,
-            inherit_from.as_deref(),
+            location.as_deref(),
             &file,
             &response,
         ));
     }
-    let checks: Vec<CheckResult> = checks
+
+    // Test scripts
+    let post = if job.scripting.enabled {
+        scripts_of(|s| &s.test, &file)
+    } else {
+        vec![]
+    };
+    if !post.is_empty() {
+        match script_input(&execution) {
+            Ok(mut input) => {
+                input.request = script::sent_request_value(
+                    &prepared.request,
+                    &response.sent,
+                    &request_name,
+                    job.path.unwrap_or_default(),
+                );
+                input.response = Some(script::response_value(&response));
+                run_scripts(Event::Test, &post, input, &mut execution);
+            }
+            Err(e) => execution.script_errors.push(ScriptError {
+                script: "variables".into(),
+                message: e.to_string(),
+            }),
+        }
+    }
+    execution.response = Ok(response);
+    execution
+}
+
+/// Sends a request and checks the response, returning a summary with secrets masked.
+pub async fn send(job: Job<'_>, detail: &Detail) -> Outcome {
+    let path = job.path.map(String::from);
+    summarize(path.as_deref(), execute(job).await, detail)
+}
+
+/// A secret-free summary of an [`Execution`].
+pub fn summarize(path: Option<&str>, execution: Execution, detail: &Detail) -> Outcome {
+    let secrets = &execution.secrets;
+    let mask = |text: &str| mask(text, secrets);
+    let passed = execution.passed();
+    let method = execution
+        .sent
+        .as_ref()
+        .map(|r| r.method.clone())
+        .unwrap_or_else(|| execution.file.method.clone())
+        .to_uppercase();
+    let tests: Vec<TestResult> = execution
+        .tests
+        .into_iter()
+        .map(|t| TestResult {
+            error: t.error.map(|e| mask(&e)),
+            ..t
+        })
+        .collect();
+    let script_errors: Vec<ScriptError> = execution
+        .script_errors
+        .into_iter()
+        .map(|e| ScriptError {
+            message: mask(&e.message),
+            ..e
+        })
+        .collect();
+    let console: Vec<LogLine> = execution
+        .console
+        .into_iter()
+        .map(|l| LogLine {
+            text: mask(&l.text),
+            ..l
+        })
+        .collect();
+    let unresolved: Vec<String> = execution.unresolved.into_iter().collect();
+    let response = match execution.response {
+        Ok(response) => response,
+        Err(failure) => {
+            let url = execution
+                .sent
+                .as_ref()
+                .map(|r| r.url.clone())
+                .unwrap_or_else(|| execution.file.url.clone());
+            return Outcome {
+                path: path.map(String::from),
+                method,
+                url: mask(&url),
+                status: None,
+                reason: String::new(),
+                time_ms: None,
+                size: None,
+                headers: vec![],
+                body: None,
+                body_truncated: false,
+                error: Some(mask(&failure.message)),
+                skipped: failure.kind == "skipped",
+                checks: vec![],
+                tests,
+                script_errors,
+                console,
+                unresolved,
+                passed: false,
+            };
+        }
+    };
+    let checks: Vec<CheckResult> = execution
+        .checks
         .into_iter()
         .map(|c| CheckResult {
             actual: mask(&c.actual),
@@ -257,8 +686,8 @@ pub async fn send(job: Job<'_>, detail: &Detail) -> Outcome {
         .collect();
     let (body, body_truncated) = summarize_body(&response.body, detail);
     Outcome {
-        path: job.path.map(String::from),
-        method: prepared.request.method.to_uppercase(),
+        path: path.map(String::from),
+        method,
         url: mask(&response.url),
         status: Some(response.status),
         reason: response.reason.clone(),
@@ -274,9 +703,13 @@ pub async fn send(job: Job<'_>, detail: &Detail) -> Outcome {
         body: body.map(|b| mask(&b)),
         body_truncated,
         error: None,
-        passed: checks.iter().all(|c| c.passed),
+        skipped: false,
+        passed,
         checks,
-        unresolved: unresolved.into_iter().collect(),
+        tests,
+        script_errors,
+        console,
+        unresolved,
     }
 }
 
@@ -343,31 +776,6 @@ pub fn contract_check(
         .map(|h| h.value.as_str())
         .unwrap_or_default();
     spec.check_response(&operation, response.status, content_type, &response.body)
-}
-
-fn failed(
-    path: Option<&str>,
-    file: &RequestFile,
-    error: String,
-    unresolved: BTreeSet<String>,
-    secrets: &[String],
-) -> Outcome {
-    Outcome {
-        path: path.map(String::from),
-        method: file.method.to_uppercase(),
-        url: mask(&file.url, secrets),
-        status: None,
-        reason: String::new(),
-        time_ms: None,
-        size: None,
-        headers: vec![],
-        body: None,
-        body_truncated: false,
-        error: Some(mask(&error, secrets)),
-        checks: vec![],
-        unresolved: unresolved.into_iter().collect(),
-        passed: false,
-    }
 }
 
 /// Replaces every secret value with `••••`.
@@ -479,8 +887,13 @@ impl Summary {
             } else {
                 summary.failed += 1;
             }
-            summary.checks += outcome.checks.len();
-            summary.failed_checks += outcome.checks.iter().filter(|c| !c.passed).count();
+            summary.checks += outcome.checks.len() + outcome.tests.len();
+            summary.failed_checks += outcome.checks.iter().filter(|c| !c.passed).count()
+                + outcome
+                    .tests
+                    .iter()
+                    .filter(|t| !t.passed && !t.skipped)
+                    .count();
         }
         summary
     }

@@ -11,7 +11,8 @@ use clap::{Args, Parser, Subcommand};
 use tuma_core::expect::{self, Expectations};
 use tuma_core::history::History;
 use tuma_core::http::Settings;
-use tuma_core::runner::{self, Detail, Job, Outcome, Summary};
+use tuma_core::runner::{self, Detail, Job};
+use tuma_core::runs;
 use tuma_core::secrets::EnvThenKeychain;
 use tuma_core::workspace::Workspace;
 use tuma_core::workspace::files::{Auth, Body, KeyValue, RequestFile};
@@ -159,6 +160,21 @@ struct RunArgs {
     /// Stop at the first failure.
     #[arg(long)]
     fail_fast: bool,
+    /// Run everything this many times. With --data, at least once per row.
+    #[arg(short = 'n', long, default_value_t = 1)]
+    iterations: usize,
+    /// A CSV (with a header row) or JSON file: row N is pm.iterationData, and {{column}} variables, in iteration N.
+    #[arg(long, value_name = "FILE")]
+    data: Option<PathBuf>,
+    /// Wait this many milliseconds between requests.
+    #[arg(long, value_name = "MS", default_value_t = 0)]
+    delay: u64,
+    /// Also write the results as JUnit XML, which CI systems show as test results.
+    #[arg(long, value_name = "FILE")]
+    junit: Option<PathBuf>,
+    /// Don't run pre-request and test scripts.
+    #[arg(long)]
+    no_scripts: bool,
     #[command(flatten)]
     common: Common,
 }
@@ -352,6 +368,7 @@ async fn send(start: &Path, args: SendArgs) -> anyhow::Result<bool> {
             history: history.as_ref(),
             source: "cli",
             allow_host: None,
+            scripting: Default::default(),
         },
         &detail,
     )
@@ -458,69 +475,90 @@ async fn run_saved(start: &Path, args: RunArgs, only_tests: bool) -> anyhow::Res
             start.display()
         );
     };
+    let data = match &args.data {
+        Some(path) => runs::read_data_file(path).map_err(anyhow::Error::msg)?,
+        None => vec![],
+    };
     let history = History::default_location();
-    let detail = args.common.detail();
-    let mut outcomes: Vec<Outcome> = Vec::new();
-    for path in runner::requests_under(&workspace, args.path.as_deref().unwrap_or(""))? {
-        let request = workspace.read_request(&path)?;
-        if only_tests && request.expect.is_empty() {
-            continue;
-        }
-        let outcome = runner::send(
-            Job {
-                workspace: Some(&workspace),
-                request: &request,
-                path: Some(&path),
-                context: None,
-                environment: args.common.environment.as_deref(),
-                overrides: &args.common.vars,
-                extra_checks: None,
-                secrets: &EnvThenKeychain,
-                history: history.as_ref(),
-                source: "cli",
-                allow_host: None,
-            },
-            &detail,
-        )
-        .await;
-        if !args.common.json {
-            output::outcome(&outcome, false);
-        }
-        let stop = args.fail_fast && !outcome.passed;
-        outcomes.push(outcome);
-        if stop {
-            break;
-        }
-    }
+    let json = args.common.json;
+    let mut printed_iteration = 0;
+    let report = runs::run(
+        runs::RunOptions {
+            workspace: &workspace,
+            path: args.path.as_deref().unwrap_or(""),
+            environment: args.common.environment.as_deref(),
+            overrides: &args.common.vars,
+            secrets: &EnvThenKeychain,
+            history: history.as_ref(),
+            source: "cli",
+            allow_host: None,
+            iterations: args.iterations,
+            data,
+            delay: std::time::Duration::from_millis(args.delay),
+            only_tests,
+            fail_fast: args.fail_fast,
+            scripts: !args.no_scripts,
+            cancel: None,
+            detail: args.common.detail(),
+        },
+        &mut |step| {
+            if json {
+                return;
+            }
+            if step.iteration != printed_iteration {
+                printed_iteration = step.iteration;
+                println!("\nIteration {}", step.iteration + 1);
+            }
+            output::outcome(&step.outcome, false);
+        },
+    )
+    .await?;
 
-    let summary = Summary::of(&outcomes);
-    if args.common.json {
+    if let Some(path) = &args.junit {
+        let name = args.path.as_deref().unwrap_or(workspace.name());
+        std::fs::write(path, runs::junit(&report, name))
+            .with_context(|| format!("could not write {}", path.display()))?;
+    }
+    if json {
         // Passing requests are listed briefly; failures in full.
-        let results: Vec<serde_json::Value> = outcomes
+        let results: Vec<serde_json::Value> = report
+            .steps
             .iter()
-            .map(|o| {
-                if o.passed {
+            .map(|s| {
+                let o = &s.outcome;
+                let mut value = if o.passed {
                     serde_json::json!({ "path": o.path, "status": o.status, "timeMs": o.time_ms, "passed": true })
                 } else {
                     serde_json::to_value(o).unwrap_or_default()
+                };
+                if report.iterations > 1 {
+                    value["iteration"] = (s.iteration + 1).into();
                 }
+                value
             })
             .collect();
-        println!(
-            "{}",
-            serde_json::to_string_pretty(
-                &serde_json::json!({ "summary": summary, "results": results })
-            )?
-        );
+        let mut value = serde_json::json!({ "summary": report.summary, "results": results });
+        if let Some(stopped) = &report.stopped {
+            value["stopped"] = stopped.clone().into();
+        }
+        println!("{}", serde_json::to_string_pretty(&value)?);
     } else {
-        output::summary(&summary);
+        if let Some(stopped) = &report.stopped {
+            println!("\n{stopped}");
+        }
+        output::summary(&report.summary);
     }
-    if outcomes.is_empty() && only_tests {
+    if report.steps.is_empty() && only_tests {
         eprintln!(
-            "No saved requests with checks. Add an expect: block, or save one with `tuma send ... --save`."
+            "No saved requests with checks or test scripts. Add an expect: block or pm.test(), or save one with \
+             `tuma send ... --save`."
         );
     }
-    Ok(summary.failed == 0)
+    Ok(report.summary.failed == 0
+        && report
+            .stopped
+            .as_deref()
+            .is_none_or(|s| !s.contains("loop")))
 }
 
 async fn openapi(start: &Path, command: OpenapiCommand) -> anyhow::Result<bool> {

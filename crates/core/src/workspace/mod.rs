@@ -12,9 +12,10 @@
 //!
 //! Paths passed in and out are relative to the workspace root and use `/`, such as `Users API/create user.yaml`.
 
+pub mod current;
 pub mod files;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
@@ -25,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use crate::http;
 use crate::secrets::SecretStore;
 use crate::vars::Scopes;
+pub use current::{Changes, CurrentValues, Scope};
 use files::{
     Auth, EnvironmentFile, FolderFile, KeyValue, RequestFile, Variable, WorkspaceFile, to_yaml,
 };
@@ -130,6 +132,28 @@ pub struct Prepared {
 pub struct Workspace {
     root: PathBuf,
     file: WorkspaceFile,
+    /// Where this machine's current values are kept; see [`current`].
+    local_dir: PathBuf,
+}
+
+/// A collection or folder a request is in, for its scripts.
+#[derive(Debug, Clone)]
+pub struct Ancestor {
+    pub name: String,
+    /// True for the collection, false for a folder in it.
+    pub collection: bool,
+    pub folder: FolderFile,
+}
+
+/// Variable scopes that exist only while sending: they win over the environment, in this order.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Layers<'a> {
+    /// One-off values, such as `tuma send --var`.
+    pub overrides: &'a [(String, String)],
+    /// `pm.variables.set` values.
+    pub local: Option<&'a BTreeMap<String, String>>,
+    /// The current row of a collection run's data file.
+    pub data: Option<&'a BTreeMap<String, String>>,
 }
 
 impl Workspace {
@@ -140,7 +164,12 @@ impl Workspace {
             return Err(Error::NotAWorkspace(root));
         }
         let file = read_yaml(&path)?;
-        Ok(Self { root, file })
+        let local_dir = current::default_local_dir(&root);
+        Ok(Self {
+            root,
+            file,
+            local_dir,
+        })
     }
 
     /// Makes `root` a workspace. The folder may already exist and hold other files, such as a code repository.
@@ -156,7 +185,12 @@ impl Workspace {
             variables: vec![],
         };
         write_yaml(&root.join(WORKSPACE_FILE), &file)?;
-        Ok(Self { root, file })
+        let local_dir = current::default_local_dir(&root);
+        Ok(Self {
+            root,
+            file,
+            local_dir,
+        })
     }
 
     pub fn root(&self) -> &Path {
@@ -668,7 +702,7 @@ impl Workspace {
         };
         if let Some(environment) = environment {
             add(
-                self.read_environment(environment, secrets)?,
+                self.effective_environment(environment, secrets)?,
                 format!("environment {environment}"),
             );
         }
@@ -681,21 +715,14 @@ impl Workspace {
                 } else {
                     "folder"
                 };
-                let vars = folder
-                    .variables
-                    .into_iter()
-                    .map(|v| VariableValue {
-                        name: v.name,
-                        value: v.value,
-                        secret: false,
-                        enabled: v.enabled,
-                    })
-                    .collect();
-                add(vars, format!("{kind} {}", dir_name(&d)));
+                add(
+                    self.effective_folder_vars(&d, &folder),
+                    format!("{kind} {}", dir_name(&d)),
+                );
                 dir = d.parent().map(Path::to_path_buf);
             }
         }
-        add(self.read_globals(secrets)?, "globals".into());
+        add(self.effective_globals(secrets)?, "globals".into());
         Ok(out)
     }
 
@@ -751,12 +778,96 @@ impl Workspace {
         overrides: &[(String, String)],
         secrets: &dyn SecretStore,
     ) -> Result<Prepared> {
+        let layers = Layers {
+            overrides,
+            ..Default::default()
+        };
+        self.prepare_with(request, path, environment, &layers, secrets)
+    }
+
+    /// The collection and folders a request at `path` is in, collection first.
+    pub fn ancestors(&self, path: &str) -> Result<Vec<Ancestor>> {
+        let mut out = Vec::new();
+        let mut dir = self.abs(path)?.parent().map(Path::to_path_buf);
+        while let Some(d) = dir.filter(|d| *d != self.root && d.starts_with(&self.root)) {
+            out.push(Ancestor {
+                name: dir_name(&d),
+                collection: d.parent() == Some(self.root.as_path()),
+                folder: read_yaml_or_default(&d.join(FOLDER_FILE))?,
+            });
+            dir = d.parent().map(Path::to_path_buf);
+        }
+        out.reverse();
+        Ok(out)
+    }
+
+    /// The variables scripts see for a request at `path` (or an unsaved one), with current values applied, and the
+    /// secret ones by name for `pm.vault`.
+    pub fn script_vars(
+        &self,
+        path: Option<&str>,
+        environment: Option<&str>,
+        secrets: &dyn SecretStore,
+    ) -> Result<(crate::script::Vars, BTreeMap<String, String>)> {
+        let map = |vars: &[VariableValue]| -> BTreeMap<String, String> {
+            vars.iter()
+                .filter(|v| v.enabled)
+                .map(|v| (v.name.clone(), v.value.clone()))
+                .collect()
+        };
+        let mut vault = BTreeMap::new();
+        let mut vars = crate::script::Vars::default();
+        let globals = self.effective_globals(secrets)?;
+        vars.globals = map(&globals);
+        vault.extend(
+            globals
+                .iter()
+                .filter(|v| v.secret)
+                .map(|v| (v.name.clone(), v.value.clone())),
+        );
+        if let Some(environment) = environment {
+            let env = self.effective_environment(environment, secrets)?;
+            vars.environment.name = Some(environment.to_string());
+            vars.environment.values = map(&env);
+            vault.extend(
+                env.iter()
+                    .filter(|v| v.secret)
+                    .map(|v| (v.name.clone(), v.value.clone())),
+            );
+        }
+        if let Some(path) = path {
+            let mut dir = self.abs(path)?.parent().map(Path::to_path_buf);
+            while let Some(d) = dir.filter(|d| *d != self.root && d.starts_with(&self.root)) {
+                let folder: FolderFile = read_yaml_or_default(&d.join(FOLDER_FILE))?;
+                let values = map(&self.effective_folder_vars(&d, &folder));
+                if d.parent() == Some(self.root.as_path()) {
+                    vars.collection = values;
+                } else {
+                    vars.folders.push(values);
+                }
+                dir = d.parent().map(Path::to_path_buf);
+            }
+        }
+        Ok((vars, vault))
+    }
+
+    /// [`Workspace::prepare`] with the scopes a script run adds.
+    pub fn prepare_with(
+        &self,
+        request: &RequestFile,
+        path: Option<&str>,
+        environment: Option<&str>,
+        layers: &Layers,
+        secrets: &dyn SecretStore,
+    ) -> Result<Prepared> {
         // The request's folders, nearest first, ending with the collection.
         let mut folders = Vec::new();
         if let Some(path) = path {
             let mut dir = self.abs(path)?.parent().map(Path::to_path_buf);
             while let Some(d) = dir.filter(|d| *d != self.root && d.starts_with(&self.root)) {
-                folders.push(read_yaml_or_default::<FolderFile>(&d.join(FOLDER_FILE))?);
+                let folder = read_yaml_or_default::<FolderFile>(&d.join(FOLDER_FILE))?;
+                let vars = self.effective_folder_vars(&d, &folder);
+                folders.push((folder, vars));
                 dir = d.parent().map(Path::to_path_buf);
             }
         }
@@ -768,20 +879,18 @@ impl Workspace {
                 .collect::<Vec<_>>()
         };
         let mut scopes = Scopes::default();
-        scopes.push(overrides.iter().cloned());
+        scopes.push(layers.overrides.iter().cloned());
+        for layer in [layers.local, layers.data].into_iter().flatten() {
+            scopes.push(layer.clone());
+        }
         if let Some(environment) = environment {
-            scopes.push(enabled(self.read_environment(environment, secrets)?));
+            scopes.push(enabled(self.effective_environment(environment, secrets)?));
         }
-        for folder in &folders {
-            scopes.push(
-                folder
-                    .variables
-                    .iter()
-                    .filter(|v| v.enabled)
-                    .map(|v| (v.name.clone(), v.value.clone())),
-            );
+        for (_, vars) in &folders {
+            scopes.push(enabled(vars.clone()));
         }
-        scopes.push(enabled(self.read_globals(secrets)?));
+        scopes.push(enabled(self.effective_globals(secrets)?));
+        let folders: Vec<FolderFile> = folders.into_iter().map(|(f, _)| f).collect();
 
         let auth = request
             .auth

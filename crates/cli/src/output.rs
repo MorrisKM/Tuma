@@ -92,7 +92,7 @@ pub fn outcome(o: &Outcome, full: bool) {
                 );
             }
         }
-        if !o.checks.is_empty() {
+        if !o.checks.is_empty() || !o.tests.is_empty() {
             println!();
         }
     }
@@ -108,6 +108,47 @@ pub fn outcome(o: &Outcome, full: bool) {
                 check.check,
                 s.dim(&format!("(got {})", check.actual))
             );
+        }
+    }
+    for test in &o.tests {
+        if test.skipped {
+            if full {
+                println!(
+                    "  {} {}",
+                    s.dim("-"),
+                    s.dim(&format!("{} (skipped)", test.name))
+                );
+            }
+        } else if test.passed {
+            if full {
+                println!("  {} {}", s.green("✓"), test.name);
+            }
+        } else {
+            println!(
+                "  {} {} {}",
+                s.red("✗"),
+                test.name,
+                s.dim(&format!("({})", test.error.as_deref().unwrap_or("failed")))
+            );
+        }
+    }
+    for error in &o.script_errors {
+        println!(
+            "  {} {} script: {}",
+            s.red("✗"),
+            error.script,
+            error.message
+        );
+    }
+    if full && !o.console.is_empty() {
+        println!();
+        for line in &o.console {
+            let text = match line.level.as_str() {
+                "error" => s.red(&line.text),
+                "warn" => s.yellow(&line.text),
+                _ => s.dim(&line.text),
+            };
+            println!("  {} {text}", s.dim("console"));
         }
     }
     if !o.unresolved.is_empty() {

@@ -22,6 +22,7 @@ jsonschema = { version = "0.60", default-features = false }
 keyring = "4"
 mime_guess = "2"
 regex = "1"
+rquickjs = "0.14"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 rustls-platform-verifier = "0.7"
 schemars = "1"

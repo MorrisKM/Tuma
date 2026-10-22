@@ -11,6 +11,8 @@ pub mod http;
 pub mod import;
 pub mod openapi;
 pub mod runner;
+pub mod runs;
+pub mod script;
 pub mod secrets;
 pub mod vars;
 pub mod workspace;

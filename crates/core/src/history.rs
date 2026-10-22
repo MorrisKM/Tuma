@@ -30,6 +30,15 @@ pub struct Entry {
     pub source: Option<String>,
 }
 
+/// Tuma's data folder, for history and other per-machine state: Tauri's app data folder for the app's identifier, or
+/// `TUMA_DATA_DIR` when set.
+pub fn data_dir() -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("TUMA_DATA_DIR") {
+        return Some(dir.into());
+    }
+    dirs::data_dir().map(|d| d.join("dev.tuma.app"))
+}
+
 pub struct History {
     path: PathBuf,
 }
@@ -38,10 +47,7 @@ impl History {
     /// The history the desktop app shows, shared with the CLI and the MCP server: Tauri's app data folder for the
     /// app's identifier, or `TUMA_DATA_DIR` when set.
     pub fn default_location() -> Option<Self> {
-        if let Some(dir) = std::env::var_os("TUMA_DATA_DIR") {
-            return Some(Self::new(dir));
-        }
-        dirs::data_dir().map(|d| Self::new(d.join("dev.tuma.app")))
+        data_dir().map(Self::new)
     }
 
     /// Keeps history in `history.jsonl` inside `dir`.
