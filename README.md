@@ -6,11 +6,13 @@ Rust and Tauri.
 - **Local-first.** No account, no cloud, no telemetry.
 - **Plain files.** Workspaces are folders of readable files you can commit to git.
 - **Fast.** Native Rust networking and the system webview instead of a bundled browser.
-- **Easy to switch.** Imports Postman collections and environments, and OpenAPI / Swagger specs.
+- **Easy to switch.** Imports Postman collections and environments, OpenAPI / Swagger specs, HAR recordings and cURL
+  commands; exports collections back to Postman format.
+- **Keyboard-first.** Ctrl+K finds any request or command; Ctrl+Enter sends, Ctrl+S saves, Ctrl+T opens a tab.
 - **Built for AI agents.** Coding agents test the API they are building through Tuma's MCP server or CLI, and save
   passing requests as tests.
 
-> **Status:** early development (milestone M3: the agent tool). See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
+> **Status:** early development (milestone M4: tabs, command palette, themes, cURL and code snippets). See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
 ## The `tuma` command
 

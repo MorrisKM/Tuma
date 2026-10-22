@@ -5,12 +5,15 @@ import { json } from "@codemirror/lang-json";
 import { xml } from "@codemirror/lang-xml";
 import { bracketMatching, foldGutter, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
-import { Compartment, EditorState, type Extension } from "@codemirror/state";
+import { Annotation, Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, placeholder as placeholderExt } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { useEffect, useRef } from "react";
 
 export type Language = "json" | "xml" | "html" | "javascript" | "text";
+
+/** Marks text set from outside the editor, which is not reported back as an edit. */
+export const external = Annotation.define<boolean>();
 
 const languages: Record<Language, () => Extension> = {
   json: () => json(),
@@ -78,7 +81,9 @@ export function CodeEditor({ value, onChange, language = "text", readOnly = fals
         languageSlot.current.of(languages[language]()),
         theme,
         EditorView.updateListener.of((update) => {
-          if (update.docChanged) onChangeRef.current?.(update.state.doc.toString());
+          if (update.docChanged && !update.transactions.some((t) => t.annotation(external))) {
+            onChangeRef.current?.(update.state.doc.toString());
+          }
         }),
       ],
     });
@@ -90,7 +95,7 @@ export function CodeEditor({ value, onChange, language = "text", readOnly = fals
   useEffect(() => {
     const v = view.current;
     if (v && v.state.doc.toString() !== value) {
-      v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: value } });
+      v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: value }, annotations: external.of(true) });
     }
   }, [value]);
 

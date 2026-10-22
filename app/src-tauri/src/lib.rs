@@ -94,7 +94,9 @@ async fn send_request(
         Some(ws) => ws
             .prepare(
                 &file,
-                path.as_deref(),
+                path.clone()
+                    .or_else(|| runner::implicit_location(ws, &file.url))
+                    .as_deref(),
                 environment.as_deref(),
                 &[],
                 workspace::secrets(),
@@ -233,6 +235,10 @@ pub fn run() {
             workspace::globals_write,
             workspace::import_file,
             workspace::agent_setup,
+            workspace::variables_in_scope,
+            workspace::snippet,
+            workspace::parse_curl,
+            workspace::export_postman,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

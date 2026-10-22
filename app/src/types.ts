@@ -141,6 +141,24 @@ export interface CheckResult {
   actual: string;
 }
 
+/** A variable a request can use. Secret values are never sent to the UI. */
+export interface VariableHint {
+  name: string;
+  value: string;
+  secret: boolean;
+  /** Such as "environment Staging" or "collection Users API". */
+  source: string;
+}
+
+export type Language = "curl" | "python" | "javaScript";
+
+export interface Snippet {
+  code: string;
+  /** The code contains a secret variable's value. */
+  containsSecrets: boolean;
+  unresolved: string[];
+}
+
 export interface AgentSetup {
   /** The `tuma` command on PATH, if installed. */
   cli: string | null;

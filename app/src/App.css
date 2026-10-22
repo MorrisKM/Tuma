@@ -31,8 +31,9 @@
   color-scheme: light dark;
 }
 
+/* Dark: when the system is dark and the user hasn't picked light, or when the user picked dark. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #15171c;
     --bg-sidebar: #1b1e24;
     --bg-input: #1f232a;
@@ -56,6 +57,36 @@
     --method-patch: #c792ea;
     --method-delete: #f2706b;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #15171c;
+  --bg-sidebar: #1b1e24;
+  --bg-input: #1f232a;
+  --bg-hover: #262a32;
+  --border: #2a2e36;
+  --text: #e6e8ec;
+  --muted: #8b93a1;
+  --accent: #34c79a;
+  --accent-text: #0b1f18;
+  --ok: #3fcf8e;
+  --redirect: #e6b450;
+  --fail: #f2706b;
+  --selection: #2c4a40;
+  --syntax-string: #7fd6a6;
+  --syntax-number: #f0a868;
+  --syntax-property: #82aaff;
+  --syntax-keyword: #c792ea;
+  --method-get: #3fcf8e;
+  --method-post: #e6b450;
+  --method-put: #82aaff;
+  --method-patch: #c792ea;
+  --method-delete: #f2706b;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 * {
@@ -1076,4 +1107,310 @@ select:focus {
 .options {
   margin: 0;
   padding-left: 18px;
+}
+
+/* Tabs */
+
+.tab-strip {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-sidebar);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  min-height: 34px;
+}
+
+.request-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px 0 10px;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  max-width: 220px;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 13px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.request-tab.active {
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.request-tab.preview .request-tab-name {
+  font-style: italic;
+}
+
+.request-tab .method-tag {
+  width: auto;
+}
+
+.request-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-close {
+  border: none;
+  background: none;
+  color: var(--muted);
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.tab-close:hover {
+  background: var(--bg-hover);
+}
+
+.tab-close .dot,
+.tab-close.dirty:hover .dot {
+  display: none;
+}
+
+.tab-close .x {
+  visibility: hidden;
+}
+
+.request-tab:hover .tab-close .x,
+.request-tab.active .tab-close .x {
+  visibility: visible;
+}
+
+.tab-close.dirty .dot {
+  display: block;
+  color: var(--accent);
+  font-size: 9px;
+}
+
+.tab-close.dirty .x {
+  display: none;
+}
+
+.tab-close.dirty:hover .x {
+  display: block;
+  visibility: visible;
+}
+
+.tab-new {
+  border: none;
+  background: none;
+  color: var(--muted);
+  padding: 0 12px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.tab-new:hover {
+  color: var(--text);
+}
+
+.spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* URL editor */
+
+.request-bar .url {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.request-bar .url:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.url .cm-editor {
+  background: transparent;
+  color: var(--text);
+}
+
+.url .cm-editor.cm-focused {
+  outline: none;
+}
+
+.url .cm-scroller {
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.url .cm-content {
+  padding: 5px 8px;
+}
+
+.url .cm-line {
+  padding: 0;
+}
+
+.url .cm-placeholder {
+  color: var(--muted);
+}
+
+.url .cm-cursor {
+  border-left-color: var(--text);
+}
+
+.cm-var {
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+.cm-var-known {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.cm-var-secret {
+  color: var(--syntax-keyword);
+  background: color-mix(in srgb, var(--syntax-keyword) 12%, transparent);
+}
+
+.cm-var-missing {
+  color: var(--fail);
+  background: color-mix(in srgb, var(--fail) 12%, transparent);
+}
+
+.cm-tooltip {
+  background: var(--bg-input) !important;
+  color: var(--text);
+  border: 1px solid var(--border) !important;
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+}
+
+.var-tooltip {
+  padding: 6px 10px;
+  font-size: 12px;
+  max-width: 420px;
+  display: grid;
+  gap: 2px;
+}
+
+.var-tooltip .source {
+  color: var(--muted);
+}
+
+.var-tooltip .missing {
+  color: var(--fail);
+}
+
+.cm-tooltip-autocomplete ul li[aria-selected] {
+  background: var(--selection) !important;
+  color: var(--text) !important;
+}
+
+.cm-completionDetail {
+  color: var(--muted);
+  margin-left: 8px;
+  font-style: normal;
+}
+
+/* Command palette */
+
+.palette-backdrop {
+  place-items: start center;
+  padding-top: 12vh;
+}
+
+.palette {
+  width: min(640px, calc(100vw - 32px));
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.4);
+  overflow: hidden;
+}
+
+.palette input {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: 12px 14px;
+  font-size: 15px;
+  background: transparent;
+}
+
+.palette input:focus {
+  outline: none;
+}
+
+.palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.palette-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.palette-list li.selected {
+  background: var(--selection);
+}
+
+/* Sidebar search, JSON filter, snippets */
+
+.tree-search {
+  width: 100%;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.json-filter {
+  width: 220px;
+  padding: 3px 8px;
+}
+
+.json-filter.invalid {
+  border-color: var(--fail);
+}
+
+.modal.wide {
+  width: min(860px, calc(100vw - 32px));
+}
+
+.snippet-code {
+  height: min(52vh, 460px);
+}
+
+.hint.warning {
+  color: var(--redirect);
+  margin: 0 0 8px;
 }

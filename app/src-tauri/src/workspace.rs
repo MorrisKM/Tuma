@@ -292,3 +292,110 @@ pub fn agent_setup(open: tauri::State<'_, Open>) -> AgentSetup {
     });
     AgentSetup { cli, project }
 }
+
+/// A variable for the URL bar's hints. Secret values are never sent to the UI.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VariableHint {
+    name: String,
+    /// Empty for secrets.
+    value: String,
+    secret: bool,
+    source: String,
+}
+
+/// The variables a request at `path` (or an unsaved one) can use, highest priority first.
+#[tauri::command]
+pub fn variables_in_scope(
+    open: tauri::State<'_, Open>,
+    path: Option<String>,
+    environment: Option<String>,
+) -> Result<Vec<VariableHint>> {
+    let guard = open.0.lock().unwrap();
+    let Some(workspace) = guard.as_ref() else {
+        return Ok(vec![]);
+    };
+    // An unsaved request is offered its only collection's variables too, as it gets them once its URL is relative.
+    let path = path.or_else(|| {
+        tuma_core::runner::sole_collection(workspace).map(|c| format!("{c}/request.yaml"))
+    });
+    let vars = workspace
+        .variables_in_scope(path.as_deref(), environment.as_deref(), secrets())
+        .map_err(|e| e.to_string())?;
+    Ok(vars
+        .into_iter()
+        .map(|v| VariableHint {
+            value: if v.secret { String::new() } else { v.value },
+            name: v.name,
+            secret: v.secret,
+            source: v.source,
+        })
+        .collect())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Snippet {
+    code: String,
+    /// The code contains the value of a secret variable, so be careful where it is pasted.
+    contains_secrets: bool,
+    unresolved: Vec<String>,
+}
+
+/// The request as code, with variables and inherited auth resolved.
+#[tauri::command]
+pub fn snippet(
+    open: tauri::State<'_, Open>,
+    request: RequestFile,
+    path: Option<String>,
+    environment: Option<String>,
+    language: tuma_core::codegen::Language,
+) -> Result<Snippet> {
+    let file = RequestFile {
+        url: tuma_core::runner::absolute_url(&request.url),
+        ..request
+    };
+    let guard = open.0.lock().unwrap();
+    let (prepared, secret_values) = match guard.as_ref() {
+        Some(ws) => (
+            ws.prepare(
+                &file,
+                path.clone()
+                    .or_else(|| tuma_core::runner::implicit_location(ws, &file.url))
+                    .as_deref(),
+                environment.as_deref(),
+                &[],
+                secrets(),
+            )
+            .map_err(|e| e.to_string())?,
+            ws.secret_values(environment.as_deref(), secrets())
+                .unwrap_or_default(),
+        ),
+        None => (tuma_core::workspace::prepare_standalone(&file, &[]), vec![]),
+    };
+    let code = tuma_core::codegen::generate(&prepared.request, language);
+    Ok(Snippet {
+        contains_secrets: secret_values.iter().any(|s| code.contains(s.as_str())),
+        code,
+        unresolved: prepared.unresolved.into_iter().collect(),
+    })
+}
+
+/// Reads a cURL command into a request. Options Tuma ignores are returned so the UI can mention them.
+#[tauri::command]
+pub fn parse_curl(command: String) -> Result<(RequestFile, Vec<String>)> {
+    tuma_core::curl::parse(&command)
+}
+
+/// Writes a collection as Postman v2.1 JSON to `file`.
+#[tauri::command]
+pub fn export_postman(
+    open: tauri::State<'_, Open>,
+    collection: String,
+    file: PathBuf,
+) -> Result<()> {
+    let tree = with(&open, |w| w.read_tree(&collection))?;
+    let json = serde_json::to_string_pretty(&tuma_core::export::postman::collection(&tree))
+        .map_err(|e| e.to_string())?;
+    std::fs::write(&file, json + "\n").map_err(|e| format!("{}: {e}", file.display()))
+}

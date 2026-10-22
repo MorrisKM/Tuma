@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useStore } from "../store";
 import type { Header, Response, Timing } from "../types";
+import { select } from "../jsonpath";
 import { CodeEditor, type Language } from "./CodeEditor";
 import { Tabs } from "./Tabs";
 
@@ -132,16 +133,29 @@ function BodyView({ response }: { response: Response }) {
   const type = contentType(response);
   const previewable = type.startsWith("image/") || type === "text/html";
   const [view, setView] = useState<View>("pretty");
+  const [filter, setFilter] = useState("");
   const language = languageFor(type);
 
-  const pretty = useMemo(() => {
-    if (response.bodyBase64 || language !== "json") return response.body;
+  const json = useMemo(() => {
+    if (response.bodyBase64 || language !== "json") return undefined;
     try {
-      return JSON.stringify(JSON.parse(response.body), null, 2);
+      return JSON.parse(response.body) as unknown;
     } catch {
-      return response.body;
+      return undefined;
     }
   }, [response, language]);
+
+  // With a filter, Pretty shows only the selected values.
+  const [pretty, filterError] = useMemo((): [string, string | null] => {
+    if (json === undefined) return [response.body, null];
+    if (!filter.trim()) return [JSON.stringify(json, null, 2), null];
+    try {
+      const found = select(json, filter);
+      return [JSON.stringify(found.length === 1 ? found[0] : found, null, 2), null];
+    } catch (e) {
+      return [JSON.stringify(json, null, 2), (e as Error).message];
+    }
+  }, [json, filter, response.body]);
 
   if (response.size === 0) return <p className="hint">The response has no body.</p>;
 
@@ -161,6 +175,17 @@ function BodyView({ response }: { response: Response }) {
             </button>
           ))}
         </div>
+        {json !== undefined && shown === "pretty" && (
+          <input
+            className={`json-filter mono${filterError ? " invalid" : ""}`}
+            value={filter}
+            placeholder="Filter: $.items[*].id"
+            aria-label="Filter the JSON with a path"
+            title={filterError ?? "A JSON path, as in checks: $.name, $.items[0], $.items[*].id"}
+            spellCheck={false}
+            onChange={(e) => setFilter(e.target.value)}
+          />
+        )}
         <span className="muted">{type || "no content type"}</span>
       </div>
       {shown === "preview" ? (

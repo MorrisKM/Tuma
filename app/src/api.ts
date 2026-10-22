@@ -1,6 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AgentSetup,
+  Language,
+  Snippet,
+  VariableHint,
   FolderFile,
   HistoryEntry,
   ImportResult,
@@ -56,3 +59,14 @@ export const globalsWrite = (variables: VariableValue[]) => invoke<void>("global
 export const importFile = (file: string) => invoke<ImportResult>("import_file", { file });
 
 export const agentSetup = () => invoke<AgentSetup>("agent_setup");
+
+export const variablesInScope = (path: string | null, environment: string | null) =>
+  invoke<VariableHint[]>("variables_in_scope", { path, environment });
+
+export const snippet = (request: RequestFile, path: string | null, environment: string | null, language: Language) =>
+  invoke<Snippet>("snippet", { request, path, environment, language });
+
+/** The request and the options Tuma ignored. */
+export const parseCurl = (command: string) => invoke<[RequestFile, string[]]>("parse_curl", { command });
+
+export const exportPostman = (collection: string, file: string) => invoke<void>("export_postman", { collection, file });

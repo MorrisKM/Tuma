@@ -45,6 +45,13 @@ export function TopBar() {
           </button>
         </div>
       )}
+      <button
+        className="button"
+        onClick={() => useStore.setState({ snippetOpen: true })}
+        title="Copy as cURL, Python or JavaScript"
+      >
+        Code
+      </button>
       <button className="button" onClick={() => void save()} title="Save (Ctrl+S)">
         Save
       </button>

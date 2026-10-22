@@ -1,4 +1,4 @@
-import { ask, open as openDialog } from "@tauri-apps/plugin-dialog";
+import { ask, open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { create } from "zustand";
 import * as api from "./api";
 import {
@@ -10,7 +10,15 @@ import {
   toRequestFile,
   withQuery,
 } from "./draft";
-import type { HistoryEntry, KeyValue, RequestError, Response, TreeNode, WorkspaceInfo } from "./types";
+import type {
+  HistoryEntry,
+  KeyValue,
+  RequestError,
+  Response,
+  TreeNode,
+  VariableHint,
+  WorkspaceInfo,
+} from "./types";
 
 /** What the main area shows. */
 export type View =
@@ -27,6 +35,20 @@ export interface Notice {
   details?: string[];
 }
 
+/** An open request tab. The active tab's live state is kept in the store's top-level fields. */
+export interface Tab {
+  id: string;
+  draft: Draft;
+  /** The draft as last opened or saved, to tell whether there are unsaved changes. */
+  saved: string;
+  response: Response | null;
+  error: RequestError | null;
+  /** The id of the request in flight, if any. */
+  sending: string | null;
+  /** A preview tab is replaced by the next request opened from the tree, until it is edited. */
+  preview: boolean;
+}
+
 interface State {
   workspace: WorkspaceInfo | null;
   tree: TreeNode[];
@@ -35,16 +57,26 @@ interface State {
   environment: string | null;
   expanded: Record<string, boolean>;
   view: View;
+
+  tabs: Tab[];
+  activeTab: string;
+  // The active tab, live. Components read these; the copy in `tabs` is refreshed when switching away.
   draft: Draft;
-  /** The draft as last opened or saved, to tell whether there are unsaved changes. */
   saved: string;
+  response: Response | null;
+  error: RequestError | null;
+  sending: string | null;
+  preview: boolean;
+
+  /** Variables the active request can use, for the URL bar's hints. */
+  scope: VariableHint[];
   /** Shows the "save to" dialog for a request that is not saved yet. */
   savingAs: boolean;
   /** The path of the tree item being renamed. */
   renaming: string | null;
-  sending: string | null;
-  response: Response | null;
-  error: RequestError | null;
+  paletteOpen: boolean;
+  /** Shows the code snippet dialog. */
+  snippetOpen: boolean;
   history: HistoryEntry[];
   notice: Notice | null;
 
@@ -52,6 +84,7 @@ interface State {
   openWorkspace: () => Promise<void>;
   closeWorkspace: () => Promise<void>;
   refresh: () => Promise<void>;
+  loadScope: () => Promise<void>;
   setEnvironment: (name: string | null) => void;
   toggle: (path: string, open?: boolean) => void;
 
@@ -59,7 +92,15 @@ interface State {
   setUrl: (url: string) => void;
   setParams: (params: KeyValue[]) => void;
   isDirty: () => boolean;
-  newRequest: () => Promise<void>;
+  /** The tabs with the active one up to date, for display. */
+  allTabs: () => Tab[];
+  newTab: () => void;
+  switchTab: (id: string) => void;
+  closeTab: (id: string) => Promise<void>;
+  /** Moves to the next (1) or previous (-1) tab. */
+  cycleTab: (step: number) => void;
+  /** Keeps the active preview tab open. */
+  pin: () => void;
   openRequest: (path: string) => Promise<void>;
   openFolder: (path: string) => Promise<void>;
   openVariables: (environment: string | null) => Promise<void>;
@@ -70,6 +111,9 @@ interface State {
   rename: (path: string, name: string) => Promise<void>;
   remove: (node: TreeNode) => Promise<void>;
   importFile: () => Promise<void>;
+  exportCollection: (path: string) => Promise<void>;
+  /** Replaces the active request with a cURL command's. */
+  importCurl: (command: string) => Promise<void>;
 
   send: () => Promise<void>;
   cancel: () => void;
@@ -81,6 +125,15 @@ interface State {
 
 const snapshot = (d: Draft) => JSON.stringify({ ...toRequestFile(d), path: d.path });
 const message = (e: unknown) => (typeof e === "string" ? e : e instanceof Error ? e.message : JSON.stringify(e));
+
+/** Whether a tab has changes worth keeping. A blank new request has none. */
+export const tabDirty = (t: Pick<Tab, "draft" | "saved">) =>
+  !(!t.draft.path && !t.draft.url.trim()) && snapshot(t.draft) !== t.saved;
+
+const blankTab = (): Tab => {
+  const draft = newDraft();
+  return { id: crypto.randomUUID(), draft, saved: snapshot(draft), response: null, error: null, sending: null, preview: false };
+};
 
 // The selected environment is remembered per workspace, on this machine only.
 const envKey = (root: string) => `tuma.environment:${root}`;
@@ -100,6 +153,8 @@ function storeEnvironment(root: string, name: string | null) {
   }
 }
 
+const first = blankTab();
+
 export const useStore = create<State>((set, get) => {
   /** Runs an action and shows its error, if any, as a notice. */
   const attempt = async (action: () => Promise<void>) => {
@@ -110,18 +165,79 @@ export const useStore = create<State>((set, get) => {
     }
   };
 
-  /** Asks before throwing away unsaved changes. Resolves true when it is fine to continue. */
-  const confirmDiscard = async () =>
-    !get().isDirty() ||
-    (await ask("You have unsaved changes to this request. Discard them?", {
-      title: "Unsaved changes",
-      kind: "warning",
-      okLabel: "Discard",
-      cancelLabel: "Keep editing",
-    }));
+  const ask_ = (text: string) =>
+    ask(text, { title: "Unsaved changes", kind: "warning", okLabel: "Discard", cancelLabel: "Keep editing" });
 
-  const load = (draft: Draft) =>
-    set({ draft, saved: snapshot(draft), view: { kind: "request" }, response: null, error: null });
+  /** The active tab as it is now. */
+  const current = (): Tab => {
+    const s = get();
+    return {
+      id: s.activeTab,
+      draft: s.draft,
+      saved: s.saved,
+      response: s.response,
+      error: s.error,
+      sending: s.sending,
+      preview: s.preview,
+    };
+  };
+
+  /** Makes `tab` the active one, storing the one that was active. */
+  const activate = (tab: Tab, tabs: Tab[]) => {
+    set({
+      tabs,
+      activeTab: tab.id,
+      draft: tab.draft,
+      saved: tab.saved,
+      response: tab.response,
+      error: tab.error,
+      sending: tab.sending,
+      preview: tab.preview,
+      view: { kind: "request" },
+    });
+    void get().loadScope();
+  };
+
+  /** Updates a tab, whether or not it is the active one. */
+  const patchTab = (id: string, patch: Partial<Tab>) => {
+    if (id === get().activeTab) {
+      const { id: _, ...rest } = patch;
+      set(rest);
+    } else {
+      set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
+    }
+  };
+
+  /** Opens a draft: in the active tab when it is a preview or blank, otherwise in a new tab. */
+  const openDraft = (draft: Draft, preview: boolean) => {
+    const tab: Tab = { ...blankTab(), draft, saved: snapshot(draft), preview };
+    const active = current();
+    const reusable = (active.preview && !tabDirty(active)) || (!active.draft.path && !active.draft.url.trim());
+    const tabs = get().allTabs();
+    if (reusable && !active.sending) {
+      activate(tab, tabs.map((t) => (t.id === active.id ? tab : t)));
+    } else {
+      const at = tabs.findIndex((t) => t.id === active.id);
+      activate(tab, [...tabs.slice(0, at + 1), tab, ...tabs.slice(at + 1)]);
+    }
+  };
+
+  /** Applies a change of path (a rename or delete) to every tab's draft. */
+  const repath = (change: (path: string | null) => string | null | undefined) => {
+    const fix = (t: Tab): Tab => {
+      const path = change(t.draft.path);
+      if (path === undefined || path === t.draft.path) return t;
+      const wasClean = !tabDirty(t);
+      const draft = { ...t.draft, path, name: path ? nameFromPath(path) : t.draft.name };
+      // A deleted request stays open as an unsaved one.
+      return { ...t, draft, saved: path && wasClean ? snapshot(draft) : path ? t.saved : "" };
+    };
+    const tabs = get().allTabs().map(fix);
+    const active = tabs.find((t) => t.id === get().activeTab)!;
+    set({ tabs, draft: active.draft, saved: active.saved });
+  };
+
+  const anyDirty = () => get().allTabs().some(tabDirty);
 
   const setWorkspace = async (workspace: WorkspaceInfo | null) => {
     const environment = workspace ? loadEnvironment(workspace.root) : null;
@@ -129,6 +245,12 @@ export const useStore = create<State>((set, get) => {
     await get().refresh();
     // A remembered environment that no longer exists is dropped.
     if (environment && !get().environments.includes(environment)) get().setEnvironment(null);
+    void get().loadScope();
+  };
+
+  const resetTabs = () => {
+    const tab = blankTab();
+    activate(tab, [tab]);
   };
 
   return {
@@ -138,13 +260,19 @@ export const useStore = create<State>((set, get) => {
     environment: null,
     expanded: {},
     view: { kind: "request" },
-    draft: newDraft(),
-    saved: snapshot(newDraft()),
-    savingAs: false,
-    renaming: null,
-    sending: null,
+    tabs: [first],
+    activeTab: first.id,
+    draft: first.draft,
+    saved: first.saved,
     response: null,
     error: null,
+    sending: null,
+    preview: false,
+    scope: [],
+    savingAs: false,
+    renaming: null,
+    paletteOpen: false,
+    snippetOpen: false,
     history: [],
     notice: null,
 
@@ -157,7 +285,8 @@ export const useStore = create<State>((set, get) => {
     openWorkspace: () =>
       attempt(async () => {
         const root = await openDialog({ directory: true, title: "Open or create a workspace folder" });
-        if (typeof root !== "string" || !(await confirmDiscard())) return;
+        if (typeof root !== "string") return;
+        if (anyDirty() && !(await ask_("Some open requests have unsaved changes. Discard them?"))) return;
         let workspace: WorkspaceInfo;
         try {
           workspace = await api.workspaceOpen(root);
@@ -171,15 +300,15 @@ export const useStore = create<State>((set, get) => {
           if (!create) return;
           workspace = await api.workspaceCreate(root, name);
         }
-        load(newDraft());
+        resetTabs();
         await setWorkspace(workspace);
       }),
 
     closeWorkspace: () =>
       attempt(async () => {
-        if (!(await confirmDiscard())) return;
+        if (anyDirty() && !(await ask_("Some open requests have unsaved changes. Discard them?"))) return;
         await api.workspaceClose();
-        load(newDraft());
+        resetTabs();
         await setWorkspace(null);
       }),
 
@@ -189,41 +318,99 @@ export const useStore = create<State>((set, get) => {
       set({ tree, environments });
     },
 
+    loadScope: async () => {
+      const { workspace, draft, environment } = get();
+      if (!workspace) {
+        set({ scope: [] });
+        return;
+      }
+      try {
+        set({ scope: await api.variablesInScope(draft.path, environment) });
+      } catch {
+        set({ scope: [] });
+      }
+    },
+
     setEnvironment: (environment) => {
       const root = get().workspace?.root;
       if (root) storeEnvironment(root, environment);
       set({ environment });
+      void get().loadScope();
     },
 
     toggle: (path, open) =>
       set((s) => ({ expanded: { ...s.expanded, [path]: open ?? !s.expanded[path] } })),
 
-    update: (patch) => set((s) => ({ draft: { ...s.draft, ...patch } })),
+    update: (patch) => set((s) => ({ draft: { ...s.draft, ...patch }, preview: false })),
 
     // The URL and the params table edit the same query string. Disabled rows exist only in the table, so they are kept.
     setUrl: (url) =>
       set((s) => ({
         draft: { ...s.draft, url, params: [...parseQuery(url), ...s.draft.params.filter((p) => !p.enabled)] },
+        preview: false,
       })),
-    setParams: (params) => set((s) => ({ draft: { ...s.draft, params, url: withQuery(s.draft.url, params) } })),
+    setParams: (params) =>
+      set((s) => ({ draft: { ...s.draft, params, url: withQuery(s.draft.url, params) }, preview: false })),
 
-    isDirty: () => {
-      const { draft, saved } = get();
-      // A blank new request has nothing worth keeping.
-      if (!draft.path && !draft.url.trim()) return false;
-      return snapshot(draft) !== saved;
+    isDirty: () => tabDirty(get()),
+
+    allTabs: () => {
+      const active = current();
+      return get().tabs.map((t) => (t.id === active.id ? active : t));
     },
 
-    newRequest: () =>
+    newTab: () => {
+      const tab = blankTab();
+      const tabs = get().allTabs();
+      const at = tabs.findIndex((t) => t.id === get().activeTab);
+      activate(tab, [...tabs.slice(0, at + 1), tab, ...tabs.slice(at + 1)]);
+    },
+
+    switchTab: (id) => {
+      if (id === get().activeTab) {
+        set({ view: { kind: "request" } });
+        return;
+      }
+      const tabs = get().allTabs();
+      const tab = tabs.find((t) => t.id === id);
+      if (tab) activate(tab, tabs);
+    },
+
+    closeTab: (id) =>
       attempt(async () => {
-        if (await confirmDiscard()) load(newDraft());
+        const tabs = get().allTabs();
+        const index = tabs.findIndex((t) => t.id === id);
+        const tab = tabs[index];
+        if (!tab) return;
+        if (tabDirty(tab) && !(await ask_(`"${tab.draft.name}" has unsaved changes. Discard them?`))) return;
+        if (tab.sending) void api.cancelRequest(tab.sending);
+        const rest = tabs.filter((t) => t.id !== id);
+        if (rest.length === 0) {
+          resetTabs();
+        } else if (id === get().activeTab) {
+          activate(rest[Math.min(index, rest.length - 1)], rest);
+        } else {
+          set({ tabs: rest });
+        }
       }),
+
+    cycleTab: (step) => {
+      const tabs = get().allTabs();
+      const index = tabs.findIndex((t) => t.id === get().activeTab);
+      const next = tabs[(index + step + tabs.length) % tabs.length];
+      if (next) activate(next, tabs);
+    },
+
+    pin: () => set({ preview: false }),
 
     openRequest: (path) =>
       attempt(async () => {
-        if (get().draft.path === path && get().view.kind === "request") return;
-        if (!(await confirmDiscard())) return;
-        load(fromRequestFile(await api.requestRead(path), path, nameFromPath(path)));
+        const open = get().allTabs().find((t) => t.draft.path === path);
+        if (open) {
+          get().switchTab(open.id);
+          return;
+        }
+        openDraft(fromRequestFile(await api.requestRead(path), path, nameFromPath(path)), true);
       }),
 
     openFolder: async (path) => set({ view: { kind: "folder", path } }),
@@ -242,7 +429,7 @@ export const useStore = create<State>((set, get) => {
           return;
         }
         await api.requestWrite(draft.path, toRequestFile(draft));
-        set({ saved: snapshot(draft) });
+        set({ saved: snapshot(draft), preview: false });
         await get().refresh();
       }),
 
@@ -251,19 +438,19 @@ export const useStore = create<State>((set, get) => {
         const { draft } = get();
         const path = await api.requestCreate(parent, name, toRequestFile(draft));
         const saved = { ...draft, path, name: nameFromPath(path) };
-        set({ draft: saved, saved: snapshot(saved), savingAs: false });
+        set({ draft: saved, saved: snapshot(saved), savingAs: false, preview: false });
         get().toggle(parent, true);
         await get().refresh();
+        void get().loadScope();
       }),
 
     addRequest: (parent) =>
       attempt(async () => {
-        if (!(await confirmDiscard())) return;
         const draft = newDraft();
         const path = await api.requestCreate(parent, "New request", toRequestFile(draft));
         get().toggle(parent, true);
         await get().refresh();
-        load({ ...draft, path, name: nameFromPath(path) });
+        openDraft({ ...draft, path, name: nameFromPath(path) }, false);
         set({ renaming: path });
       }),
 
@@ -283,13 +470,8 @@ export const useStore = create<State>((set, get) => {
         // Requests and views inside a renamed folder move with it.
         const moved = (p: string | null) =>
           p === path ? newPath : p?.startsWith(`${path}/`) ? newPath + p.slice(path.length) : p;
-        const { draft, saved, view } = get();
-        const draftPath = moved(draft.path);
-        if (draftPath !== draft.path) {
-          const wasClean = snapshot(draft) === saved;
-          const next = { ...draft, path: draftPath, name: nameFromPath(draftPath!) };
-          set({ draft: next, saved: wasClean ? snapshot(next) : saved });
-        }
+        repath(moved);
+        const { view } = get();
         if (view.kind === "folder") set({ view: { kind: "folder", path: moved(view.path)! } });
         await get().refresh();
       }),
@@ -306,9 +488,8 @@ export const useStore = create<State>((set, get) => {
         if (!ok) return;
         await api.itemDelete(node.path);
         const inside = (p: string | null) => p === node.path || !!p?.startsWith(`${node.path}/`);
-        const { draft, view } = get();
-        // The open request stays in the editor as an unsaved one.
-        if (inside(draft.path)) set({ draft: { ...draft, path: null }, saved: "" });
+        repath((p) => (inside(p) ? null : undefined));
+        const { view } = get();
         if (view.kind === "folder" && inside(view.path)) set({ view: { kind: "request" } });
         await get().refresh();
       }),
@@ -320,8 +501,8 @@ export const useStore = create<State>((set, get) => {
           return;
         }
         const file = await openDialog({
-          title: "Import an OpenAPI spec or a Postman export",
-          filters: [{ name: "OpenAPI spec or Postman export", extensions: ["json", "yaml", "yml"] }],
+          title: "Import an OpenAPI spec, a Postman export or a HAR file",
+          filters: [{ name: "OpenAPI, Postman or HAR", extensions: ["json", "yaml", "yml", "har"] }],
         });
         if (typeof file !== "string") return;
         const result = await api.importFile(file);
@@ -344,18 +525,42 @@ export const useStore = create<State>((set, get) => {
         });
       }),
 
+    exportCollection: (path) =>
+      attempt(async () => {
+        const file = await saveDialog({
+          title: "Export as a Postman collection",
+          defaultPath: `${path}.postman_collection.json`,
+          filters: [{ name: "Postman collection", extensions: ["json"] }],
+        });
+        if (!file) return;
+        await api.exportPostman(path, file);
+        set({ notice: { tone: "info", text: `Exported "${path}" to ${file}.` } });
+      }),
+
+    importCurl: (command) =>
+      attempt(async () => {
+        const [file, ignored] = await api.parseCurl(command);
+        const { draft } = get();
+        // Keep where the request is saved and what it is called; take everything else from the command.
+        const next = fromRequestFile(file, draft.path, draft.name);
+        set({ draft: next, preview: false });
+        if (ignored.length) {
+          set({ notice: { tone: "info", text: `Imported the cURL command. Ignored: ${ignored.join(", ")}` } });
+        }
+      }),
+
     send: async () => {
-      const { draft, sending, environment } = get();
+      const { draft, sending, environment, activeTab } = get();
       if (sending || !draft.url.trim()) return;
       const id = crypto.randomUUID();
-      set({ sending: id, error: null, view: { kind: "request" } });
+      set({ sending: id, error: null, view: { kind: "request" }, preview: false });
       try {
         const response = await api.sendRequest(id, toRequestFile(draft), draft.path, environment);
-        if (get().sending === id) set({ response, error: null });
+        patchTab(activeTab, { response, error: null });
       } catch (e) {
-        if (get().sending === id) set({ response: null, error: e as RequestError });
+        patchTab(activeTab, { response: null, error: e as RequestError });
       } finally {
-        if (get().sending === id) set({ sending: null });
+        patchTab(activeTab, { sending: null });
         void get().loadHistory();
       }
     },
@@ -367,9 +572,8 @@ export const useStore = create<State>((set, get) => {
 
     openHistory: (entry) =>
       attempt(async () => {
-        if (!(await confirmDiscard())) return;
         // History keeps the request as sent; it opens unsaved, so saving it does not overwrite the original.
-        load({ ...fromRequestFile(entry.request, null, "Untitled") });
+        openDraft(fromRequestFile(entry.request, null, "Untitled"), false);
       }),
 
     loadHistory: async () => set({ history: await api.historyList() }),
@@ -388,4 +592,9 @@ export function folders(tree: TreeNode[], depth = 0): { path: string; name: stri
   return tree.flatMap((n) =>
     n.kind === "request" ? [] : [{ path: n.path, name: n.name, depth }, ...folders(n.children ?? [], depth + 1)],
   );
+}
+
+/** Every saved request, for search. */
+export function requests(tree: TreeNode[]): TreeNode[] {
+  return tree.flatMap((n) => (n.kind === "request" ? [n] : requests(n.children ?? [])));
 }

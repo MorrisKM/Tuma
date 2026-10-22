@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useStore } from "../store";
+import { requests, useStore } from "../store";
 import type { HistoryEntry, TreeNode } from "../types";
 
 type Tab = "collections" | "history";
@@ -7,7 +7,7 @@ type Tab = "collections" | "history";
 export function Sidebar() {
   const [tab, setTab] = useState<Tab>("collections");
   const workspace = useStore((s) => s.workspace);
-  const { openWorkspace, closeWorkspace, importFile, addFolder, newRequest, openVariables } = useStore.getState();
+  const { openWorkspace, closeWorkspace, importFile, addFolder, newTab, openVariables } = useStore.getState();
 
   return (
     <aside className="sidebar">
@@ -24,7 +24,7 @@ export function Sidebar() {
           )}
         </div>
         <div className="sidebar-actions">
-          <button className="button small" onClick={() => void newRequest()} title="New request (Ctrl+N)">
+          <button className="button small" onClick={newTab} title="New request (Ctrl+T)">
             New request
           </button>
           {workspace && (
@@ -69,6 +69,7 @@ function Collections() {
   const workspace = useStore((s) => s.workspace);
   const tree = useStore((s) => s.tree);
   const { openWorkspace, importFile, addFolder } = useStore.getState();
+  const [query, setQuery] = useState("");
 
   if (!workspace) {
     return (
@@ -96,12 +97,48 @@ function Collections() {
       </div>
     );
   }
+  const q = query.trim().toLowerCase();
+  const found = q
+    ? requests(tree).filter((r) => `${r.path} ${r.method}`.toLowerCase().includes(q))
+    : [];
   return (
-    <ul className="tree" role="tree">
-      {tree.map((node) => (
-        <TreeItem key={node.path} node={node} depth={0} />
-      ))}
-    </ul>
+    <>
+      <input
+        className="tree-search"
+        type="search"
+        value={query}
+        placeholder="Filter requests"
+        aria-label="Filter requests"
+        spellCheck={false}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setQuery("");
+          if (e.key === "Enter" && found[0]) void useStore.getState().openRequest(found[0].path);
+        }}
+      />
+      {q ? (
+        <ul className="tree" role="listbox">
+          {found.map((r) => (
+            <li key={r.path}>
+              <button className="history-item" onClick={() => void useStore.getState().openRequest(r.path)} title={r.path}>
+                <span className={`method-tag method-${r.method?.toLowerCase()}`}>{r.method}</span>
+                <span className="history-url">
+                  {r.name}
+                  <span className="muted small"> {r.path.replace(/\/[^/]*$/, "")}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+          {found.length === 0 && <li className="muted small sidebar-empty">No request matches.</li>}
+        </ul>
+      ) : (
+        <ul className="tree" role="tree">
+          {tree.map((node) => (
+            <TreeItem key={node.path} node={node} depth={0} />
+          ))}
+        </ul>
+      )}
+    </>
   );
 }
 
@@ -155,6 +192,9 @@ function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
             {!isRequest && <button onClick={() => void addRequest(node.path)}>New request</button>}
             {!isRequest && <button onClick={() => void addFolder(node.path)}>New folder</button>}
             {!isRequest && <button onClick={() => void openFolder(node.path)}>Settings</button>}
+            {node.kind === "collection" && (
+              <button onClick={() => void useStore.getState().exportCollection(node.path)}>Export to Postman…</button>
+            )}
             <button onClick={() => useStore.setState({ renaming: node.path })}>Rename</button>
             <button className="danger" onClick={() => void remove(node)}>
               Delete

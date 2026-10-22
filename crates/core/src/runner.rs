@@ -161,9 +161,7 @@ pub async fn send(job: Job<'_>, detail: &Detail) -> Outcome {
     let inherit_from = match (job.path, job.context, job.workspace) {
         (Some(path), _, _) => Some(path.to_string()),
         (None, Some(folder), _) => Some(format!("{}/request.yaml", folder.trim_matches('/'))),
-        (None, None, Some(ws)) if job.request.url.starts_with('/') => {
-            sole_collection(ws).map(|c| format!("{c}/request.yaml"))
-        }
+        (None, None, Some(ws)) => implicit_location(ws, &job.request.url),
         _ => None,
     };
 
@@ -282,8 +280,20 @@ pub async fn send(job: Job<'_>, detail: &Detail) -> Outcome {
     }
 }
 
+/// Where an unsaved request is treated as saved, for its variables and auth: in the workspace's only collection, when
+/// its URL is relative to a variable (`/users`, `{{baseUrl}}/users`). A full URL inherits nothing, so a collection's
+/// credentials never go to a host typed into a new request.
+pub fn implicit_location(workspace: &Workspace, url: &str) -> Option<String> {
+    let url = url.trim();
+    if url.starts_with('/') || url.starts_with("{{") {
+        sole_collection(workspace).map(|c| format!("{c}/request.yaml"))
+    } else {
+        None
+    }
+}
+
 /// The workspace's only collection, if it has exactly one: a path such as `/users` then means "in that API".
-fn sole_collection(workspace: &Workspace) -> Option<String> {
+pub fn sole_collection(workspace: &Workspace) -> Option<String> {
     match workspace.tree().ok()?.as_slice() {
         [only] => Some(only.path.clone()),
         _ => None,
