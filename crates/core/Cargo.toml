@@ -18,6 +18,7 @@ cookie_store = { version = "0.22", default-features = false, features = ["serde_
 bytes = "1"
 dirs = "6"
 flate2 = "1"
+getrandom = { version = "0.4", features = ["sys_rng"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 http = "1"
 http-body-util = "0.1"
@@ -32,6 +33,8 @@ percent-encoding = "2"
 regex = "1"
 ring = "0.17"
 rquickjs = "0.14"
+sha1 = "0.11"
+rsa = { version = "=0.10.0-rc.19", default-features = false, features = ["std", "encoding", "sha1", "sha2", "getrandom"] }
 prost = "0.14"
 prost-reflect = { version = "0.16", features = ["serde"] }
 prost-types = "0.14"

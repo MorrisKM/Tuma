@@ -1,17 +1,26 @@
 //! Encrypting parts of a request body before it is sent, and decrypting parts of the response, for APIs that exchange
-//! encrypted fields (card numbers, personal data) or whole encrypted payloads.
+//! encrypted fields (card numbers, PINs, personal data) or whole encrypted payloads.
 //!
-//! AES in GCM (authenticated, recommended) or CBC (PKCS#7 padding) mode, with a 128- or 256-bit key from a variable,
-//! so the key can be a secret. Each value gets a fresh random IV, written in front of the ciphertext (`iv ‖ ciphertext
-//! [‖ tag]`) and encoded as base64 or hex, unless a fixed IV is given. Fields are chosen by JSON path (`$.card.number`,
-//! `$.items[*].ssn`); `$` is the whole body. A non-string value is encrypted as its JSON text. A decrypted value comes
-//! back as a string, or as JSON when it is a JSON object or array.
+//! - AES in GCM (authenticated, recommended) or CBC (PKCS#7 padding) mode, with a 128- or 256-bit key from a variable.
+//!   Each value gets a fresh random IV, written in front of the ciphertext (`iv ‖ ciphertext [‖ tag]`), unless a fixed
+//!   IV is given.
+//! - RSA-OAEP (SHA-1 or SHA-256, MGF1 with the same hash, no label), with a PEM public key for encrypting and a PEM
+//!   private key for decrypting, as browser libraries such as node-forge do.
+//! - Hybrid responses: `base64(RSA(key) : RSA(iv) : AES-CBC(data))`, where the AES key and IV come RSA-encrypted with
+//!   the data and are unwrapped with the private key.
+//!
+//! Keys come from `{{variables}}`, so they can be secrets in the keychain. Fields are chosen by JSON path
+//! (`$.card.number`, `$.items[*].ssn`); `$` is the whole body. A non-string value is encrypted as its JSON text. A
+//! decrypted value comes back as a string, or as JSON when it is a JSON object or array.
 
 use aes_gcm::aead::{Aead, KeyInit};
 use base64::Engine;
 use cbc::cipher::block_padding::Pkcs7;
 use cbc::cipher::{BlockModeDecrypt, BlockModeEncrypt, KeyIvInit};
 use ring::rand::{SecureRandom, SystemRandom};
+use rsa::pkcs1::{DecodeRsaPrivateKey, DecodeRsaPublicKey};
+use rsa::pkcs8::{DecodePrivateKey, DecodePublicKey};
+use rsa::{Oaep, RsaPrivateKey, RsaPublicKey};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -28,13 +37,18 @@ pub enum Algorithm {
     Aes256Cbc,
     #[serde(rename = "aes-128-cbc")]
     Aes128Cbc,
+    /// RSA-OAEP with SHA-1 and MGF1-SHA-1, as node-forge's `RSA-OAEP` with `md: sha1`.
+    #[serde(rename = "rsa-oaep-sha1")]
+    RsaOaepSha1,
+    #[serde(rename = "rsa-oaep-sha256")]
+    RsaOaepSha256,
 }
 
 impl Algorithm {
     fn key_len(self) -> usize {
         match self {
             Algorithm::Aes256Gcm | Algorithm::Aes256Cbc => 32,
-            Algorithm::Aes128Gcm | Algorithm::Aes128Cbc => 16,
+            _ => 16,
         }
     }
 
@@ -44,6 +58,10 @@ impl Algorithm {
 
     fn gcm(self) -> bool {
         matches!(self, Algorithm::Aes256Gcm | Algorithm::Aes128Gcm)
+    }
+
+    pub fn is_rsa(self) -> bool {
+        matches!(self, Algorithm::RsaOaepSha1 | Algorithm::RsaOaepSha256)
     }
 }
 
@@ -60,21 +78,63 @@ pub enum Encoding {
     Utf8,
 }
 
-/// A request's encryption settings, as written in its file. `key` and `iv` may use `{{variables}}`.
+/// The hash of RSA-OAEP (and of its MGF1).
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum OaepHash {
+    #[default]
+    Sha1,
+    Sha256,
+}
+
+/// A response that carries its own AES key and IV, each encrypted with the RSA public key:
+/// `key ‖ separator ‖ iv ‖ separator ‖ data`, the data AES-CBC (the key's length picks AES-128, -192 or -256).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase", default)]
+pub struct HybridFormat {
+    pub separator: String,
+    /// The joined parts are themselves base64 (the value is base64 of `key:iv:data`).
+    pub wrapped: bool,
+    /// The RSA-decrypted key and IV are base64 text, not raw bytes.
+    pub keys_base64: bool,
+    /// RSA-OAEP's hash for the key and IV.
+    pub hash: OaepHash,
+}
+
+impl Default for HybridFormat {
+    fn default() -> Self {
+        Self {
+            separator: ":".into(),
+            wrapped: true,
+            keys_base64: true,
+            hash: OaepHash::Sha1,
+        }
+    }
+}
+
+/// A request's encryption settings, as written in its file. `key`, `iv` and `private_key` may use `{{variables}}`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", default)]
 pub struct CryptoSettings {
     pub algorithm: Algorithm,
-    /// The key, such as `{{encryptionKey}}` (a secret variable).
+    /// The AES key, or for RSA the public key (PEM), such as `{{encryptionKey}}`.
     pub key: String,
     #[serde(skip_serializing_if = "is_base64")]
     pub key_encoding: Encoding,
-    /// A fixed IV; empty means a random one for every value, written before the ciphertext.
+    /// A fixed AES IV; empty means a random one for every value, written before the ciphertext.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub iv: String,
     /// How the ciphertext is written: base64 or hex.
     #[serde(skip_serializing_if = "is_base64")]
     pub output: Encoding,
+    /// The RSA private key (PEM), such as `{{rsaPrivateKey}}`, to decrypt RSA-encrypted fields and hybrid responses.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub private_key: String,
+    /// Response values that carry their own RSA-encrypted AES key and IV.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hybrid: Option<HybridFormat>,
     /// JSON paths of the body fields to encrypt before sending; `$` is the whole body.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub encrypt: Vec<String>,
@@ -133,15 +193,134 @@ fn encode(bytes: &[u8], encoding: Encoding) -> String {
     }
 }
 
-/// Settings with the key and IV as bytes, checked once per request.
-pub struct Cipher {
+/// A PEM block as written, or squeezed onto one line (as `.env` files keep keys, sometimes with literal `\n`s),
+/// rewrapped so it parses.
+fn normalize_pem(text: &str) -> Result<String, String> {
+    let text = text
+        .trim()
+        .trim_matches(|c| c == '"' || c == '\'')
+        .replace("\\n", "\n");
+    let begin = text
+        .find("-----BEGIN ")
+        .ok_or("the key is not a PEM block (-----BEGIN ...-----)")?;
+    let label_end = text[begin + 11..]
+        .find("-----")
+        .ok_or("the key's BEGIN line is incomplete")?
+        + begin
+        + 11;
+    let label = &text[begin + 11..label_end];
+    let end_marker = format!("-----END {label}-----");
+    let end = text
+        .find(&end_marker)
+        .ok_or_else(|| format!("the key has no {end_marker} line"))?;
+    let body: String = text[label_end + 5..end]
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
+    let lines: Vec<&str> = body
+        .as_bytes()
+        .chunks(64)
+        .map(|c| std::str::from_utf8(c).unwrap_or(""))
+        .collect();
+    Ok(format!(
+        "-----BEGIN {label}-----\n{}\n{end_marker}\n",
+        lines.join("\n")
+    ))
+}
+
+fn public_key(pem: &str) -> Result<RsaPublicKey, String> {
+    let pem = normalize_pem(pem)?;
+    if pem.contains("PRIVATE KEY") {
+        return Err("this is a private key; encrypting needs the public key".into());
+    }
+    RsaPublicKey::from_public_key_pem(&pem)
+        .or_else(|_| RsaPublicKey::from_pkcs1_pem(&pem))
+        .map_err(|e| format!("not an RSA public key ({e})"))
+}
+
+fn private_key(pem: &str) -> Result<RsaPrivateKey, String> {
+    let pem = normalize_pem(pem)?;
+    if pem.contains("ENCRYPTED PRIVATE KEY") {
+        return Err("the private key is protected with a passphrase; export it without one".into());
+    }
+    RsaPrivateKey::from_pkcs8_pem(&pem)
+        .or_else(|_| RsaPrivateKey::from_pkcs1_pem(&pem))
+        .map_err(|e| format!("not an RSA private key ({e})"))
+}
+
+fn rsa_encrypt(key: &RsaPublicKey, hash: OaepHash, plain: &[u8]) -> Result<Vec<u8>, String> {
+    let mut rng = getrandom::rand_core::UnwrapErr(getrandom::SysRng);
+    let result = match hash {
+        OaepHash::Sha1 => key.encrypt(&mut rng, Oaep::<sha1::Sha1>::new(), plain),
+        OaepHash::Sha256 => key.encrypt(&mut rng, Oaep::<rsa::sha2::Sha256>::new(), plain),
+    };
+    result.map_err(|e| match e {
+        rsa::Error::MessageTooLong => format!(
+            "{} bytes is too long to encrypt with this RSA key; RSA-OAEP takes short values such as PINs and keys",
+            plain.len()
+        ),
+        e => format!("RSA encryption failed: {e}"),
+    })
+}
+
+fn rsa_decrypt(key: &RsaPrivateKey, hash: OaepHash, data: &[u8]) -> Result<Vec<u8>, String> {
+    match hash {
+        OaepHash::Sha1 => key.decrypt(Oaep::<sha1::Sha1>::new(), data),
+        OaepHash::Sha256 => key.decrypt(Oaep::<rsa::sha2::Sha256>::new(), data),
+    }
+    .map_err(|_| {
+        format!(
+            "could not decrypt with the RSA private key: a different key pair, hash (OAEP {}), or the value is not \
+             RSA-encrypted",
+            if hash == OaepHash::Sha1 { "SHA-1" } else { "SHA-256" }
+        )
+    })
+}
+
+/// AES-CBC with PKCS#7, the key's length choosing AES-128, -192 or -256.
+fn aes_cbc_decrypt(key: &[u8], iv: &[u8], data: &[u8]) -> Result<Vec<u8>, String> {
+    let wrong =
+        || "could not decrypt the data: the unwrapped AES key and IV don't fit it".to_string();
+    let bad = |e: cbc::cipher::InvalidLength| {
+        format!("the unwrapped AES key or IV has the wrong length ({e})")
+    };
+    match key.len() {
+        16 => cbc::Decryptor::<aes::Aes128>::new_from_slices(key, iv)
+            .map_err(bad)?
+            .decrypt_padded_vec::<Pkcs7>(data)
+            .map_err(|_| wrong()),
+        24 => cbc::Decryptor::<aes::Aes192>::new_from_slices(key, iv)
+            .map_err(bad)?
+            .decrypt_padded_vec::<Pkcs7>(data)
+            .map_err(|_| wrong()),
+        32 => cbc::Decryptor::<aes::Aes256>::new_from_slices(key, iv)
+            .map_err(bad)?
+            .decrypt_padded_vec::<Pkcs7>(data)
+            .map_err(|_| wrong()),
+        n => Err(format!(
+            "the unwrapped AES key is {n} bytes; AES needs 16, 24 or 32"
+        )),
+    }
+}
+
+/// AES with the settings' key.
+struct Aes {
     algorithm: Algorithm,
     key: Vec<u8>,
     iv: Option<Vec<u8>>,
+}
+
+/// Settings with keys parsed and checked, once per request.
+pub struct Cipher {
+    algorithm: Algorithm,
+    aes: Option<Aes>,
+    public: Option<RsaPublicKey>,
+    private: Option<RsaPrivateKey>,
+    hybrid: Option<HybridFormat>,
     output: Encoding,
 }
 
-// Without the key, so it never ends up in a log.
+// Without the keys, so they never end up in a log.
 impl std::fmt::Debug for Cipher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Cipher({})", name(self.algorithm))
@@ -149,13 +328,60 @@ impl std::fmt::Debug for Cipher {
 }
 
 impl Cipher {
-    /// `key` and `iv` are the settings' values after variables.
+    /// `key`, `iv` and `private_key` are the settings' values after variables.
     pub fn new(settings: &CryptoSettings, key: &str, iv: &str) -> Result<Self, String> {
+        Self::with_private_key(settings, key, iv, "")
+    }
+
+    pub fn with_private_key(
+        settings: &CryptoSettings,
+        key: &str,
+        iv: &str,
+        private: &str,
+    ) -> Result<Self, String> {
+        let algorithm = settings.algorithm;
+        let output = if settings.output == Encoding::Hex {
+            Encoding::Hex
+        } else {
+            Encoding::Base64
+        };
+        let private = if private.trim().is_empty() {
+            None
+        } else {
+            Some(private_key(private)?)
+        };
+        if settings.hybrid.is_some() && private.is_none() && !settings.decrypt.is_empty() {
+            return Err("hybrid responses need the RSA private key: set one (such as {{rsaPrivateKey}}) in the \
+                        request's Crypto tab"
+                .into());
+        }
+        let mut cipher = Self {
+            algorithm,
+            aes: None,
+            public: None,
+            private,
+            hybrid: settings.hybrid.clone(),
+            output,
+        };
+        if algorithm.is_rsa() {
+            if !key.trim().is_empty() {
+                cipher.public = Some(public_key(key)?);
+            } else if !settings.encrypt.is_empty() {
+                return Err("no RSA public key: set one (such as {{rsaPublicKey}}) in the request's Crypto tab".into());
+            }
+            if cipher.private.is_none() && cipher.hybrid.is_none() && !settings.decrypt.is_empty() {
+                return Err("decrypting RSA-encrypted fields needs the RSA private key: set one in the Crypto tab".into());
+            }
+            return Ok(cipher);
+        }
+        // AES's own key, unless the request only decrypts hybrid responses (which bring their key).
+        if settings.hybrid.is_some() && settings.encrypt.is_empty() && key.trim().is_empty() {
+            return Ok(cipher);
+        }
         if key.trim().is_empty() {
             return Err("no encryption key: set one (such as {{encryptionKey}}) in the request's Crypto tab".into());
         }
         let key = decode(key, settings.key_encoding, "key")?;
-        let algorithm = settings.algorithm;
         if key.len() != algorithm.key_len() {
             return Err(format!(
                 "the key is {} bytes, but {} needs {} ({} bits)",
@@ -179,50 +405,57 @@ impl Cipher {
             }
             Some(iv)
         };
-        let output = if settings.output == Encoding::Hex {
-            Encoding::Hex
+        cipher.aes = Some(Aes { algorithm, key, iv });
+        Ok(cipher)
+    }
+
+    fn oaep(&self) -> OaepHash {
+        if self.algorithm == Algorithm::RsaOaepSha256 {
+            OaepHash::Sha256
         } else {
-            Encoding::Base64
-        };
-        Ok(Self {
-            algorithm,
-            key,
-            iv,
-            output,
-        })
+            OaepHash::Sha1
+        }
     }
 
     pub fn encrypt(&self, plain: &[u8]) -> Result<String, String> {
-        let iv = match &self.iv {
+        if self.algorithm.is_rsa() {
+            let key = self
+                .public
+                .as_ref()
+                .ok_or("no RSA public key to encrypt with")?;
+            return Ok(encode(&rsa_encrypt(key, self.oaep(), plain)?, self.output));
+        }
+        let aes = self.aes.as_ref().ok_or("no AES key to encrypt with")?;
+        let iv = match &aes.iv {
             Some(iv) => iv.clone(),
             None => {
-                let mut iv = vec![0u8; self.algorithm.iv_len()];
+                let mut iv = vec![0u8; aes.algorithm.iv_len()];
                 SystemRandom::new()
                     .fill(&mut iv)
                     .map_err(|_| "no random numbers available".to_string())?;
                 iv
             }
         };
-        let sealed = match self.algorithm {
-            Algorithm::Aes256Gcm => aes_gcm::Aes256Gcm::new_from_slice(&self.key)
+        let sealed = match aes.algorithm {
+            Algorithm::Aes256Gcm => aes_gcm::Aes256Gcm::new_from_slice(&aes.key)
                 .map_err(|e| e.to_string())?
                 .encrypt(iv.as_slice().try_into().map_err(|_| "bad IV")?, plain),
-            Algorithm::Aes128Gcm => aes_gcm::Aes128Gcm::new_from_slice(&self.key)
+            Algorithm::Aes128Gcm => aes_gcm::Aes128Gcm::new_from_slice(&aes.key)
                 .map_err(|e| e.to_string())?
                 .encrypt(iv.as_slice().try_into().map_err(|_| "bad IV")?, plain),
             Algorithm::Aes256Cbc => Ok(cbc::Encryptor::<aes::Aes256>::new_from_slices(
-                &self.key, &iv,
+                &aes.key, &iv,
             )
             .map_err(|e| e.to_string())?
             .encrypt_padded_vec::<Pkcs7>(plain)),
-            Algorithm::Aes128Cbc => Ok(cbc::Encryptor::<aes::Aes128>::new_from_slices(
-                &self.key, &iv,
-            )
-            .map_err(|e| e.to_string())?
-            .encrypt_padded_vec::<Pkcs7>(plain)),
+            _ => Ok(
+                cbc::Encryptor::<aes::Aes128>::new_from_slices(&aes.key, &iv)
+                    .map_err(|e| e.to_string())?
+                    .encrypt_padded_vec::<Pkcs7>(plain),
+            ),
         }
         .map_err(|_| "encryption failed".to_string())?;
-        let out = if self.iv.is_some() {
+        let out = if aes.iv.is_some() {
             sealed
         } else {
             [iv, sealed].concat()
@@ -231,38 +464,89 @@ impl Cipher {
     }
 
     pub fn decrypt(&self, text: &str) -> Result<Vec<u8>, String> {
+        if let Some(format) = &self.hybrid {
+            return self.decrypt_hybrid(text, format);
+        }
+        if self.algorithm.is_rsa() {
+            let key = self
+                .private
+                .as_ref()
+                .ok_or("no RSA private key to decrypt with")?;
+            return rsa_decrypt(
+                key,
+                self.oaep(),
+                &decode(text, self.output, "value to decrypt")?,
+            );
+        }
+        let aes = self.aes.as_ref().ok_or("no AES key to decrypt with")?;
         let bytes = decode(text, self.output, "value to decrypt")?;
-        let (iv, data) = match &self.iv {
+        let (iv, data) = match &aes.iv {
             Some(iv) => (iv.as_slice(), bytes.as_slice()),
-            None if bytes.len() > self.algorithm.iv_len() => {
-                bytes.split_at(self.algorithm.iv_len())
-            }
+            None if bytes.len() > aes.algorithm.iv_len() => bytes.split_at(aes.algorithm.iv_len()),
             None => return Err("the value is too short to hold an IV and ciphertext".into()),
         };
         let wrong = || {
             format!(
                 "could not decrypt: wrong key, IV, algorithm ({}) or encoding, or the value is not encrypted",
-                name(self.algorithm)
+                name(aes.algorithm)
             )
         };
-        match self.algorithm {
-            Algorithm::Aes256Gcm => aes_gcm::Aes256Gcm::new_from_slice(&self.key)
+        match aes.algorithm {
+            Algorithm::Aes256Gcm => aes_gcm::Aes256Gcm::new_from_slice(&aes.key)
                 .map_err(|e| e.to_string())?
                 .decrypt(iv.try_into().map_err(|_| wrong())?, data)
                 .map_err(|_| wrong()),
-            Algorithm::Aes128Gcm => aes_gcm::Aes128Gcm::new_from_slice(&self.key)
+            Algorithm::Aes128Gcm => aes_gcm::Aes128Gcm::new_from_slice(&aes.key)
                 .map_err(|e| e.to_string())?
                 .decrypt(iv.try_into().map_err(|_| wrong())?, data)
                 .map_err(|_| wrong()),
-            Algorithm::Aes256Cbc => cbc::Decryptor::<aes::Aes256>::new_from_slices(&self.key, iv)
+            Algorithm::Aes256Cbc => cbc::Decryptor::<aes::Aes256>::new_from_slices(&aes.key, iv)
                 .map_err(|e| e.to_string())?
                 .decrypt_padded_vec::<Pkcs7>(data)
                 .map_err(|_| wrong()),
-            Algorithm::Aes128Cbc => cbc::Decryptor::<aes::Aes128>::new_from_slices(&self.key, iv)
+            _ => cbc::Decryptor::<aes::Aes128>::new_from_slices(&aes.key, iv)
                 .map_err(|e| e.to_string())?
                 .decrypt_padded_vec::<Pkcs7>(data)
                 .map_err(|_| wrong()),
         }
+    }
+
+    /// `base64(RSA(key) : RSA(iv) : AES-CBC(data))`, as `format` describes it.
+    fn decrypt_hybrid(&self, value: &str, format: &HybridFormat) -> Result<Vec<u8>, String> {
+        let private = self
+            .private
+            .as_ref()
+            .ok_or("no RSA private key to unwrap the AES key with")?;
+        let joined = if format.wrapped {
+            String::from_utf8(decode(value, Encoding::Base64, "response")?).map_err(|_| {
+                "the response's base64 does not hold text: turn off \"wrapped\"".to_string()
+            })?
+        } else {
+            value.trim().to_string()
+        };
+        let separator = if format.separator.is_empty() {
+            ":"
+        } else {
+            &format.separator
+        };
+        let parts: Vec<&str> = joined.split(separator).collect();
+        if parts.len() != 3 {
+            return Err(format!(
+                "expected three parts, key{separator}iv{separator}data, but found {}",
+                parts.len()
+            ));
+        }
+        let unwrap = |part: &str, what: &str| -> Result<Vec<u8>, String> {
+            let plain = rsa_decrypt(private, format.hash, &decode(part, Encoding::Base64, what)?)?;
+            if format.keys_base64 {
+                decode(&String::from_utf8_lossy(&plain), Encoding::Base64, what)
+            } else {
+                Ok(plain)
+            }
+        };
+        let key = unwrap(parts[0], "AES key")?;
+        let iv = unwrap(parts[1], "IV")?;
+        aes_cbc_decrypt(&key, &iv, &decode(parts[2], Encoding::Base64, "data")?)
     }
 }
 
@@ -272,6 +556,8 @@ fn name(a: Algorithm) -> &'static str {
         Algorithm::Aes128Gcm => "AES-128-GCM",
         Algorithm::Aes256Cbc => "AES-256-CBC",
         Algorithm::Aes128Cbc => "AES-128-CBC",
+        Algorithm::RsaOaepSha1 => "RSA-OAEP (SHA-1)",
+        Algorithm::RsaOaepSha256 => "RSA-OAEP (SHA-256)",
     }
 }
 

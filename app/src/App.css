@@ -4092,3 +4092,27 @@ td.mock-method {
   line-height: 1.5;
   text-align: left;
 }
+
+.crypto-heading {
+  margin: 4px 0 -2px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+
+.crypto-options {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.crypto-separator {
+  width: 52px;
+}
+
+.crypto-form small code {
+  font-family: var(--mono);
+  font-size: 11px;
+}

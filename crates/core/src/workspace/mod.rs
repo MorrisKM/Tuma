@@ -139,11 +139,17 @@ pub struct PreparedCrypto {
     pub settings: crate::crypto::CryptoSettings,
     pub key: String,
     pub iv: String,
+    pub private_key: String,
 }
 
 impl PreparedCrypto {
     pub fn cipher(&self) -> std::result::Result<crate::crypto::Cipher, String> {
-        crate::crypto::Cipher::new(&self.settings, &self.key, &self.iv)
+        crate::crypto::Cipher::with_private_key(
+            &self.settings,
+            &self.key,
+            &self.iv,
+            &self.private_key,
+        )
     }
 }
 
@@ -157,6 +163,7 @@ fn prepare_crypto(
     Some(PreparedCrypto {
         key: scopes.resolve(&settings.key, unresolved),
         iv: scopes.resolve(&settings.iv, unresolved),
+        private_key: scopes.resolve(&settings.private_key, unresolved),
         settings: settings.clone(),
     })
 }

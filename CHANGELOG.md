@@ -48,8 +48,9 @@ The first stable release.
   app or with `tuma perf`
 - Passive security checks of the responses a test receives: HTTPS, security headers, cookie flags, CORS, information
   that leaks, secrets in URLs
-- Encryption of chosen request body fields and decryption of response fields (AES-GCM or AES-CBC, the key from a
-  secret variable)
+- Encryption of chosen request body fields and decryption of response fields: AES-GCM or AES-CBC, RSA-OAEP (SHA-1
+  as node-forge does, or SHA-256) with PEM keys, and hybrid responses whose AES key and IV come RSA-encrypted with the
+  data; keys from secret variables
 
 ### Scripts and testing
 

@@ -129,7 +129,21 @@ export interface RequestFile {
   crypto?: CryptoSettings | null;
 }
 
-export type CryptoAlgorithm = "aes-256-gcm" | "aes-128-gcm" | "aes-256-cbc" | "aes-128-cbc";
+export type CryptoAlgorithm =
+  | "aes-256-gcm"
+  | "aes-128-gcm"
+  | "aes-256-cbc"
+  | "aes-128-cbc"
+  | "rsa-oaep-sha1"
+  | "rsa-oaep-sha256";
+
+/** A response carrying its own RSA-encrypted AES key and IV: base64(RSA(key):RSA(iv):AES-CBC(data)). */
+export interface HybridFormat {
+  separator: string;
+  wrapped: boolean;
+  keysBase64: boolean;
+  hash: "sha1" | "sha256";
+}
 export type CryptoEncoding = "base64" | "hex" | "utf8";
 
 export interface CryptoSettings {
@@ -139,6 +153,9 @@ export interface CryptoSettings {
   keyEncoding?: CryptoEncoding;
   iv?: string;
   output?: CryptoEncoding;
+  /** The RSA private key (PEM), such as {{rsaPrivateKey}}. */
+  privateKey?: string;
+  hybrid?: HybridFormat | null;
   /** JSON paths; "$" is the whole body. */
   encrypt?: string[];
   decrypt?: string[];

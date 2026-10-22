@@ -980,7 +980,7 @@
       }
     },
     "CryptoSettings": {
-      "description": "A request's encryption settings, as written in its file. `key` and `iv` may use `{{variables}}`.",
+      "description": "A request's encryption settings, as written in its file. `key`, `iv` and `private_key` may use `{{variables}}`.",
       "type": "object",
       "properties": {
         "algorithm": {
@@ -988,7 +988,7 @@
           "default": "aes-256-gcm"
         },
         "key": {
-          "description": "The key, such as `{{encryptionKey}}` (a secret variable).",
+          "description": "The AES key, or for RSA the public key (PEM), such as `{{encryptionKey}}`.",
           "type": "string",
           "default": ""
         },
@@ -996,12 +996,27 @@
           "$ref": "#/$defs/Encoding"
         },
         "iv": {
-          "description": "A fixed IV; empty means a random one for every value, written before the ciphertext.",
+          "description": "A fixed AES IV; empty means a random one for every value, written before the ciphertext.",
           "type": "string"
         },
         "output": {
           "description": "How the ciphertext is written: base64 or hex.",
           "$ref": "#/$defs/Encoding"
+        },
+        "privateKey": {
+          "description": "The RSA private key (PEM), such as `{{rsaPrivateKey}}`, to decrypt RSA-encrypted fields and hybrid responses.",
+          "type": "string"
+        },
+        "hybrid": {
+          "description": "Response values that carry their own RSA-encrypted AES key and IV.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HybridFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "encrypt": {
           "description": "JSON paths of the body fields to encrypt before sending; `$` is the whole body.",
@@ -1020,12 +1035,22 @@
       }
     },
     "Algorithm": {
-      "type": "string",
-      "enum": [
-        "aes-256-gcm",
-        "aes-128-gcm",
-        "aes-256-cbc",
-        "aes-128-cbc"
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "aes-256-gcm",
+            "aes-128-gcm",
+            "aes-256-cbc",
+            "aes-128-cbc",
+            "rsa-oaep-sha256"
+          ]
+        },
+        {
+          "description": "RSA-OAEP with SHA-1 and MGF1-SHA-1, as node-forge's `RSA-OAEP` with `md: sha1`.",
+          "type": "string",
+          "const": "rsa-oaep-sha1"
+        }
       ]
     },
     "Encoding": {
@@ -1043,6 +1068,39 @@
           "type": "string",
           "const": "utf8"
         }
+      ]
+    },
+    "HybridFormat": {
+      "description": "A response that carries its own AES key and IV, each encrypted with the RSA public key:\n`key ‖ separator ‖ iv ‖ separator ‖ data`, the data AES-CBC (the key's length picks AES-128, -192 or -256).",
+      "type": "object",
+      "properties": {
+        "separator": {
+          "type": "string",
+          "default": ":"
+        },
+        "wrapped": {
+          "description": "The joined parts are themselves base64 (the value is base64 of `key:iv:data`).",
+          "type": "boolean",
+          "default": true
+        },
+        "keysBase64": {
+          "description": "The RSA-decrypted key and IV are base64 text, not raw bytes.",
+          "type": "boolean",
+          "default": true
+        },
+        "hash": {
+          "description": "RSA-OAEP's hash for the key and IV.",
+          "$ref": "#/$defs/OaepHash",
+          "default": "sha1"
+        }
+      }
+    },
+    "OaepHash": {
+      "description": "The hash of RSA-OAEP (and of its MGF1).",
+      "type": "string",
+      "enum": [
+        "sha1",
+        "sha256"
       ]
     }
   }
