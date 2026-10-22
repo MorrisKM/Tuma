@@ -1,4 +1,4 @@
-import { isWebSocket } from "../draft";
+import { isGrpc, isWebSocket } from "../draft";
 import { useStore } from "../store";
 import { UrlEditor } from "./UrlEditor";
 
@@ -10,17 +10,19 @@ export function RequestBar() {
   const sending = useStore((s) => s.sending);
   const scope = useStore((s) => s.scope);
   const socket = useStore((s) => s.sockets[s.activeTab]?.status);
-  const { update, setUrl, send, cancel, importCurl, connect, disconnect } = useStore.getState();
+  const call = useStore((s) => s.calls[s.activeTab]?.status);
+  const { update, setUrl, send, cancel, importCurl, connect, disconnect, invoke, grpcCancel } = useStore.getState();
   const ws = isWebSocket(url);
+  const grpc = isGrpc(url);
 
   return (
     <div className="request-bar">
       {/* A text input with suggestions, so custom methods such as PURGE work too. */}
       <input
-        className={`method method-${ws ? "ws" : method.toLowerCase()}`}
+        className={`method method-${ws ? "ws" : grpc ? "grpc" : method.toLowerCase()}`}
         list="methods"
-        value={ws ? "WS" : method}
-        disabled={ws}
+        value={ws ? "WS" : grpc ? "GRPC" : method}
+        disabled={ws || grpc}
         spellCheck={false}
         aria-label="Method"
         onChange={(e) => update({ method: e.target.value.toUpperCase() })}
@@ -38,7 +40,17 @@ export function RequestBar() {
         scope={scope}
         placeholder="URL, /path with {{baseUrl}}, or paste a cURL command"
       />
-      {ws ? (
+      {grpc ? (
+        call === "starting" || call === "open" ? (
+          <button type="button" className="button" onClick={grpcCancel}>
+            Cancel
+          </button>
+        ) : (
+          <button type="button" className="button primary" disabled={!url.trim()} onClick={() => void invoke()}>
+            Invoke
+          </button>
+        )
+      ) : ws ? (
         socket === "open" || socket === "connecting" ? (
           <button type="button" className="button" onClick={disconnect}>
             Disconnect

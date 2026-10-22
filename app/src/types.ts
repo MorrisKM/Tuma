@@ -121,6 +121,43 @@ export interface RequestFile {
   scripts?: Scripts;
   /** WebSocket requests: messages to send with a click. */
   messages?: SavedMessage[];
+  /** gRPC requests: the method and where it is described. */
+  grpc?: GrpcSettings | null;
+}
+
+export interface GrpcSettings {
+  /** package.Service/Method */
+  method: string;
+  /** .proto files relative to the workspace; none means server reflection. */
+  protos?: string[];
+  imports?: string[];
+}
+
+export interface ServiceInfo {
+  name: string;
+  methods: MethodInfo[];
+}
+
+export interface MethodInfo {
+  name: string;
+  path: string;
+  clientStreaming: boolean;
+  serverStreaming: boolean;
+  input: string;
+  output: string;
+  example: string;
+}
+
+export type GrpcEvent =
+  | { kind: "headers"; metadata: Header[] }
+  | { kind: "message"; incoming: boolean; json: string; at: number }
+  | { kind: "done"; code: number; status: string; message: string; metadata: Header[]; elapsedMs: number };
+
+/** A tab's gRPC call. */
+export interface CallState {
+  status: "starting" | "open" | "done";
+  events: GrpcEvent[];
+  error?: string;
 }
 
 export interface SavedMessage {

@@ -2,10 +2,20 @@
 // so switching tabs or body types never loses what was typed, and it carries fields the editor does not show yet
 // (description, checks, scripts) so saving never drops them.
 
-import type { Auth, Body, KeyValue, Part, RequestFile, SavedMessage, Scripts, Settings } from "./types";
+import type { Auth, Body, GrpcSettings, KeyValue, Part, RequestFile, SavedMessage, Scripts, Settings } from "./types";
+
+/** gRPC settings as files keep them: empty lists left out. */
+const cleanGrpc = (g: GrpcSettings): GrpcSettings => ({
+  method: g.method,
+  ...(g.protos?.length ? { protos: g.protos } : {}),
+  ...(g.imports?.length ? { imports: g.imports } : {}),
+});
 
 /** A WebSocket request: its URL starts with ws:// or wss://. */
 export const isWebSocket = (url: string) => /^\s*wss?:\/\//i.test(url);
+
+/** A gRPC request: its URL starts with grpc:// or grpcs://. */
+export const isGrpc = (url: string) => /^\s*grpcs?:\/\//i.test(url);
 
 export type BodyMode =
   | "none"
@@ -49,6 +59,8 @@ export interface Draft {
   scripts: Scripts;
   /** WebSocket requests: saved messages. */
   messages: SavedMessage[];
+  /** gRPC requests: the method and its .proto files. The message is `raw`. */
+  grpc: GrpcSettings;
 }
 
 // Must match tuma_core's defaults, or every saved request would get a `settings:` block.
@@ -80,6 +92,7 @@ export const newDraft = (): Draft => ({
   expect: {},
   scripts: {},
   messages: [],
+  grpc: { method: "" },
 });
 
 const kv = (rows: Partial<KeyValue>[] | undefined): KeyValue[] =>
@@ -87,18 +100,19 @@ const kv = (rows: Partial<KeyValue>[] | undefined): KeyValue[] =>
 
 export function toRequestFile(d: Draft): RequestFile {
   return {
-    // A WebSocket has no method; "WS" labels it in the tree.
-    method: isWebSocket(d.url) ? "WS" : d.method,
+    // WebSockets and gRPC have no HTTP method; "WS" and "GRPC" label them in the tree.
+    method: isWebSocket(d.url) ? "WS" : isGrpc(d.url) ? "GRPC" : d.method,
     url: d.url,
     description: d.description,
     operation: d.operation,
     headers: d.headers,
-    body: toBody(d),
+    body: isGrpc(d.url) ? (d.raw.trim() ? { type: "json", content: d.raw } : { type: "none" }) : toBody(d),
     auth: d.auth,
     settings: d.settings,
     expect: d.expect,
     scripts: d.scripts,
     ...(d.messages.length ? { messages: d.messages } : {}),
+    ...(isGrpc(d.url) ? { grpc: cleanGrpc(d.grpc) } : {}),
   };
 }
 
@@ -145,6 +159,7 @@ export function fromRequestFile(r: RequestFile, path: string | null, name: strin
     expect: r.expect ?? {},
     scripts: r.scripts ?? {},
     messages: r.messages ?? [],
+    grpc: r.grpc ?? { method: "" },
   };
   d.params = parseQuery(d.url);
   const body = r.body ?? { type: "none" };

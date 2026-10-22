@@ -135,6 +135,7 @@ fn request(item: &Value, name: &str, warnings: &mut Warnings) -> RequestFile {
         expect: Default::default(),
         scripts: scripts(item.get("event")),
         messages: Vec::new(),
+        grpc: None,
     }
 }
 

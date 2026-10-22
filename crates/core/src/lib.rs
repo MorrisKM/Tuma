@@ -7,6 +7,7 @@ pub mod curl;
 pub mod expect;
 pub mod export;
 pub mod graphql;
+pub mod grpc;
 pub mod history;
 pub mod http;
 pub mod import;

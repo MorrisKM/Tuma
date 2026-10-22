@@ -83,6 +83,12 @@ enum Command {
     /// Import an OpenAPI or Swagger spec as a collection, find one, or sync a collection with its spec.
     #[command(subcommand)]
     Openapi(OpenapiCommand),
+    /// Call a gRPC method, or list a server's methods. Methods come from server reflection, or from --proto files.
+    ///
+    ///   tuma grpc grpc://localhost:50051 --list
+    ///   tuma grpc grpc://localhost:50051 shop.v1.Shop/GetItem -d '{"id": 7}'
+    #[command(verbatim_doc_comment)]
+    Grpc(GrpcArgs),
     /// Open a WebSocket, send messages, and print what comes back.
     ///
     ///   tuma ws wss://echo.example.com -m '{"type":"ping"}' --wait 3
@@ -97,6 +103,37 @@ enum Command {
         #[arg(long)]
         name: Option<String>,
     },
+}
+
+#[derive(Args)]
+struct GrpcArgs {
+    /// A grpc:// or grpcs:// address, or a saved gRPC request.
+    target: String,
+    /// The method, as package.Service/Method. A saved request has its own.
+    method: Option<String>,
+    /// A JSON message. Repeat for client-streaming calls; {{variables}} work.
+    #[arg(short = 'd', long = "data")]
+    messages: Vec<String>,
+    /// List the services and methods instead of calling one.
+    #[arg(long)]
+    list: bool,
+    /// .proto files describing the service, when the server has no reflection.
+    #[arg(long = "proto")]
+    protos: Vec<String>,
+    /// Folders imports are found in.
+    #[arg(short = 'I', long = "import")]
+    imports: Vec<String>,
+    /// Metadata, as "name: value". Repeat for more.
+    #[arg(short = 'H', long = "header")]
+    headers: Vec<String>,
+    /// Send "authorization: Bearer <token>".
+    #[arg(long)]
+    bearer: Option<String>,
+    /// Don't verify the server's certificate (grpcs://).
+    #[arg(short = 'k', long)]
+    insecure: bool,
+    #[command(flatten)]
+    common: Common,
 }
 
 #[derive(Args)]
@@ -375,6 +412,7 @@ async fn run(cli: Cli) -> anyhow::Result<bool> {
         }
         Command::Auth(command) => auth(&start, command).await,
         Command::Ws(args) => websocket(&start, args).await,
+        Command::Grpc(args) => grpc_command(&start, args).await,
         Command::Init { name } => {
             if let Some(root) = runner::find_workspace(&start) {
                 bail!("there is already a workspace at {}", root.display());
@@ -638,6 +676,191 @@ async fn run_saved(start: &Path, args: RunArgs, only_tests: bool) -> anyhow::Res
             .stopped
             .as_deref()
             .is_none_or(|s| !s.contains("loop")))
+}
+
+async fn grpc_command(start: &Path, args: GrpcArgs) -> anyhow::Result<bool> {
+    use tuma_core::grpc::{self, GrpcEvent};
+    let workspace = find_workspace(start)?;
+    let saved = workspace.as_ref().and_then(|ws| {
+        let path = args.target.trim_matches('/');
+        let path = if path.ends_with(".yaml") {
+            path.to_string()
+        } else {
+            format!("{path}.yaml")
+        };
+        ws.read_request(&path).ok().map(|r| (path, r))
+    });
+    let (path, mut request) = match saved {
+        Some((path, request)) => (Some(path), request),
+        None => (
+            None,
+            RequestFile {
+                url: args.target.clone(),
+                ..RequestFile::default()
+            },
+        ),
+    };
+    if !request.is_grpc() {
+        bail!(
+            "\"{}\" is not a gRPC address: use grpc:// or grpcs://",
+            request.url
+        );
+    }
+    let mut settings = request.grpc.clone().unwrap_or_default();
+    if let Some(method) = &args.method {
+        settings.method = method.clone();
+    }
+    if !args.protos.is_empty() {
+        settings.protos = args.protos.clone();
+        settings.imports = args.imports.clone();
+    }
+    for h in &args.headers {
+        let (name, value) = h
+            .split_once(':')
+            .with_context(|| format!("metadata \"{h}\" should be \"name: value\""))?;
+        request.headers.push(KeyValue {
+            name: name.trim().into(),
+            value: value.trim().into(),
+            enabled: true,
+        });
+    }
+    if let Some(token) = &args.bearer {
+        request.auth = Some(Auth::Bearer {
+            token: token.clone(),
+        });
+    }
+    if args.insecure {
+        request.settings.verify_tls = false;
+    }
+    let network =
+        settings::network_for(workspace.as_ref(), &EnvThenKeychain).map_err(anyhow::Error::msg)?;
+    let job = Job {
+        workspace: workspace.as_ref(),
+        request: &request,
+        path: path.as_deref(),
+        context: None,
+        environment: args.common.environment.as_deref(),
+        overrides: &args.common.vars,
+        extra_checks: None,
+        secrets: &EnvThenKeychain,
+        history: None,
+        source: "cli",
+        allow_host: None,
+        scripting: Default::default(),
+        network: Some(network.clone()),
+        observer: None,
+    };
+    let resolved = workspace
+        .as_ref()
+        .map(|ws| {
+            ws.prepare(
+                &request,
+                path.as_deref(),
+                job.environment,
+                job.overrides,
+                job.secrets,
+            )
+        })
+        .transpose()?
+        .map(|p| p.request)
+        .unwrap_or_else(|| {
+            tuma_core::workspace::prepare_standalone(&request, job.overrides).request
+        });
+    let target = grpc::Target::from_request(&resolved, network.clone())
+        .await
+        .map_err(anyhow::Error::msg)?;
+    // Relative .proto paths are from the workspace for a saved request, else from here.
+    let root = match (&path, &workspace) {
+        (Some(_), Some(ws)) => ws.root().to_path_buf(),
+        _ => start.to_path_buf(),
+    };
+    let pool = grpc::describe(&target, &settings, Some(&root))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    if args.list || settings.method.is_empty() {
+        let services = grpc::services(&pool);
+        if args.common.json {
+            println!("{}", serde_json::to_string_pretty(&services)?);
+        } else {
+            for s in &services {
+                println!("{}", s.name);
+                for m in &s.methods {
+                    let kind = match (m.client_streaming, m.server_streaming) {
+                        (false, false) => "",
+                        (false, true) => "  (server streaming)",
+                        (true, false) => "  (client streaming)",
+                        (true, true) => "  (bidirectional)",
+                    };
+                    println!("  {}({}) returns {}{kind}", m.name, m.input, m.output);
+                }
+            }
+            if settings.method.is_empty() && !args.list {
+                eprintln!(
+                    "\nName a method to call it, such as: tuma grpc {} <Service/Method> -d '{{...}}'",
+                    args.target
+                );
+            }
+        }
+        return Ok(true);
+    }
+    let mut messages = Vec::new();
+    for message in if args.messages.is_empty() {
+        match &request.body {
+            Body::Json { content } => vec![content.clone()],
+            _ => request.messages.iter().map(|m| m.content.clone()).collect(),
+        }
+    } else {
+        args.messages.clone()
+    } {
+        messages
+            .push(runner::resolve_text(&job, &message).map_err(|f| anyhow::anyhow!(f.message))?);
+    }
+    let json = args.common.json;
+    let (done_tx, mut done_rx) = tokio::sync::mpsc::unbounded_channel::<bool>();
+    let sink: grpc::EventSink = std::sync::Arc::new(move |event: GrpcEvent| {
+        if json {
+            println!("{}", serde_json::to_string(&event).unwrap_or_default());
+        } else {
+            match &event {
+                GrpcEvent::Headers { .. } => {}
+                GrpcEvent::Message {
+                    incoming: true,
+                    json,
+                    ..
+                } => println!("{json}"),
+                GrpcEvent::Message { .. } => {}
+                GrpcEvent::Done {
+                    status,
+                    message,
+                    elapsed_ms,
+                    ..
+                } => eprintln!(
+                    "{status}{} ({elapsed_ms} ms)",
+                    if message.is_empty() {
+                        String::new()
+                    } else {
+                        format!(": {message}")
+                    }
+                ),
+            }
+        }
+        if let GrpcEvent::Done { code, .. } = event {
+            let _ = done_tx.send(code == 0);
+        }
+    });
+    let mut call = grpc::start(&target, &pool, &settings.method, sink)
+        .await
+        .map_err(anyhow::Error::msg)?;
+    if messages.is_empty() {
+        messages.push("{}".into());
+    }
+    for message in &messages {
+        call.send(message).map_err(anyhow::Error::msg)?;
+    }
+    call.end();
+    let ok = done_rx.recv().await.unwrap_or(false);
+    settings::keep_cookies(&network, workspace.as_ref()).map_err(anyhow::Error::msg)?;
+    Ok(ok)
 }
 
 async fn websocket(start: &Path, args: WsArgs) -> anyhow::Result<bool> {

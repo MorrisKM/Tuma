@@ -3,7 +3,8 @@ import { useStore } from "../store";
 import type { Header, Response, Timing } from "../types";
 import { select } from "../jsonpath";
 import { CodeEditor, type Language } from "./CodeEditor";
-import { isWebSocket } from "../draft";
+import { isGrpc, isWebSocket } from "../draft";
+import { GrpcLog } from "./GrpcViews";
 import { EventsView } from "./EventsView";
 import { MessageLog } from "./WebSocketViews";
 import { ConsoleView, TestsView, testsLabel, VisualizerView } from "./ScriptResults";
@@ -18,12 +19,22 @@ export function ResponsePanel() {
   const sending = useStore((s) => s.sending);
   const live = useStore((s) => (s.sending ? s.live[s.sending] : undefined));
   const websocket = useStore((s) => isWebSocket(s.draft.url));
+  const grpc = useStore((s) => isGrpc(s.draft.url));
   const [tab, setTab] = useState<Tab>("body");
   // A finished event stream opens on its events.
   useEffect(() => {
     if (response?.events) setTab("events");
   }, [response]);
 
+  if (grpc) {
+    return (
+      <section className="response-panel">
+        <div className="panel-body">
+          <GrpcLog />
+        </div>
+      </section>
+    );
+  }
   if (websocket) {
     return (
       <section className="response-panel">

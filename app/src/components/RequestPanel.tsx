@@ -1,12 +1,13 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
-import { type BodyMode, isTextMode, isWebSocket, toRequestFile } from "../draft";
+import { type BodyMode, isGrpc, isTextMode, isWebSocket, toRequestFile } from "../draft";
 import { useStore } from "../store";
 import type { KeyValue } from "../types";
 import { AuthForm } from "./AuthForm";
 import { CodeEditor, type Language } from "./CodeEditor";
 import { blankPart, blankRow, KeyValueEditor } from "./KeyValueEditor";
 import { GraphqlEditor } from "./GraphqlEditor";
+import { GrpcMessage, GrpcProtos } from "./GrpcViews";
 import { MessageComposer } from "./WebSocketViews";
 import { ScriptsEditor } from "./ScriptsEditor";
 import { Tabs } from "./Tabs";
@@ -19,6 +20,7 @@ export function RequestPanel() {
   const [tab, setTab] = useState<Tab>("params");
   const draft = useStore((s) => s.draft);
   if (isWebSocket(draft.url)) return <WebSocketPanel />;
+  if (isGrpc(draft.url)) return <GrpcPanel />;
 
   return (
     <section className="request-panel">
@@ -291,6 +293,36 @@ function WebSocketPanel() {
         {tab === "params" && <Params />}
         {tab === "headers" && <Headers />}
         {tab === "auth" && <AuthEditor />}
+        {tab === "settings" && <SettingsEditor />}
+      </div>
+    </section>
+  );
+}
+
+type GrpcTab = "message" | "metadata" | "auth" | "protos" | "settings";
+
+/** A gRPC request: the method and its message; headers are sent as metadata. */
+function GrpcPanel() {
+  const [tab, setTab] = useState<GrpcTab>("message");
+  const draft = useStore((s) => s.draft);
+  return (
+    <section className="request-panel">
+      <Tabs
+        active={tab}
+        onChange={setTab}
+        tabs={[
+          { id: "message", label: "Message" },
+          { id: "metadata", label: "Metadata", count: active(draft.headers) },
+          { id: "auth", label: "Auth" },
+          { id: "protos", label: "Proto files", count: draft.grpc.protos?.length ?? 0 },
+          { id: "settings", label: "Settings" },
+        ]}
+      />
+      <div className="panel-body">
+        {tab === "message" && <GrpcMessage />}
+        {tab === "metadata" && <Headers />}
+        {tab === "auth" && <AuthEditor />}
+        {tab === "protos" && <GrpcProtos />}
         {tab === "settings" && <SettingsEditor />}
       </div>
     </section>

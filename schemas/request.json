@@ -54,11 +54,22 @@
       "$ref": "#/$defs/Scripts"
     },
     "messages": {
-      "description": "For a WebSocket request (a `ws://` or `wss://` URL): messages to send with a click.",
+      "description": "For a WebSocket request (a `ws://` or `wss://` URL) or a streaming gRPC call: messages to send with a click.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/SavedMessage"
       }
+    },
+    "grpc": {
+      "description": "For a gRPC request (a `grpc://` or `grpcs://` URL): the method, and `.proto` files if the server has no\nreflection. The message is the JSON body.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GrpcSettings"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "$defs": {
@@ -896,6 +907,31 @@
           "description": "Text; `{{variables}}` are resolved when it is sent.",
           "type": "string",
           "default": ""
+        }
+      }
+    },
+    "GrpcSettings": {
+      "description": "Where a request's method descriptions come from.",
+      "type": "object",
+      "properties": {
+        "method": {
+          "description": "The method to call, as `package.Service/Method`.",
+          "type": "string",
+          "default": ""
+        },
+        "protos": {
+          "description": "`.proto` files, relative to the workspace. Empty: ask the server (reflection).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "imports": {
+          "description": "Folders imports are found in, relative to the workspace. The files' own folders are searched too.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     }

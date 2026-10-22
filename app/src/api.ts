@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AgentSetup,
+  ServiceInfo,
   TokenInfo,
   TokenStatus,
   CookieView,
@@ -132,3 +133,13 @@ export const wsConnect = (id: string, request: RequestFile, path: string | null,
 export const wsSend = (id: string, text: string, request: RequestFile, path: string | null, environment: string | null) =>
   invoke<void>("ws_send", { id, text, request, path, environment });
 export const wsClose = (id: string) => invoke<void>("ws_close", { id });
+
+export const grpcDescribe = (request: RequestFile, path: string | null, environment: string | null) =>
+  invoke<ServiceInfo[]>("grpc_describe", { request, path, environment });
+/** Starts the request's call; events arrive as "grpc-event". */
+export const grpcStart = (id: string, request: RequestFile, path: string | null, environment: string | null) =>
+  invoke<void>("grpc_start", { id, request, path, environment });
+export const grpcSend = (id: string, json: string, request: RequestFile, path: string | null, environment: string | null) =>
+  invoke<void>("grpc_send", { id, json, request, path, environment });
+export const grpcEnd = (id: string) => invoke<void>("grpc_end", { id });
+export const grpcCancel = (id: string) => invoke<void>("grpc_cancel", { id });

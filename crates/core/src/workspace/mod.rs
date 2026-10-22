@@ -96,6 +96,8 @@ pub struct FolderTree {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+// Trees are built only for imports and exports, so the size of a request in one doesn't matter.
+#[allow(clippy::large_enum_variant)]
 pub enum TreeItem {
     Folder(FolderTree),
     Request { name: String, file: RequestFile },

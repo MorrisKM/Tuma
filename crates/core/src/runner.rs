@@ -560,7 +560,11 @@ pub async fn execute(job: Job<'_>) -> Execution {
     // The request
     let direct = http::Network::default();
     let network = job.network.as_deref().unwrap_or(&direct);
-    let result = http::send_observed(&prepared.request, network, job.observer).await;
+    let result = if file.is_grpc() {
+        call_grpc(&job, &file, &prepared.request).await
+    } else {
+        http::send_observed(&prepared.request, network, job.observer).await
+    };
     execution.sent = Some(prepared.request.clone());
     if let Some(history) = job.history {
         let entry = Entry {
@@ -738,6 +742,41 @@ pub fn summarize(path: Option<&str>, execution: Execution, detail: &Detail) -> O
         console,
         unresolved,
     }
+}
+
+/// A gRPC request as an HTTP-like exchange (see [`crate::grpc::as_response`]): the JSON body is the message, or the
+/// saved messages for a client-streaming call.
+async fn call_grpc(
+    job: &Job<'_>,
+    file: &RequestFile,
+    request: &http::Request,
+) -> Result<http::Response, http::Error> {
+    let fail = |message: String| http::Error::Grpc(message);
+    let settings = file.grpc.clone().unwrap_or_default();
+    if settings.method.trim().is_empty() {
+        return Err(fail(
+            "no method: set grpc.method to package.Service/Method".into(),
+        ));
+    }
+    let network = job.network.clone().unwrap_or_default();
+    let target = crate::grpc::Target::from_request(request, network)
+        .await
+        .map_err(fail)?;
+    let pool = crate::grpc::describe(&target, &settings, job.workspace.map(|w| w.root()))
+        .await
+        .map_err(fail)?;
+    let messages: Vec<String> = match &request.body {
+        http::Body::Raw { content, .. } if !content.trim().is_empty() => vec![content.clone()],
+        _ => file
+            .messages
+            .iter()
+            .map(|m| resolve_text(job, &m.content).map_err(|f| fail(f.message)))
+            .collect::<Result<_, _>>()?,
+    };
+    let finished = crate::grpc::call(&target, &pool, &settings.method, &messages)
+        .await
+        .map_err(fail)?;
+    Ok(crate::grpc::as_response(&request.url, &finished))
 }
 
 /// Where an unsaved request is treated as saved, for its variables and auth: in the workspace's only collection, when
@@ -936,6 +975,30 @@ pub async fn open_websocket(
     http::websocket::connect(&prepared, &network, events)
         .await
         .map_err(|e| Failure::new(e.kind(), e.to_string()))
+}
+
+/// A gRPC request's address and metadata (variables, inherited auth and tokens resolved), its settings, and its
+/// method descriptions (by reflection, or from its `.proto` files, relative to the workspace).
+pub async fn grpc_connection(
+    job: &Job<'_>,
+) -> Result<
+    (
+        crate::grpc::Target,
+        prost_reflect::DescriptorPool,
+        crate::grpc::GrpcSettings,
+    ),
+    Failure,
+> {
+    let (request, _) = resolve(job, job.request).await?;
+    let network = job.network.clone().unwrap_or_default();
+    let target = crate::grpc::Target::from_request(&request, network)
+        .await
+        .map_err(|e| Failure::new("grpc", e))?;
+    let settings = job.request.grpc.clone().unwrap_or_default();
+    let pool = crate::grpc::describe(&target, &settings, job.workspace.map(|w| w.root()))
+        .await
+        .map_err(|e| Failure::new("grpc", e))?;
+    Ok((target, pool, settings))
 }
 
 /// A text with `{{variables}}` resolved as they would be in the job's request, such as a WebSocket message.

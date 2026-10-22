@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package shop.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// A small shop, for Tuma's gRPC tests.
+service Shop {
+  rpc GetItem(GetItemRequest) returns (Item);
+  rpc ListItems(ListItemsRequest) returns (stream Item);
+  rpc AddItems(stream Item) returns (Summary);
+  rpc Chat(stream Note) returns (stream Note);
+}
+
+message GetItemRequest {
+  int64 id = 1;
+}
+
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  BOOK = 1;
+  GAME = 2;
+}
+
+message Item {
+  int64 id = 1;
+  string name = 2;
+  double price = 3;
+  repeated string tags = 4;
+  Kind kind = 5;
+  google.protobuf.Timestamp added = 6;
+}
+
+message ListItemsRequest {
+  int32 limit = 1;
+}
+
+message Summary {
+  int32 count = 1;
+  double total = 2;
+}
+
+message Note {
+  string text = 1;
+}

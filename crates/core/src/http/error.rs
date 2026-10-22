@@ -33,6 +33,8 @@ pub enum Error {
     TooManyRedirects(u32),
     #[error("{0}")]
     Auth(String),
+    #[error("gRPC: {0}")]
+    Grpc(String),
     #[error("WebSocket: {0}")]
     WebSocket(String),
     #[error("proxy: {0}")]
@@ -58,6 +60,7 @@ impl Error {
             Error::Proxy(_) => "proxy",
             Error::Auth(_) => "auth",
             Error::WebSocket(_) => "websocket",
+            Error::Grpc(_) => "grpc",
             Error::TooManyRedirects(_) => "redirects",
             Error::Decode { .. } => "decode",
         }

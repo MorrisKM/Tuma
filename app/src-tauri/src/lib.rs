@@ -1,5 +1,6 @@
 //! The desktop shell: Tauri commands that call into `tuma_core`. Keep logic out of here.
 
+mod grpc;
 mod oauth;
 mod runs;
 mod settings;
@@ -259,6 +260,7 @@ pub fn run() {
         .manage(visualizer::Store::default())
         .manage(runs::Running::default())
         .manage(sockets::Sockets::default())
+        .manage(grpc::Calls::default())
         .register_uri_scheme_protocol(visualizer::SCHEME, visualizer::serve)
         .setup(|app| {
             app.manage(History::new(app.path().app_data_dir()?));
@@ -306,6 +308,11 @@ pub fn run() {
             oauth::oauth2_tokens,
             oauth::oauth2_forget,
             oauth::graphql_schema,
+            grpc::grpc_describe,
+            grpc::grpc_start,
+            grpc::grpc_send,
+            grpc::grpc_end,
+            grpc::grpc_cancel,
             sockets::ws_connect,
             sockets::ws_send,
             sockets::ws_close,

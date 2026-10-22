@@ -4,6 +4,7 @@ import * as api from "./api";
 import {
   type Draft,
   fromRequestFile,
+  isGrpc,
   isWebSocket,
   nameFromPath,
   newDraft,
@@ -16,6 +17,8 @@ import type {
   KeyValue,
   RequestError,
   Response,
+  CallState,
+  ServiceInfo,
   SocketState,
   SseEvent,
   TreeNode,
@@ -90,6 +93,16 @@ interface State {
   live: Record<string, SseEvent[]>;
   /** WebSocket connections, by tab id. */
   sockets: Record<string, SocketState>;
+  /** gRPC calls, by tab id. */
+  calls: Record<string, CallState>;
+  /** Methods of gRPC servers, by URL and .proto files. */
+  grpcMethods: Record<string, ServiceInfo[]>;
+  loadGrpcMethods: () => Promise<void>;
+  /** Starts the call and sends the message; a call that doesn't stream requests ends right away. */
+  invoke: () => Promise<void>;
+  grpcSend: (json: string) => Promise<void>;
+  grpcEnd: () => void;
+  grpcCancel: () => void;
   connect: () => Promise<void>;
   disconnect: () => void;
   sendMessage: (text: string) => Promise<void>;
@@ -291,6 +304,46 @@ export const useStore = create<State>((set, get) => {
     notice: null,
     live: {},
     sockets: {},
+    calls: {},
+    grpcMethods: {},
+
+    loadGrpcMethods: () =>
+      attempt(async () => {
+        const { draft, environment } = get();
+        const services = await api.grpcDescribe(toRequestFile(draft), draft.path, environment);
+        set((s) => ({ grpcMethods: { ...s.grpcMethods, [grpcKey(draft)]: services } }));
+      }),
+
+    invoke: async () => {
+      const { draft, environment, activeTab } = get();
+      const request = toRequestFile(draft);
+      const setCall = (call: CallState) => set((s) => ({ calls: { ...s.calls, [activeTab]: call } }));
+      setCall({ status: "starting", events: [] });
+      // Whether the method streams requests decides when the stream ends.
+      if (!get().grpcMethods[grpcKey(draft)]) await get().loadGrpcMethods();
+      try {
+        await api.grpcStart(activeTab, request, draft.path, environment);
+        set((s) => {
+          const current = s.calls[activeTab];
+          return current?.status === "starting" ? { calls: { ...s.calls, [activeTab]: { ...current, status: "open" } } } : {};
+        });
+        const method = methodInfo(get().grpcMethods[grpcKey(draft)], draft.grpc.method);
+        if (draft.raw.trim()) await api.grpcSend(activeTab, draft.raw, request, draft.path, environment);
+        if (!method?.clientStreaming) await api.grpcEnd(activeTab);
+      } catch (e) {
+        setCall({ status: "done", events: get().calls[activeTab]?.events ?? [], error: message(e) });
+        void api.grpcCancel(activeTab);
+      }
+    },
+
+    grpcSend: (json) =>
+      attempt(async () => {
+        const { draft, environment, activeTab } = get();
+        await api.grpcSend(activeTab, json, toRequestFile(draft), draft.path, environment);
+      }),
+
+    grpcEnd: () => void api.grpcEnd(get().activeTab),
+    grpcCancel: () => void api.grpcCancel(get().activeTab),
 
     connect: async () => {
       const { draft, environment, activeTab } = get();
@@ -426,6 +479,7 @@ export const useStore = create<State>((set, get) => {
         if (tabDirty(tab) && !(await ask_(`"${tab.draft.name}" has unsaved changes. Discard them?`))) return;
         if (tab.sending) void api.cancelRequest(tab.sending);
         if (get().sockets[id]?.status === "open") void api.wsClose(id);
+        if (get().calls[id]?.status === "open") void api.grpcCancel(id);
         const rest = tabs.filter((t) => t.id !== id);
         if (rest.length === 0) {
           resetTabs();
@@ -598,6 +652,10 @@ export const useStore = create<State>((set, get) => {
         if (get().sockets[activeTab]?.status !== "open") await get().connect();
         return;
       }
+      if (isGrpc(draft.url)) {
+        if (get().calls[activeTab]?.status !== "open") await get().invoke();
+        return;
+      }
       const id = crypto.randomUUID();
       set({ sending: id, error: null, view: { kind: "request" }, preview: false });
       try {
@@ -648,3 +706,10 @@ export function folders(tree: TreeNode[], depth = 0): { path: string; name: stri
 export function requests(tree: TreeNode[]): TreeNode[] {
   return tree.flatMap((n) => (n.kind === "request" ? [n] : requests(n.children ?? [])));
 }
+
+/** The cache key of a gRPC request's methods: where they come from. */
+export const grpcKey = (d: Draft) => `${d.url.trim()}|${(d.grpc.protos ?? []).join(",")}`;
+
+/** A method's description, by its package.Service/Method path. */
+export const methodInfo = (services: ServiceInfo[] | undefined, path: string) =>
+  services?.flatMap((s) => s.methods).find((m) => m.path === path);

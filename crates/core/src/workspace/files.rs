@@ -72,9 +72,13 @@ pub struct RequestFile {
     /// Pre-request and test scripts (JavaScript, Postman's `pm.*` API). Collections and folders can have them too.
     #[serde(skip_serializing_if = "Scripts::is_empty")]
     pub scripts: Scripts,
-    /// For a WebSocket request (a `ws://` or `wss://` URL): messages to send with a click.
+    /// For a WebSocket request (a `ws://` or `wss://` URL) or a streaming gRPC call: messages to send with a click.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub messages: Vec<SavedMessage>,
+    /// For a gRPC request (a `grpc://` or `grpcs://` URL): the method, and `.proto` files if the server has no
+    /// reflection. The message is the JSON body.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grpc: Option<crate::grpc::GrpcSettings>,
 }
 
 /// A WebSocket message kept with its request.
@@ -92,6 +96,12 @@ impl RequestFile {
         let url = self.url.trim_start().to_ascii_lowercase();
         url.starts_with("ws://") || url.starts_with("wss://")
     }
+
+    /// A gRPC request: its URL starts with `grpc://` or `grpcs://`.
+    pub fn is_grpc(&self) -> bool {
+        let url = self.url.trim_start().to_ascii_lowercase();
+        url.starts_with("grpc://") || url.starts_with("grpcs://")
+    }
 }
 
 impl Default for RequestFile {
@@ -108,6 +118,7 @@ impl Default for RequestFile {
             expect: Expectations::default(),
             scripts: Scripts::default(),
             messages: Vec::new(),
+            grpc: None,
         }
     }
 }

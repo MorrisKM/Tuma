@@ -17,7 +17,7 @@ import { TopBar } from "./components/TopBar";
 import { focusUrl } from "./components/UrlEditor";
 import { VariablesEditor } from "./components/VariablesEditor";
 import { useStore } from "./store";
-import type { SseEvent, WsEvent } from "./types";
+import type { GrpcEvent, SseEvent, WsEvent } from "./types";
 import { listen } from "@tauri-apps/api/event";
 import { applyTheme, loadTheme } from "./theme";
 import "./App.css";
@@ -75,12 +75,21 @@ function App() {
         return { sockets: { ...s.sockets, [payload.id]: { ...current, status, events: [...current.events, payload.event] } } };
       }),
     );
+    // gRPC call events, by tab.
+    const stopGrpc = listen<{ id: string; event: GrpcEvent }>("grpc-event", ({ payload }) =>
+      useStore.setState((s) => {
+        const current = s.calls[payload.id] ?? { status: "open" as const, events: [] };
+        const status = payload.event.kind === "done" ? "done" : current.status === "starting" ? "open" : current.status;
+        return { calls: { ...s.calls, [payload.id]: { ...current, status, events: [...current.events, payload.event] } } };
+      }),
+    );
     // Capture phase, so editors' own bindings (such as CodeMirror's Ctrl+Enter) don't get these first.
     window.addEventListener("keydown", onKey, true);
     return () => {
       window.removeEventListener("keydown", onKey, true);
       void stop.then((f) => f());
       void stopWs.then((f) => f());
+      void stopGrpc.then((f) => f());
     };
   }, []);
 

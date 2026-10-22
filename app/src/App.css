@@ -1928,3 +1928,32 @@ iframe.visualizer {
 .method-ws {
   color: var(--syntax-keyword);
 }
+
+/* gRPC */
+
+.grpc-message {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+}
+
+.grpc-message select,
+.grpc-message .toolbar input {
+  min-width: 260px;
+}
+
+.grpc-editor {
+  flex: 1;
+  min-height: 100px;
+}
+
+.grpc-answer {
+  height: 100%;
+  min-height: 160px;
+}
+
+.method-grpc {
+  color: var(--syntax-number);
+}
