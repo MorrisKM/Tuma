@@ -1,6 +1,6 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
-import { type BodyMode, isTextMode } from "../draft";
+import { type BodyMode, isTextMode, toRequestFile } from "../draft";
 import { useStore } from "../store";
 import type { KeyValue } from "../types";
 import { AuthForm } from "./AuthForm";
@@ -192,12 +192,14 @@ function prettyJson(text: string): string {
 }
 
 function AuthEditor() {
-  const auth = useStore((s) => s.draft.auth);
-  const saved = useStore((s) => s.draft.path !== null);
+  const draft = useStore((s) => s.draft);
+  const auth = draft.auth;
+  const saved = draft.path !== null;
   return (
     <AuthForm
       auth={auth}
       onChange={(auth) => useStore.getState().update({ auth })}
+      tokenFor={{ request: toRequestFile(draft), path: draft.path }}
       inheritHint={
         saved
           ? "Uses the auth of the nearest folder or collection that sets one."

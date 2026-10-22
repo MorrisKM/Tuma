@@ -2,7 +2,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 import * as api from "../api";
 import { useStore } from "../store";
-import type { CertificateSetting, CookieView, MachineSettings } from "../types";
+import type { CertificateSetting, CookieView, MachineSettings, TokenInfo } from "../types";
 
 /** This machine's network settings: proxy, client certificates, CA certificates and cookies. */
 export function SettingsView() {
@@ -15,6 +15,8 @@ export function SettingsView() {
   const [password, setPassword] = useState<string | undefined>(undefined);
   const [passphrases, setPassphrases] = useState<Record<string, string>>({});
   const [cookies, setCookies] = useState<Record<string, CookieView[]>>({});
+  const [tokens, setTokens] = useState<TokenInfo[]>([]);
+  const loadTokens = () => api.oauth2Tokens().then(setTokens, () => setTokens([]));
   const notify = useStore.getState().notify;
 
   const load = async () => {
@@ -30,7 +32,10 @@ export function SettingsView() {
   const loadCookies = () => api.cookiesList().then(setCookies, () => setCookies({}));
   useEffect(() => {
     void load();
-    if (workspace) void loadCookies();
+    if (workspace) {
+      void loadCookies();
+      void loadTokens();
+    }
   }, [workspace]);
 
   if (!settings) return null;
@@ -263,6 +268,46 @@ export function SettingsView() {
               </details>
             ))}
           </div>
+        )}
+
+        {workspace && (
+          <>
+            <h3>OAuth 2.0 tokens</h3>
+            {tokens.length === 0 ? (
+              <p className="hint">
+                None in {workspace.name}. Get one from a request's or folder's Auth tab, or with tuma auth login.
+              </p>
+            ) : (
+              <table className="current-table">
+                <tbody>
+                  {tokens.map((t) => (
+                    <tr key={t.key}>
+                      <td>{t.clientId}</td>
+                      <td className="mono small">{t.tokenUrl}</td>
+                      <td className="muted small">
+                        {t.scope ? `${t.scope} · ` : ""}
+                        {t.expiresAt
+                          ? t.expiresAt * 1000 < Date.now()
+                            ? t.refreshable
+                              ? "expired, refreshable"
+                              : "expired"
+                            : `until ${new Date(t.expiresAt * 1000).toLocaleString()}`
+                          : "no expiry"}
+                      </td>
+                      <td>
+                        <button
+                          className="link-button danger"
+                          onClick={() => void api.oauth2Forget(t.key).then(loadTokens, (e) => notify({ tone: "error", text: String(e) }))}
+                        >
+                          Forget
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </>
         )}
       </div>
     </section>

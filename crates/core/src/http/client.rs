@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use bytes::Bytes;
 use http::header::{
     AUTHORIZATION, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE, COOKIE, HOST, LOCATION,
-    PROXY_AUTHORIZATION, SET_COOKIE,
+    PROXY_AUTHORIZATION, SET_COOKIE, WWW_AUTHENTICATE,
 };
 use http::{HeaderMap, HeaderValue, Method, StatusCode, Version};
 use http_body_util::{BodyExt, Full};
@@ -20,7 +20,8 @@ use tokio_rustls::TlsConnector;
 use url::{Host, Position, Url};
 
 use super::Error;
-use super::model::{Header, Redirect, Request, Response, SentRequest, Timing};
+use super::auth;
+use super::model::{Auth, Header, Redirect, Request, Response, SentRequest, Timing};
 use super::network::Network;
 use super::prepare::prepare;
 use super::tls;
@@ -52,6 +53,8 @@ async fn send_inner(request: &Request, network: &Network) -> Result<Response, Er
         prepared.body,
     );
     let mut redirects = Vec::new();
+    // Digest answers the server's challenge once per URL.
+    let mut digest_answered = None::<Url>;
     // A Cookie header set on the request is sent as is, with the jar's cookies after it.
     let own_cookies = headers.get(COOKIE).cloned();
 
@@ -96,6 +99,27 @@ async fn send_inner(request: &Request, network: &Network) -> Result<Response, Er
             jar.lock().unwrap().store_response_cookies(cookies, &url);
         }
         let status = exchange.status;
+        if let Auth::Digest(digest) = &request.auth
+            && status == StatusCode::UNAUTHORIZED
+            && digest_answered.as_ref() != Some(&url)
+            && let Some(answer) = exchange
+                .headers
+                .get_all(WWW_AUTHENTICATE)
+                .iter()
+                .filter_map(|v| v.to_str().ok())
+                .find_map(|challenge| {
+                    let uri = &url[Position::BeforePath..Position::AfterQuery];
+                    auth::digest_authorization(challenge, digest, method.as_str(), uri, None)
+                })
+        {
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&answer)
+                    .map_err(|_| Error::InvalidHeader("Authorization".into()))?,
+            );
+            digest_answered = Some(url.clone());
+            continue;
+        }
         let location = exchange.headers.get(LOCATION).and_then(|l| l.to_str().ok());
 
         if let Some(next) =

@@ -1,4 +1,8 @@
 method: DELETE
 url: "{{baseUrl}}/orders/7"
 auth:
-  type: none
+  type: aws
+  accessKey: ""
+  secretKey: ""
+  region: eu-west-1
+  service: ""

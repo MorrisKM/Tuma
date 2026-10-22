@@ -83,12 +83,30 @@ enum Command {
     /// Import an OpenAPI or Swagger spec as a collection, find one, or sync a collection with its spec.
     #[command(subcommand)]
     Openapi(OpenapiCommand),
+    /// OAuth 2.0 tokens: log in for a request, folder or collection, list tokens, or forget them.
+    #[command(subcommand)]
+    Auth(AuthCommand),
     /// Create a workspace: .tuma/ at the root of the current project.
     Init {
         /// The workspace's name. Defaults to the project folder's name.
         #[arg(long)]
         name: Option<String>,
     },
+}
+
+#[derive(Subcommand)]
+enum AuthCommand {
+    /// Get a token with the OAuth 2.0 settings of a request, folder or collection; browser grants open a browser.
+    Login {
+        /// Such as "Users API" or "Users API/Admin/list users".
+        path: String,
+        #[arg(short, long = "env", env = "TUMA_ENV")]
+        environment: Option<String>,
+    },
+    /// List the workspace's stored tokens.
+    Tokens,
+    /// Forget a stored token (by its key, from `tuma auth tokens`), or all of them.
+    Logout { key: Option<String> },
 }
 
 #[derive(Subcommand)]
@@ -325,6 +343,7 @@ async fn run(cli: Cli) -> anyhow::Result<bool> {
             .await?;
             Ok(true)
         }
+        Command::Auth(command) => auth(&start, command).await,
         Command::Init { name } => {
             if let Some(root) = runner::find_workspace(&start) {
                 bail!("there is already a workspace at {}", root.display());
@@ -574,6 +593,119 @@ async fn run_saved(start: &Path, args: RunArgs, only_tests: bool) -> anyhow::Res
             .stopped
             .as_deref()
             .is_none_or(|s| !s.contains("loop")))
+}
+
+async fn auth(start: &Path, command: AuthCommand) -> anyhow::Result<bool> {
+    use tuma_core::oauth2;
+    let Some(workspace) = find_workspace(start)? else {
+        bail!("no workspace here or above {}", start.display());
+    };
+    match command {
+        AuthCommand::Login { path, environment } => {
+            let path = path.trim_matches('/');
+            // A request is read as is; a folder or collection is logged in for as if a request were in it.
+            let (request, location) = match workspace
+                .read_request(path)
+                .or_else(|_| workspace.read_request(&format!("{path}.yaml")))
+            {
+                Ok(request) => (
+                    request,
+                    if path.ends_with(".yaml") {
+                        path.to_string()
+                    } else {
+                        format!("{path}.yaml")
+                    },
+                ),
+                Err(_) => (RequestFile::default(), format!("{path}/request.yaml")),
+            };
+            let Some(settings) = oauth2::effective_settings(
+                &workspace,
+                &request,
+                Some(&location),
+                environment.as_deref(),
+                &EnvThenKeychain,
+            )
+            .map_err(anyhow::Error::msg)?
+            else {
+                bail!("\"{path}\" doesn't use OAuth 2.0 auth (its own or inherited)");
+            };
+            let network = settings::network_for(Some(&workspace), &EnvThenKeychain)
+                .map_err(anyhow::Error::msg)?;
+            let open = |url: &str| {
+                println!("Log in in your browser. If it didn't open, go to:\n  {url}\n");
+                let _ = oauth2::open_in_browser(url);
+            };
+            let token = oauth2::authorize(
+                &settings,
+                Some(workspace.id()),
+                &EnvThenKeychain,
+                Some(&network),
+                &open,
+            )
+            .await
+            .map_err(anyhow::Error::msg)?;
+            let expiry = match token.expires_at {
+                Some(at) => format!(
+                    ", valid for {} minutes",
+                    at.saturating_sub(token.obtained_at) / 60
+                ),
+                None => String::new(),
+            };
+            println!(
+                "Got a token{expiry}{}. Requests using these settings now send it.",
+                if token.refresh_token.is_some() {
+                    "; it will be refreshed when it expires"
+                } else {
+                    ""
+                }
+            );
+            Ok(true)
+        }
+        AuthCommand::Tokens => {
+            let tokens = oauth2::list(workspace.id());
+            if tokens.is_empty() {
+                println!("No stored tokens. Get one with `tuma auth login <request or folder>`.");
+            }
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            for t in tokens {
+                let state = match t.expires_at {
+                    Some(at) if at <= now => "expired".to_string(),
+                    Some(at) => format!("{} min left", (at - now) / 60),
+                    None => "no expiry".to_string(),
+                };
+                println!(
+                    "{}  {} at {}  ({state}{})",
+                    t.key,
+                    t.client_id,
+                    t.token_url,
+                    if t.refreshable { ", refreshable" } else { "" }
+                );
+            }
+            Ok(true)
+        }
+        AuthCommand::Logout { key } => {
+            let keys: Vec<String> = match key {
+                Some(key) => vec![key],
+                None => oauth2::list(workspace.id())
+                    .into_iter()
+                    .map(|t| t.key)
+                    .collect(),
+            };
+            for key in &keys {
+                oauth2::forget(workspace.id(), key, &EnvThenKeychain)
+                    .map_err(anyhow::Error::msg)?;
+            }
+            println!(
+                "Forgot {} token{}",
+                keys.len(),
+                if keys.len() == 1 { "" } else { "s" }
+            );
+            Ok(true)
+        }
+    }
 }
 
 async fn openapi(start: &Path, command: OpenapiCommand) -> anyhow::Result<bool> {

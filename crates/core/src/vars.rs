@@ -4,6 +4,7 @@
 use std::collections::{BTreeSet, HashMap};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::http::auth::OAuth2Auth;
 use crate::http::{Auth, Body, KeyValue, Part, Request};
 
 /// Variable scopes, highest priority first. The first scope that defines a name wins.
@@ -115,6 +116,14 @@ impl Scopes {
             },
         };
         let auth = match &request.auth {
+            Auth::Digest(a) => Auth::Digest(resolve_fields(a, &mut u)),
+            Auth::Aws(a) => Auth::Aws(resolve_fields(a, &mut u)),
+            Auth::Jwt(a) => Auth::Jwt(resolve_fields(a, &mut u)),
+            Auth::OAuth1(a) => Auth::OAuth1(resolve_fields(a, &mut u)),
+            Auth::OAuth2(a) => Auth::OAuth2(OAuth2Auth {
+                access_token: a.access_token.clone(),
+                ..resolve_fields(a, &mut u)
+            }),
             Auth::None => Auth::None,
             Auth::Bearer { token } => Auth::Bearer { token: u(token) },
             Auth::Basic { username, password } => Auth::Basic {
@@ -141,6 +150,26 @@ impl Scopes {
         };
         (resolved, unresolved)
     }
+}
+
+/// Resolves every text field of a settings struct, through its JSON form.
+fn resolve_fields<T: serde::Serialize + serde::de::DeserializeOwned + Clone>(
+    value: &T,
+    u: &mut dyn FnMut(&str) -> String,
+) -> T {
+    fn walk(v: &mut serde_json::Value, u: &mut dyn FnMut(&str) -> String) {
+        match v {
+            serde_json::Value::String(s) => *s = u(s),
+            serde_json::Value::Array(items) => items.iter_mut().for_each(|i| walk(i, u)),
+            serde_json::Value::Object(map) => map.values_mut().for_each(|i| walk(i, u)),
+            _ => {}
+        }
+    }
+    let Ok(mut json) = serde_json::to_value(value) else {
+        return value.clone();
+    };
+    walk(&mut json, u);
+    serde_json::from_value(json).unwrap_or_else(|_| value.clone())
 }
 
 /// Postman's most used dynamic variables: `{{$guid}}`, `{{$timestamp}}` and friends.

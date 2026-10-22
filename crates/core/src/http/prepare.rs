@@ -10,6 +10,7 @@ use http::{HeaderMap, HeaderName, HeaderValue, Method};
 use url::Url;
 
 use super::Error;
+use super::auth;
 use super::model::{ApiKeyLocation, Auth, Body, Part, Request};
 
 pub(crate) struct Prepared {
@@ -28,14 +29,12 @@ pub(crate) async fn prepare(request: &Request) -> Result<Prepared, Error> {
         headers.append(name, value);
     }
 
-    let (body, content_type) = encode_body(&request.body).await?;
+    let (mut body, content_type) = encode_body(&request.body).await?;
     if let Some(content_type) = content_type
         && !headers.contains_key(CONTENT_TYPE)
     {
         headers.insert(CONTENT_TYPE, header_value(&content_type)?);
     }
-
-    apply_auth(&request.auth, &mut url, &mut headers)?;
 
     let version = concat!("Tuma/", env!("CARGO_PKG_VERSION"));
     let defaults = [
@@ -48,6 +47,8 @@ pub(crate) async fn prepare(request: &Request) -> Result<Prepared, Error> {
             .entry(name)
             .or_insert(HeaderValue::from_static(value));
     }
+    // Last, because signatures cover the final URL, headers and body.
+    apply_auth(&request.auth, &method, &mut url, &mut headers, &mut body)?;
 
     Ok(Prepared {
         method,
@@ -101,9 +102,99 @@ fn header_value(value: &str) -> Result<HeaderValue, Error> {
     HeaderValue::from_str(value).map_err(|_| Error::InvalidHeader(value.to_string()))
 }
 
-fn apply_auth(auth: &Auth, url: &mut Url, headers: &mut HeaderMap) -> Result<(), Error> {
+fn apply_auth(
+    auth: &Auth,
+    method: &Method,
+    url: &mut Url,
+    headers: &mut HeaderMap,
+    body: &mut Bytes,
+) -> Result<(), Error> {
     match auth {
         Auth::None => {}
+        // Answered after the server's challenge; see the client.
+        Auth::Digest(_) => {}
+        Auth::Aws(aws) => {
+            let list: Vec<(String, String)> = headers
+                .iter()
+                .map(|(n, v)| {
+                    (
+                        n.to_string(),
+                        String::from_utf8_lossy(v.as_bytes()).into_owned(),
+                    )
+                })
+                .collect();
+            for (name, value) in auth::aws_sign(aws, method.as_str(), url, &list, body, None) {
+                let (name, value) = header_pair(&name, &value)?;
+                headers.insert(name, value);
+            }
+        }
+        Auth::Jwt(jwt) => {
+            let token = auth::jwt_token(jwt).map_err(Error::Auth)?;
+            match &jwt.query_param {
+                Some(param) => {
+                    url.query_pairs_mut().append_pair(param, &token);
+                }
+                None => {
+                    let value = if jwt.prefix.is_empty() {
+                        token
+                    } else {
+                        format!("{} {token}", jwt.prefix)
+                    };
+                    headers.insert(AUTHORIZATION, header_value(&value)?);
+                }
+            }
+        }
+        Auth::OAuth1(oauth) => {
+            let is_form = headers
+                .get(CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .is_some_and(|ct| ct.starts_with("application/x-www-form-urlencoded"));
+            let form: Vec<(String, String)> = if is_form {
+                url::form_urlencoded::parse(body)
+                    .map(|(k, v)| (k.into_owned(), v.into_owned()))
+                    .collect()
+            } else {
+                vec![]
+            };
+            let params = auth::oauth1_params(oauth, method.as_str(), url, &form, None, None);
+            match oauth.location {
+                auth::OAuth1Location::Header => {
+                    headers.insert(
+                        AUTHORIZATION,
+                        header_value(&auth::oauth1_header(&oauth.realm, &params))?,
+                    );
+                }
+                auth::OAuth1Location::Body if is_form => {
+                    let mut text = String::from_utf8_lossy(body).into_owned();
+                    let extra: String = url::form_urlencoded::Serializer::new(String::new())
+                        .extend_pairs(&params)
+                        .finish();
+                    if !text.is_empty() {
+                        text.push('&');
+                    }
+                    text.push_str(&extra);
+                    *body = Bytes::from(text);
+                }
+                _ => {
+                    url.query_pairs_mut().extend_pairs(&params);
+                }
+            }
+        }
+        Auth::OAuth2(oauth) => match &oauth.access_token {
+            Some(token) => {
+                let value = if oauth.prefix.is_empty() {
+                    token.clone()
+                } else {
+                    format!("{} {token}", oauth.prefix)
+                };
+                headers.insert(AUTHORIZATION, header_value(&value)?);
+            }
+            None => {
+                return Err(Error::Auth(
+                    "OAuth 2.0: there is no access token yet; get one from the Auth tab, or with `tuma auth login`".into(),
+                ));
+            }
+        },
         Auth::Bearer { token } if !token.is_empty() => {
             headers.insert(AUTHORIZATION, header_value(&format!("Bearer {token}"))?);
         }

@@ -1,5 +1,6 @@
 //! The HTTP engine: build a [`Request`], [`send`] it, get a [`Response`] with a timing breakdown.
 
+pub mod auth;
 mod client;
 mod error;
 mod model;

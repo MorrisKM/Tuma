@@ -5576,6 +5576,7 @@ dependencies = [
  "percent-encoding",
  "rcgen",
  "regex",
+ "ring",
  "rquickjs",
  "rustls",
  "rustls-platform-verifier",

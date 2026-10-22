@@ -9,6 +9,7 @@ pub mod export;
 pub mod history;
 pub mod http;
 pub mod import;
+pub mod oauth2;
 pub mod openapi;
 pub mod runner;
 pub mod runs;

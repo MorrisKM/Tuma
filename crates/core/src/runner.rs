@@ -508,7 +508,25 @@ pub async fn execute(job: Job<'_>) -> Execution {
             workspace::prepare_standalone(&file, &overrides)
         }
     };
+    let mut prepared = prepared;
     execution.unresolved = prepared.unresolved.clone();
+    // OAuth 2.0: a stored, refreshed or new token, with the settings' variables already resolved.
+    if let http::Auth::OAuth2(oauth) = &mut prepared.request.auth {
+        match crate::oauth2::token_for(
+            oauth,
+            job.workspace.map(|w| w.id()),
+            job.secrets,
+            job.network.as_deref(),
+        )
+        .await
+        {
+            Ok(token) => oauth.access_token = Some(token.access_token),
+            Err(e) => {
+                execution.response = Err(Failure::new("auth", e));
+                return execution;
+            }
+        }
+    }
     if prepared.unresolved.contains("baseUrl")
         && file.url.starts_with("{{baseUrl}}")
         && job.request.url.starts_with('/')

@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::expect::Expectations;
+use crate::http::auth::{AwsAuth, DigestAuth, JwtAuth, OAuth1Auth, OAuth2Auth};
 use crate::http::{self, ApiKeyLocation};
 
 /// `workspace.yaml` at the workspace root.
@@ -382,6 +383,17 @@ pub enum Auth {
         #[serde(default)]
         location: ApiKeyLocation,
     },
+    /// HTTP Digest: answers the server's challenge.
+    Digest(DigestAuth),
+    /// AWS Signature Version 4.
+    Aws(AwsAuth),
+    /// A JWT signed from a payload, sent as a bearer token.
+    Jwt(JwtAuth),
+    #[serde(rename = "oauth1")]
+    OAuth1(OAuth1Auth),
+    /// Tokens are kept on this machine (in the keychain), not in the file.
+    #[serde(rename = "oauth2")]
+    OAuth2(OAuth2Auth),
 }
 
 impl From<&Auth> for http::Auth {
@@ -399,6 +411,11 @@ impl From<&Auth> for http::Auth {
                 value,
                 location,
             },
+            Auth::Digest(a) => http::Auth::Digest(a),
+            Auth::Aws(a) => http::Auth::Aws(a),
+            Auth::Jwt(a) => http::Auth::Jwt(a),
+            Auth::OAuth1(a) => http::Auth::OAuth1(a),
+            Auth::OAuth2(a) => http::Auth::OAuth2(a),
         }
     }
 }
@@ -406,6 +423,11 @@ impl From<&Auth> for http::Auth {
 impl From<&http::Auth> for Auth {
     fn from(auth: &http::Auth) -> Self {
         match auth.clone() {
+            http::Auth::Digest(a) => Auth::Digest(a),
+            http::Auth::Aws(a) => Auth::Aws(a),
+            http::Auth::Jwt(a) => Auth::Jwt(a),
+            http::Auth::OAuth1(a) => Auth::OAuth1(a),
+            http::Auth::OAuth2(a) => Auth::OAuth2(a),
             http::Auth::None => Auth::None,
             http::Auth::Bearer { token } => Auth::Bearer { token },
             http::Auth::Basic { username, password } => Auth::Basic { username, password },

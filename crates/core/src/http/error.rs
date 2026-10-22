@@ -29,6 +29,8 @@ pub enum Error {
     Timeout(u64),
     #[error("stopped after {0} redirects")]
     TooManyRedirects(u32),
+    #[error("{0}")]
+    Auth(String),
     #[error("proxy: {0}")]
     Proxy(String),
     #[error("could not decode the {encoding} response body: {source}")]
@@ -48,6 +50,7 @@ impl Error {
             Error::Http(_) => "http",
             Error::Timeout(_) => "timeout",
             Error::Proxy(_) => "proxy",
+            Error::Auth(_) => "auth",
             Error::TooManyRedirects(_) => "redirects",
             Error::Decode { .. } => "decode",
         }

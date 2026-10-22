@@ -1,5 +1,6 @@
 //! The desktop shell: Tauri commands that call into `tuma_core`. Keep logic out of here.
 
+mod oauth;
 mod runs;
 mod settings;
 mod visualizer;
@@ -252,6 +253,10 @@ pub fn run() {
             workspace::current_values,
             workspace::reset_current_values,
             runs::run_collection,
+            oauth::oauth2_status,
+            oauth::oauth2_authorize,
+            oauth::oauth2_tokens,
+            oauth::oauth2_forget,
             settings::settings_read,
             settings::settings_write,
             settings::cookies_list,

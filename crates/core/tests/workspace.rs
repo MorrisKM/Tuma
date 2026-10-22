@@ -88,7 +88,6 @@ fn postman_import_matches_golden_files() {
             "\"List products\": 1 saved example(s) not imported",
             "\"List products\": 1 disabled query parameter(s) dropped",
             "\"Search\": GraphQL body imported as JSON until GraphQL support arrives",
-            "\"Signed\": awsv4 auth is not supported yet; it was set to no auth",
         ]
     );
 

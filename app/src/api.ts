@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AgentSetup,
+  TokenInfo,
+  TokenStatus,
   CookieView,
   MachineSettings,
   SettingsView,
@@ -111,3 +113,11 @@ export const settingsWrite = (
 export const cookiesList = () => invoke<Record<string, CookieView[]>>("cookies_list");
 export const cookiesRemove = (domain: string | null, path: string | null, name: string | null) =>
   invoke<void>("cookies_remove", { domain, path, name });
+
+export const oauth2Status = (request: RequestFile, path: string | null, environment: string | null) =>
+  invoke<TokenStatus>("oauth2_status", { request, path, environment });
+/** Browser grants open the system browser and resolve after the login. */
+export const oauth2Authorize = (request: RequestFile, path: string | null, environment: string | null) =>
+  invoke<TokenStatus>("oauth2_authorize", { request, path, environment });
+export const oauth2Tokens = () => invoke<TokenInfo[]>("oauth2_tokens");
+export const oauth2Forget = (key: string) => invoke<void>("oauth2_forget", { key });

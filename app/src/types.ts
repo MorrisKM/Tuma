@@ -25,7 +25,72 @@ export type Auth =
   | { type: "none" }
   | { type: "bearer"; token: string }
   | { type: "basic"; username: string; password: string }
-  | { type: "apiKey"; key: string; value: string; location: "header" | "query" };
+  | { type: "apiKey"; key: string; value: string; location: "header" | "query" }
+  | { type: "digest"; username: string; password: string }
+  | { type: "aws"; accessKey: string; secretKey: string; sessionToken?: string; region: string; service: string }
+  | {
+      type: "jwt";
+      algorithm: JwtAlgorithm;
+      secret: string;
+      secretBase64?: boolean;
+      payload: string;
+      headers?: string;
+      prefix: string;
+      queryParam?: string | null;
+    }
+  | {
+      type: "oauth1";
+      consumerKey: string;
+      consumerSecret: string;
+      token?: string;
+      tokenSecret?: string;
+      signatureMethod: "HMAC-SHA1" | "HMAC-SHA256" | "HMAC-SHA512" | "PLAINTEXT";
+      location: "header" | "query" | "body";
+      realm?: string;
+      callback?: string;
+      verifier?: string;
+    }
+  | ({ type: "oauth2" } & OAuth2Settings);
+
+export type JwtAlgorithm =
+  | "HS256" | "HS384" | "HS512" | "RS256" | "RS384" | "RS512" | "PS256" | "PS384" | "PS512" | "ES256" | "ES384";
+
+export interface OAuth2Settings {
+  grant: "authorizationCode" | "implicit" | "clientCredentials" | "password";
+  authUrl?: string;
+  accessTokenUrl?: string;
+  clientId: string;
+  clientSecret?: string;
+  scope?: string;
+  redirectUri: string;
+  pkce: boolean;
+  username?: string;
+  password?: string;
+  audience?: string;
+  clientAuthentication: "header" | "body";
+  prefix: string;
+}
+
+/** The stored token for some OAuth 2.0 settings. */
+export interface TokenStatus {
+  key: string;
+  obtainedAt: number | null;
+  expiresAt: number | null;
+  refreshable: boolean;
+  scope: string | null;
+  present: boolean;
+}
+
+export interface TokenInfo {
+  key: string;
+  clientId: string;
+  tokenUrl: string;
+  grant: OAuth2Settings["grant"];
+  scope?: string;
+  obtainedAt: number;
+  expiresAt?: number;
+  refreshable: boolean;
+}
 
 export interface Settings {
   timeoutMs: number | null;

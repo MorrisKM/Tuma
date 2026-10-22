@@ -26,6 +26,7 @@ mime_guess = "2"
 p12-keystore = "=0.3.2"
 percent-encoding = "2"
 regex = "1"
+ring = "0.17"
 rquickjs = "0.14"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 rustls-platform-verifier = "0.7"

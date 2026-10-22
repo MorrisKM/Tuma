@@ -88,6 +88,7 @@ export function FolderEditor({ path }: { path: string }) {
           <AuthForm
             auth={folder.auth ?? null}
             onChange={(auth) => setFolder({ ...folder, auth })}
+            tokenFor={{ request: { method: "GET", url: "", auth: folder.auth ?? undefined }, path: `${path}/request.yaml` }}
             inheritHint={
               isCollection
                 ? "Requests in this collection that inherit auth send none."

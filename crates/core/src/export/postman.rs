@@ -112,6 +112,49 @@ fn auth_json(auth: &Auth) -> Value {
             };
             json!({ "type": "apikey", "apikey": [pair("key", key), pair("value", value), pair("in", location)] })
         }
+        Auth::Digest(a) => {
+            json!({ "type": "digest", "digest": [pair("username", &a.username), pair("password", &a.password)] })
+        }
+        Auth::Aws(a) => json!({ "type": "awsv4", "awsv4": [
+            pair("accessKey", &a.access_key), pair("secretKey", &a.secret_key), pair("sessionToken", &a.session_token),
+            pair("region", &a.region), pair("service", &a.service),
+        ] }),
+        Auth::Jwt(a) => json!({ "type": "jwt", "jwt": [
+            pair("algorithm", &format!("{:?}", a.algorithm)), pair("secret", &a.secret),
+            pair("isSecretBase64Encoded", &a.secret_base64.to_string()), pair("payload", &a.payload),
+            pair("header", &a.headers), pair("headerPrefix", &a.prefix),
+            pair("addTokenTo", if a.query_param.is_some() { "queryParam" } else { "header" }),
+            pair("queryParamKey", a.query_param.as_deref().unwrap_or("token")),
+        ] }),
+        Auth::OAuth1(a) => {
+            let method = serde_json::to_value(a.signature_method)
+                .ok()
+                .and_then(|v| v.as_str().map(String::from))
+                .unwrap_or_default();
+            json!({ "type": "oauth1", "oauth1": [
+                pair("consumerKey", &a.consumer_key), pair("consumerSecret", &a.consumer_secret),
+                pair("token", &a.token), pair("tokenSecret", &a.token_secret), pair("signatureMethod", &method),
+                pair("addParamsToHeader", &(a.location == crate::http::auth::OAuth1Location::Header).to_string()),
+                pair("realm", &a.realm), pair("callback", &a.callback), pair("verifier", &a.verifier), pair("version", "1.0"),
+            ] })
+        }
+        Auth::OAuth2(a) => {
+            use crate::http::auth::{ClientAuthentication, OAuth2Grant};
+            let grant = match a.grant {
+                OAuth2Grant::AuthorizationCode if a.pkce => "authorization_code_with_pkce",
+                OAuth2Grant::AuthorizationCode => "authorization_code",
+                OAuth2Grant::Implicit => "implicit",
+                OAuth2Grant::ClientCredentials => "client_credentials",
+                OAuth2Grant::Password => "password_credentials",
+            };
+            json!({ "type": "oauth2", "oauth2": [
+                pair("grant_type", grant), pair("authUrl", &a.auth_url), pair("accessTokenUrl", &a.access_token_url),
+                pair("clientId", &a.client_id), pair("clientSecret", &a.client_secret), pair("scope", &a.scope),
+                pair("redirect_uri", &a.redirect_uri), pair("username", &a.username), pair("password", &a.password),
+                pair("client_authentication", if a.client_authentication == ClientAuthentication::Body { "body" } else { "header" }),
+                pair("headerPrefix", &a.prefix), pair("addTokenTo", "header"),
+            ] })
+        }
     }
 }
 

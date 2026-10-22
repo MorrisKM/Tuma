@@ -36,14 +36,50 @@ fn schema<T: schemars::JsonSchema>(title: &str) -> Value {
 
 /// The schema with unknown keys forbidden, for checking.
 fn strict(value: Value) -> Value {
+    let defs = value.get("$defs").cloned().unwrap_or_default();
+    strict_with(value, &defs)
+}
+
+fn strict_with(value: Value, defs: &Value) -> Value {
     match value {
         Value::Object(mut map) => {
+            // A tagged variant that holds a struct (`type: aws` plus AwsAuth's fields) has its own properties and a
+            // $ref; forbidding unknown keys needs both sets in one place.
+            if map.contains_key("properties")
+                && let Some(Value::String(reference)) = map.get("$ref").cloned()
+                && let Some(def) = reference
+                    .strip_prefix("#/$defs/")
+                    .and_then(|name| defs.get(name))
+            {
+                map.remove("$ref");
+                if let (Some(Value::Object(props)), Some(Value::Object(extra))) =
+                    (map.get_mut("properties"), def.get("properties"))
+                {
+                    for (k, v) in extra {
+                        props.entry(k.clone()).or_insert_with(|| v.clone());
+                    }
+                }
+                if let Some(Value::Array(required)) = def.get("required") {
+                    let list = map
+                        .entry("required")
+                        .or_insert_with(|| Value::Array(vec![]));
+                    if let Value::Array(list) = list {
+                        list.extend(required.iter().cloned());
+                    }
+                }
+            }
             if map.contains_key("properties") && !map.contains_key("additionalProperties") {
                 map.insert("additionalProperties".into(), Value::Bool(false));
             }
-            Value::Object(map.into_iter().map(|(k, v)| (k, strict(v))).collect())
+            Value::Object(
+                map.into_iter()
+                    .map(|(k, v)| (k, strict_with(v, defs)))
+                    .collect(),
+            )
         }
-        Value::Array(items) => Value::Array(items.into_iter().map(strict).collect()),
+        Value::Array(items) => {
+            Value::Array(items.into_iter().map(|v| strict_with(v, defs)).collect())
+        }
         other => other,
     }
 }
@@ -62,15 +98,21 @@ pub struct Problem {
 
 /// Checks every file in the workspace at `root`.
 pub fn check_workspace(root: &Path) -> Vec<Problem> {
-    let validators: Vec<(&str, jsonschema::Validator)> = schemas()
+    let validators: Vec<(&str, jsonschema::Validator, Value)> = schemas()
         .into_iter()
         .filter_map(|(name, schema)| {
-            jsonschema::validator_for(&strict(schema))
+            let schema = strict(schema);
+            jsonschema::validator_for(&schema)
                 .ok()
-                .map(|v| (name, v))
+                .map(|v| (name, v, schema))
         })
         .collect();
-    let validator = |name: &str| validators.iter().find(|(n, _)| *n == name).map(|(_, v)| v);
+    let validator = |name: &str| {
+        validators
+            .iter()
+            .find(|(n, _, _)| *n == name)
+            .map(|(_, v, s)| (v, s))
+    };
     let mut problems = Vec::new();
     let check = |path: &Path, kind: &str| -> Vec<Problem> {
         let rel = path
@@ -79,7 +121,7 @@ pub fn check_workspace(root: &Path) -> Vec<Problem> {
             .to_string_lossy()
             .replace('\\', "/");
         validator(kind)
-            .map(|v| check_file(path, &rel, kind, v))
+            .map(|(v, schema)| check_file(path, &rel, kind, v, schema))
             .unwrap_or_default()
     };
 
@@ -160,6 +202,7 @@ fn check_file(
     rel: &str,
     kind: &str,
     validator: &jsonschema::Validator,
+    schema: &Value,
 ) -> Vec<Problem> {
     let problem = |line, message: String| Problem {
         file: rel.to_string(),
@@ -200,6 +243,18 @@ fn check_file(
             if error.contains("anyOf") || error.contains("oneOf") {
                 // A tagged value (auth, body) whose type or fields don't fit any variant.
                 let kind = value.pointer(&format!("{at}/type")).and_then(Value::as_str);
+                // A known type: check against that form alone, to name the field that is wrong.
+                if let Some(kind) = kind
+                    && let Some(inner) = variant_error(schema, &value, &at, kind)
+                {
+                    let (path, error) = inner;
+                    if error.contains("Additional properties") {
+                        let key = error.split('\'').nth(1).unwrap_or_default();
+                        let line = line_of(&text, &format!("{path}/{key}")).or(line);
+                        return problem(line, format!("{at}: {}", unknown_key_message(&error)));
+                    }
+                    return problem(line_of(&text, &path).or(line), format!("{path}: {error}"));
+                }
                 let message = match kind {
                     Some(kind) => format!(
                         "{prefix}\"type: {kind}\" is not supported here, or one of its fields is missing or misspelled"
@@ -265,6 +320,28 @@ fn check_file(
         }
     }
     problems
+}
+
+/// For a tagged value (such as `auth` with `type: aws`) that fits none of the forms: the first error against the form
+/// its type names, as (instance path, message).
+fn variant_error(schema: &Value, value: &Value, at: &str, kind: &str) -> Option<(String, String)> {
+    let field = at.rsplit('/').next()?;
+    let mut name = field.to_string();
+    name[..1].make_ascii_uppercase();
+    let options = schema.pointer(&format!("/$defs/{name}"))?;
+    let variants = options
+        .get("oneOf")
+        .or_else(|| options.get("anyOf"))?
+        .as_array()?;
+    let variant = variants
+        .iter()
+        .find(|v| v.pointer("/properties/type/const").and_then(Value::as_str) == Some(kind))?;
+    let mut standalone = variant.clone();
+    standalone["$defs"] = schema.get("$defs").cloned().unwrap_or_default();
+    let validator = jsonschema::validator_for(&standalone).ok()?;
+    let instance = value.pointer(at)?;
+    let error = validator.iter_errors(instance).next()?;
+    Some((format!("{at}{}", error.instance_path()), error.to_string()))
 }
 
 fn parse<T: DeserializeOwned>(text: &str) -> Option<T> {
@@ -410,6 +487,14 @@ mod tests {
             ("API/c.yaml", "method: GET\nauth:\n  type: oauth9\n"),
             ("API/d.yaml", "method: [GET\n"),
             (
+                "API/f.yaml",
+                "method: GET\nauth:\n  type: aws\n  region: eu-west-1\n  regon: x\n",
+            ),
+            (
+                "API/g.yaml",
+                "method: GET\nauth:\n  type: oauth2\n  grant: clientCredentials\n  clientId: x\n",
+            ),
+            (
                 "API/e.yaml",
                 "method: GET\nscripts:\n  test: |-\n    pm.test('ok', () => {});\n    let x = ;\n",
             ),
@@ -456,6 +541,16 @@ mod tests {
         assert!(
             lines.iter().any(|l| l
                 .starts_with("API/e.yaml:5 the post-response script has an error: SyntaxError")),
+            "{lines:#?}"
+        );
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.starts_with("API/f.yaml:5 /auth: unknown key \"regon\"")),
+            "{lines:#?}"
+        );
+        assert!(
+            !lines.iter().any(|l| l.starts_with("API/g.yaml")),
             "{lines:#?}"
         );
         std::fs::remove_dir_all(root).unwrap();

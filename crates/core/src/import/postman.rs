@@ -8,6 +8,10 @@ use serde_json::Value;
 
 use super::Warnings;
 use crate::http::ApiKeyLocation;
+use crate::http::auth::{
+    AwsAuth, ClientAuthentication, DigestAuth, JwtAuth, OAuth1Auth, OAuth1Location, OAuth1Method,
+    OAuth2Auth, OAuth2Grant,
+};
 use crate::workspace::FolderTree;
 use crate::workspace::TreeItem;
 use crate::workspace::files::{
@@ -306,6 +310,99 @@ fn auth(auth: Option<&Value>, name: &str, warnings: &mut Warnings) -> Option<Aut
                 ApiKeyLocation::Header
             },
         },
+        "digest" => Auth::Digest(DigestAuth {
+            username: field("username"),
+            password: field("password"),
+        }),
+        "awsv4" => Auth::Aws(AwsAuth {
+            access_key: field("accessKey"),
+            secret_key: field("secretKey"),
+            session_token: field("sessionToken"),
+            region: field("region"),
+            service: field("service"),
+        }),
+        "jwt" => Auth::Jwt(JwtAuth {
+            algorithm: serde_json::from_value(Value::String(field("algorithm")))
+                .unwrap_or_default(),
+            secret: match field("secret") {
+                s if s.is_empty() => field("privateKey"),
+                s => s,
+            },
+            secret_base64: field("isSecretBase64Encoded") == "true",
+            payload: field("payload"),
+            headers: field("header"),
+            prefix: match field("headerPrefix") {
+                p if p.is_empty() => "Bearer".into(),
+                p => p,
+            },
+            query_param: (field("addTokenTo") == "queryParam").then(|| {
+                match field("queryParamKey") {
+                    k if k.is_empty() => "token".into(),
+                    k => k,
+                }
+            }),
+        }),
+        "oauth1" => Auth::OAuth1(OAuth1Auth {
+            consumer_key: field("consumerKey"),
+            consumer_secret: field("consumerSecret"),
+            token: field("token"),
+            token_secret: field("tokenSecret"),
+            signature_method: match field("signatureMethod").as_str() {
+                "HMAC-SHA256" => OAuth1Method::HmacSha256,
+                "HMAC-SHA512" => OAuth1Method::HmacSha512,
+                "PLAINTEXT" => OAuth1Method::Plaintext,
+                "" | "HMAC-SHA1" => OAuth1Method::HmacSha1,
+                other => {
+                    warnings.add(format!("\"{name}\": OAuth 1.0 {other} signatures are not supported; HMAC-SHA1 is used"));
+                    OAuth1Method::HmacSha1
+                }
+            },
+            location: if field("addParamsToHeader") == "false" {
+                OAuth1Location::Query
+            } else {
+                OAuth1Location::Header
+            },
+            realm: field("realm"),
+            callback: field("callback"),
+            verifier: field("verifier"),
+        }),
+        "oauth2" => {
+            let defaults = OAuth2Auth::default();
+            Auth::OAuth2(OAuth2Auth {
+                grant: match field("grant_type").as_str() {
+                    "implicit" => OAuth2Grant::Implicit,
+                    "client_credentials" => OAuth2Grant::ClientCredentials,
+                    "password_credentials" => OAuth2Grant::Password,
+                    _ => OAuth2Grant::AuthorizationCode,
+                },
+                pkce: field("grant_type") == "authorization_code_with_pkce",
+                auth_url: field("authUrl"),
+                access_token_url: field("accessTokenUrl"),
+                client_id: field("clientId"),
+                client_secret: field("clientSecret"),
+                scope: field("scope"),
+                redirect_uri: match field("redirect_uri") {
+                    // Postman's own callback page can't reach Tuma; a loopback address can.
+                    r if r.is_empty() || r.contains("oauth.pstmn.io") => {
+                        defaults.redirect_uri.clone()
+                    }
+                    r => r,
+                },
+                username: field("username"),
+                password: field("password"),
+                audience: field("audience"),
+                client_authentication: if field("client_authentication") == "body" {
+                    ClientAuthentication::Body
+                } else {
+                    ClientAuthentication::Header
+                },
+                prefix: match field("headerPrefix") {
+                    p if p.is_empty() => defaults.prefix.clone(),
+                    p => p,
+                },
+                access_token: None,
+            })
+        }
         other => {
             warnings.add(format!(
                 "\"{name}\": {other} auth is not supported yet; it was set to no auth"

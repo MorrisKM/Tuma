@@ -1719,3 +1719,16 @@ iframe.visualizer {
   cursor: pointer;
   font-size: 13px;
 }
+
+.token-box {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.form label small {
+  display: block;
+  margin-top: 2px;
+}

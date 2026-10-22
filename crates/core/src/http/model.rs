@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use super::auth::{AwsAuth, DigestAuth, JwtAuth, OAuth1Auth, OAuth2Auth};
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
@@ -118,6 +119,13 @@ pub enum Auth {
         value: String,
         location: ApiKeyLocation,
     },
+    Digest(DigestAuth),
+    Aws(AwsAuth),
+    Jwt(JwtAuth),
+    #[serde(rename = "oauth1")]
+    OAuth1(OAuth1Auth),
+    #[serde(rename = "oauth2")]
+    OAuth2(OAuth2Auth),
 }
 
 #[derive(

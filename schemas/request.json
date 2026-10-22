@@ -349,6 +349,75 @@
             "key",
             "value"
           ]
+        },
+        {
+          "description": "HTTP Digest: answers the server's challenge.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "digest"
+            }
+          },
+          "$ref": "#/$defs/DigestAuth",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "AWS Signature Version 4.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "aws"
+            }
+          },
+          "$ref": "#/$defs/AwsAuth",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "A JWT signed from a payload, sent as a bearer token.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "jwt"
+            }
+          },
+          "$ref": "#/$defs/JwtAuth",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "oauth1"
+            }
+          },
+          "$ref": "#/$defs/OAuth1Auth",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Tokens are kept on this machine (in the keychain), not in the file.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "oauth2"
+            }
+          },
+          "$ref": "#/$defs/OAuth2Auth",
+          "required": [
+            "type"
+          ]
         }
       ]
     },
@@ -358,6 +427,255 @@
         "header",
         "query"
       ]
+    },
+    "DigestAuth": {
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string",
+          "default": ""
+        },
+        "password": {
+          "type": "string",
+          "default": ""
+        }
+      }
+    },
+    "AwsAuth": {
+      "type": "object",
+      "properties": {
+        "accessKey": {
+          "type": "string",
+          "default": ""
+        },
+        "secretKey": {
+          "type": "string",
+          "default": ""
+        },
+        "sessionToken": {
+          "description": "For temporary credentials.",
+          "type": "string"
+        },
+        "region": {
+          "description": "Such as `us-east-1`.",
+          "type": "string",
+          "default": ""
+        },
+        "service": {
+          "description": "Such as `s3`, `execute-api` or `iam`.",
+          "type": "string",
+          "default": ""
+        }
+      }
+    },
+    "JwtAlgorithm": {
+      "type": "string",
+      "enum": [
+        "HS256",
+        "HS384",
+        "HS512",
+        "RS256",
+        "RS384",
+        "RS512",
+        "PS256",
+        "PS384",
+        "PS512",
+        "ES256",
+        "ES384"
+      ]
+    },
+    "JwtAuth": {
+      "type": "object",
+      "properties": {
+        "algorithm": {
+          "$ref": "#/$defs/JwtAlgorithm",
+          "default": "HS256"
+        },
+        "secret": {
+          "description": "For HS algorithms, the shared secret; otherwise a PEM private key (PKCS#8, or PKCS#1 for RSA).",
+          "type": "string",
+          "default": ""
+        },
+        "secretBase64": {
+          "description": "The HS secret is base64.",
+          "type": "boolean"
+        },
+        "payload": {
+          "description": "The claims, as JSON.",
+          "type": "string",
+          "default": "{}"
+        },
+        "headers": {
+          "description": "Extra header fields, as JSON, such as `{\"kid\": \"key-1\"}`.",
+          "type": "string"
+        },
+        "prefix": {
+          "description": "Sent as `Authorization: <prefix> <token>`.",
+          "type": "string",
+          "default": "Bearer"
+        },
+        "queryParam": {
+          "description": "Send the token as this query parameter instead of a header.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "OAuth1Method": {
+      "type": "string",
+      "enum": [
+        "HMAC-SHA1",
+        "HMAC-SHA256",
+        "HMAC-SHA512",
+        "PLAINTEXT"
+      ]
+    },
+    "OAuth1Location": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "header",
+            "query"
+          ]
+        },
+        {
+          "description": "In a form body (only for `application/x-www-form-urlencoded` requests).",
+          "type": "string",
+          "const": "body"
+        }
+      ]
+    },
+    "OAuth1Auth": {
+      "type": "object",
+      "properties": {
+        "consumerKey": {
+          "type": "string",
+          "default": ""
+        },
+        "consumerSecret": {
+          "type": "string",
+          "default": ""
+        },
+        "token": {
+          "type": "string"
+        },
+        "tokenSecret": {
+          "type": "string"
+        },
+        "signatureMethod": {
+          "$ref": "#/$defs/OAuth1Method",
+          "default": "HMAC-SHA1"
+        },
+        "location": {
+          "$ref": "#/$defs/OAuth1Location",
+          "default": "header"
+        },
+        "realm": {
+          "type": "string"
+        },
+        "callback": {
+          "type": "string"
+        },
+        "verifier": {
+          "type": "string"
+        }
+      }
+    },
+    "OAuth2Grant": {
+      "oneOf": [
+        {
+          "description": "A browser login that returns a code, exchanged for a token (with PKCE when `pkce` is set).",
+          "type": "string",
+          "const": "authorizationCode"
+        },
+        {
+          "description": "A browser login that returns the token directly. Old; prefer the code grant with PKCE.",
+          "type": "string",
+          "const": "implicit"
+        },
+        {
+          "description": "The app's own credentials, no user.",
+          "type": "string",
+          "const": "clientCredentials"
+        },
+        {
+          "description": "A user name and password sent to the token endpoint.",
+          "type": "string",
+          "const": "password"
+        }
+      ]
+    },
+    "ClientAuthentication": {
+      "oneOf": [
+        {
+          "description": "The client id and secret as HTTP Basic auth.",
+          "type": "string",
+          "const": "header"
+        },
+        {
+          "description": "The client id and secret in the form body.",
+          "type": "string",
+          "const": "body"
+        }
+      ]
+    },
+    "OAuth2Auth": {
+      "type": "object",
+      "properties": {
+        "grant": {
+          "$ref": "#/$defs/OAuth2Grant",
+          "default": "authorizationCode"
+        },
+        "authUrl": {
+          "description": "The login page, for the browser grants.",
+          "type": "string"
+        },
+        "accessTokenUrl": {
+          "description": "Where codes, credentials and refresh tokens are exchanged for tokens.",
+          "type": "string"
+        },
+        "clientId": {
+          "type": "string",
+          "default": ""
+        },
+        "clientSecret": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "redirectUri": {
+          "description": "For the browser grants: a loopback address Tuma listens on, registered with the provider.",
+          "type": "string",
+          "default": "http://localhost:8765/callback"
+        },
+        "pkce": {
+          "description": "For the code grant: use PKCE (S256).",
+          "type": "boolean",
+          "default": true
+        },
+        "username": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        },
+        "audience": {
+          "type": "string"
+        },
+        "clientAuthentication": {
+          "$ref": "#/$defs/ClientAuthentication",
+          "default": "header"
+        },
+        "prefix": {
+          "description": "Sent as `Authorization: <prefix> <token>`.",
+          "type": "string",
+          "default": "Bearer"
+        }
+      }
     },
     "Settings": {
       "type": "object",
