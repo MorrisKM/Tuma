@@ -35,7 +35,11 @@ or set it once with set_variables. Write secrets as {{variables}}; their values 
 Check forms: \"status=201\", \"status=2xx\", \"time<500\", \"header content-type~json\", \"$.id exists\", \
 \"$.id !exists\", \"$.name == \\\"Ann\\\"\", \"$.count == 3\", \"$.email =~ ^.+@\", \"$.tags ~ admin\", \
 \"$.items length 3\", \"$.id type integer\", and \"schema\" (the response matches the OpenAPI spec; import \
-one with import_openapi, which can find it on the running server).";
+one with import_openapi, which can find it on the running server).
+
+API docs: generate_docs writes OpenAPI, Markdown or HTML from the saved requests. To make them good, first give each \
+request a description with describe_request and save real responses with save_example (send the request, then save \
+what came back, success and error cases); then generate the docs and write them where the user asked.";
 
 /// Options from the command line.
 pub struct Options {
@@ -129,6 +133,43 @@ struct RunParams {
 struct PathParams {
     /// A saved request's path, as list_requests shows it.
     path: String,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+struct DocsParams {
+    /// A request's or folder's path, as list_requests shows it, or a collection's name. Leave out for the whole
+    /// workspace.
+    #[serde(default)]
+    scope: Option<String>,
+    /// "markdown" (the default), "openapi" (YAML), "openapi-json" or "html".
+    #[serde(default)]
+    format: Option<String>,
+    /// The environment whose base URL the docs show. Defaults to the server's environment.
+    #[serde(default)]
+    environment: Option<String>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+struct DescribeParams {
+    /// A saved request's path, as list_requests shows it.
+    path: String,
+    /// What the request does, its parameters' meaning and its errors, in Markdown. Replaces the current text.
+    description: String,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+struct ExampleParams {
+    /// A saved request's path, as list_requests shows it.
+    path: String,
+    /// Such as "Created" or "Not found". An example with the same name is replaced.
+    name: String,
+    status: u16,
+    /// Such as application/json.
+    #[serde(default)]
+    content_type: Option<String>,
+    /// The response body.
+    #[serde(default)]
+    body: String,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -666,6 +707,121 @@ impl Server {
         match result {
             Ok(v) => ok(&v),
             Err(e) => error(&e.to_string()),
+        }
+    }
+
+    #[tool(
+        description = "Generate API docs from the saved requests: Markdown (default), OpenAPI 3.1 (\"openapi\" for \
+        YAML, \"openapi-json\") or a standalone HTML page, for one request, a folder, a collection or the whole \
+        workspace. Returns the text; write it to a file yourself. Secret values are never included."
+    )]
+    async fn generate_docs(&self, Parameters(p): Parameters<DocsParams>) -> CallToolResult {
+        let workspace = match self.workspace() {
+            Ok(Some(w)) => w,
+            Ok(None) => return error("There is no workspace yet."),
+            Err(e) => return error(&e),
+        };
+        let format = match p.format.as_deref().map(tuma_core::docs::Format::parse) {
+            None => tuma_core::docs::Format::Markdown,
+            Some(Some(f)) => f,
+            Some(None) => return error("format must be markdown, openapi, openapi-json or html"),
+        };
+        let scope = p.scope.as_deref().map(|s| Self::resolve(&workspace, s));
+        let environment = p.environment.or_else(|| self.environment.clone());
+        match tuma_core::docs::generate(
+            &workspace,
+            scope.as_deref(),
+            environment.as_deref(),
+            format,
+            &EnvThenKeychain,
+        ) {
+            Ok(docs) => {
+                let mut blocks = vec![ContentBlock::text(docs.text)];
+                if !docs.warnings.is_empty() {
+                    blocks.push(ContentBlock::text(format!(
+                        "Notes:\n- {}",
+                        docs.warnings.join("\n- ")
+                    )));
+                }
+                CallToolResult::success(blocks)
+            }
+            Err(e) => error(&e),
+        }
+    }
+
+    #[tool(
+        description = "Set a saved request's description, which the generated API docs show: what it does, what \
+        its parameters mean, and its errors. Markdown."
+    )]
+    async fn describe_request(&self, Parameters(p): Parameters<DescribeParams>) -> CallToolResult {
+        if self.read_only {
+            return error("Saving is turned off: this server was started with --read-only.");
+        }
+        let workspace = match self.workspace() {
+            Ok(Some(w)) => w,
+            Ok(None) => return error("There is no workspace yet."),
+            Err(e) => return error(&e),
+        };
+        let path = Self::resolve(&workspace, &p.path);
+        let result = workspace.read_request(&path).and_then(|mut request| {
+            request.description = p.description.trim().to_string();
+            workspace.write_request(&path, &request)
+        });
+        match result {
+            Ok(()) => ok(&json!({ "described": path })),
+            Err(e) => error(&e.to_string()),
+        }
+    }
+
+    #[tool(
+        description = "Save a response as an example of a saved request. Examples document the request in the \
+        generated docs (their JSON gives the response schemas) and mock servers answer with them."
+    )]
+    async fn save_example(&self, Parameters(p): Parameters<ExampleParams>) -> CallToolResult {
+        if self.read_only {
+            return error("Saving is turned off: this server was started with --read-only.");
+        }
+        let workspace = match self.workspace() {
+            Ok(Some(w)) => w,
+            Ok(None) => return error("There is no workspace yet."),
+            Err(e) => return error(&e),
+        };
+        let path = Self::resolve(&workspace, &p.path);
+        let example = tuma_core::workspace::files::Example {
+            name: p.name.clone(),
+            status: p.status,
+            headers: p
+                .content_type
+                .map(|ct| {
+                    vec![KeyValue {
+                        name: "Content-Type".into(),
+                        value: ct,
+                        enabled: true,
+                    }]
+                })
+                .unwrap_or_default(),
+            body: p.body,
+        };
+        let result = workspace.read_request(&path).and_then(|mut request| {
+            request.examples.retain(|e| e.name != p.name);
+            request.examples.push(example);
+            workspace.write_request(&path, &request)
+        });
+        match result {
+            Ok(()) => ok(&json!({ "saved": p.name, "request": path })),
+            Err(e) => error(&e.to_string()),
+        }
+    }
+}
+
+impl Server {
+    /// "Orders/List" or "Orders/List.yaml" → the request file's path, when there is one; folders stay as they are.
+    fn resolve(workspace: &Workspace, path: &str) -> String {
+        let path = path.trim_matches('/');
+        if !path.ends_with(".yaml") && workspace.root().join(format!("{path}.yaml")).is_file() {
+            format!("{path}.yaml")
+        } else {
+            path.to_string()
         }
     }
 }

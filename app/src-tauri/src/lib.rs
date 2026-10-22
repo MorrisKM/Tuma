@@ -288,6 +288,7 @@ pub fn run() {
             workspace::folder_write,
             workspace::folder_create,
             workspace::item_rename,
+            workspace::docs_generate,
             workspace::workspace_list,
             workspace::workspaces_dir_set,
             workspace::workspace_new,

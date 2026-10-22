@@ -43,6 +43,9 @@ export interface WorkspaceList {
   folder: string;
   workspaces: { name: string; root: string; inFolder: boolean }[];
 }
+export type DocsFormat = "openapi" | "openapi-json" | "markdown" | "html";
+export const docsGenerate = (scope: string | null, format: DocsFormat, environment: string | null, file?: string) =>
+  invoke<{ text: string; warnings: string[] }>("docs_generate", { scope, format, environment, file: file ?? null });
 export const workspaceList = () => invoke<WorkspaceList>("workspace_list");
 export const workspacesDirSet = (folder: string) => invoke<void>("workspaces_dir_set", { folder });
 export const workspaceNew = (name: string) => invoke<WorkspaceInfo>("workspace_new", { name });

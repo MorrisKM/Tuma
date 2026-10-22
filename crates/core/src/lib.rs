@@ -4,6 +4,7 @@
 pub mod check;
 pub mod codegen;
 pub mod curl;
+pub mod docs;
 pub mod expect;
 pub mod export;
 pub mod graphql;

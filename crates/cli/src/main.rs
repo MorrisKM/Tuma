@@ -74,6 +74,23 @@ enum Command {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
+    /// Generate API docs from the saved requests: OpenAPI 3.1, Markdown or a standalone HTML page.
+    ///
+    /// For one request ("Shop/Orders/Get order"), a folder or collection ("Shop"), or the whole workspace. Request
+    /// descriptions and saved examples make them complete; secret values are never included.
+    Docs {
+        /// A request, folder or collection; the whole workspace when left out.
+        scope: Option<String>,
+        /// openapi (YAML), openapi-json, markdown or html. Guessed from --output's extension when not given.
+        #[arg(short, long)]
+        format: Option<String>,
+        /// The environment whose base URL the docs show.
+        #[arg(short, long)]
+        env: Option<String>,
+        /// Write to this file instead of standard output.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
     /// Check every file in the workspace: YAML syntax, unknown keys (typos), and checks that can't work.
     Check {
         /// Print JSON instead of text.
@@ -362,6 +379,53 @@ async fn run(cli: Cli) -> anyhow::Result<bool> {
                     eprintln!("Wrote {}", path.display());
                 }
                 None => println!("{json}"),
+            }
+            Ok(true)
+        }
+        Command::Docs {
+            scope,
+            format,
+            env,
+            output,
+        } => {
+            let Some(workspace) = find_workspace(&start)? else {
+                bail!("no workspace here or above {}", start.display());
+            };
+            let guessed = output
+                .as_ref()
+                .and_then(|o| o.extension())
+                .map(|e| e.to_string_lossy().to_string());
+            let format = match format.as_deref().or(guessed.as_deref()) {
+                None => tuma_core::docs::Format::Markdown,
+                Some(name) => tuma_core::docs::Format::parse(name).with_context(|| {
+                    format!("unknown format {name}; use openapi, openapi-json, markdown or html")
+                })?,
+            };
+            let scope = scope.map(|s| {
+                let s = s.trim_matches('/').to_string();
+                if !s.ends_with(".yaml") && workspace.root().join(format!("{s}.yaml")).is_file() {
+                    format!("{s}.yaml")
+                } else {
+                    s
+                }
+            });
+            let docs = tuma_core::docs::generate(
+                &workspace,
+                scope.as_deref(),
+                env.as_deref(),
+                format,
+                &EnvThenKeychain,
+            )
+            .map_err(anyhow::Error::msg)?;
+            for warning in &docs.warnings {
+                eprintln!("  ! {warning}");
+            }
+            match output {
+                Some(path) => {
+                    std::fs::write(&path, &docs.text)?;
+                    eprintln!("Wrote {}", path.display());
+                }
+                None => print!("{}", docs.text),
             }
             Ok(true)
         }

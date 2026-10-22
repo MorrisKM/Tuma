@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   Bot,
   Check,
   ChevronDown,
@@ -193,6 +194,10 @@ function WorkspaceSwitcher() {
           {workspace && (
             <>
               <hr />
+              <button className="menu-check" onClick={() => useStore.setState({ docs: { scope: null } })}>
+                <BookOpen size={14} />
+                Generate API docs…
+              </button>
               <button className="menu-check" onClick={() => void exportWorkspace()}>
                 <Upload size={14} />
                 Export as .zip…
@@ -469,6 +474,7 @@ function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
             )}
             <button onClick={() => useStore.setState({ renaming: node.path })}>Rename</button>
             <button onClick={() => void useStore.getState().duplicate(node.path)}>Duplicate</button>
+            <button onClick={() => useStore.setState({ docs: { scope: node.path } })}>Generate API docs…</button>
             <hr />
             <button className="danger" onClick={() => void remove(node)}>
               Delete

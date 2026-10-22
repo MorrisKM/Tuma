@@ -125,6 +125,8 @@ interface State {
   exportWorkspace: () => Promise<void>;
   /** Whether the New workspace dialog is open. */
   creatingWorkspace: boolean;
+  /** The Generate docs dialog, for a request's or folder's path, or the whole workspace (null scope). */
+  docs: { scope: string | null } | null;
   closeWorkspace: () => Promise<void>;
   refresh: () => Promise<void>;
   loadScope: () => Promise<void>;
@@ -322,6 +324,7 @@ export const useStore = create<State>((set, get) => {
     renaming: null,
     paletteOpen: false,
     creatingWorkspace: false,
+    docs: null,
     snippetOpen: false,
     history: [],
     notice: null,

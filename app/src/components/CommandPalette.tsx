@@ -46,6 +46,14 @@ export function CommandPalette() {
       { id: "import-workspace-zip", label: "Import a workspace .zip…", hint: "Workspace", run: () => void s.importWorkspace("zip") },
       { id: "open", label: "Open a folder as a workspace, in place…", hint: "Workspace", run: () => void s.openWorkspace() },
       ...(workspace
+        ? [
+            { id: "docs-workspace", label: "Generate API docs for the workspace…", hint: "Docs", run: () => useStore.setState({ docs: { scope: null } }) },
+            ...(s.draft.path
+              ? [{ id: "docs-request", label: "Generate API docs for this request…", hint: "Docs", run: () => useStore.setState({ docs: { scope: s.draft.path } }) }]
+              : []),
+          ]
+        : []),
+      ...(workspace
         ? [{ id: "export-workspace", label: "Export the workspace as .zip…", hint: "Workspace", run: () => void s.exportWorkspace() }]
         : []),
       ...(workspace

@@ -12,6 +12,7 @@ import { NoticeBar } from "./components/NoticeBar";
 import { RequestBar } from "./components/RequestBar";
 import { RequestPanel } from "./components/RequestPanel";
 import { ResponsePanel } from "./components/ResponsePanel";
+import { DocsDialog } from "./components/DocsDialog";
 import { NewWorkspaceDialog } from "./components/NewWorkspaceDialog";
 import { SaveDialog } from "./components/SaveDialog";
 import { Sidebar } from "./components/Sidebar";
@@ -65,6 +66,7 @@ function App() {
   const view = useStore((s) => s.view);
   const savingAs = useStore((s) => s.savingAs);
   const creatingWorkspace = useStore((s) => s.creatingWorkspace);
+  const docs = useStore((s) => s.docs);
   const paletteOpen = useStore((s) => s.paletteOpen);
   const snippetOpen = useStore((s) => s.snippetOpen);
   const workspace = useStore((s) => s.workspace);
@@ -148,6 +150,7 @@ function App() {
       </main>
       {savingAs && <SaveDialog />}
       {creatingWorkspace && <NewWorkspaceDialog />}
+      {docs && <DocsDialog scope={docs.scope} />}
       {paletteOpen && <CommandPalette />}
       {snippetOpen && <SnippetDialog />}
     </div>

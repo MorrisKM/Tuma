@@ -433,6 +433,41 @@ pub fn import_file(open: tauri::State<'_, Open>, file: PathBuf) -> Result<Import
     })
 }
 
+#[derive(Serialize)]
+pub struct Docs {
+    text: String,
+    warnings: Vec<String>,
+}
+
+/// API docs for a request, folder or collection (`scope`), or the whole workspace; written to `file` when given.
+#[tauri::command]
+pub fn docs_generate(
+    open: tauri::State<'_, Open>,
+    scope: Option<String>,
+    format: String,
+    environment: Option<String>,
+    file: Option<PathBuf>,
+) -> Result<Docs> {
+    let guard = open.0.lock().unwrap();
+    let workspace = guard.as_ref().ok_or("Open a workspace first")?;
+    let format = tuma_core::docs::Format::parse(&format).ok_or("Unknown format")?;
+    let docs = tuma_core::docs::generate(
+        workspace,
+        scope.as_deref(),
+        environment.as_deref(),
+        format,
+        secrets(),
+    )?;
+    if let Some(file) = file {
+        std::fs::write(&file, &docs.text)
+            .map_err(|e| format!("could not write {}: {e}", file.display()))?;
+    }
+    Ok(Docs {
+        text: docs.text,
+        warnings: docs.warnings,
+    })
+}
+
 /// What the "Connect an agent" view needs: whether the `tuma` command is installed, and where.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
