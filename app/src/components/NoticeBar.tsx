@@ -16,6 +16,11 @@ export function NoticeBar() {
           </ul>
         )}
       </div>
+      {notice.action && (
+        <button className="button small primary" onClick={notice.action.run}>
+          {notice.action.label}
+        </button>
+      )}
       <button className="icon-button" onClick={() => useStore.getState().notify(null)} aria-label="Dismiss">
         ×
       </button>

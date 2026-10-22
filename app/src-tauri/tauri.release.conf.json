@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "beforeBuildCommand": "pnpm build && node scripts/build-cli.mjs"
+  },
+  "bundle": {
+    "externalBin": ["binaries/tuma"],
+    "createUpdaterArtifacts": true
+  }
+}

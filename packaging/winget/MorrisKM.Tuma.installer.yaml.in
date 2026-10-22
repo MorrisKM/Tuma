@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.9.0.schema.json
+PackageIdentifier: MorrisKM.Tuma
+PackageVersion: @VERSION@
+InstallerType: nullsoft
+Scope: user
+UpgradeBehavior: install
+Commands:
+- tuma
+ReleaseDate: @DATE@
+Installers:
+- Architecture: x64
+  InstallerUrl: @URL:nsis-x64@
+  InstallerSha256: @SHA256UPPER:nsis-x64@
+ManifestType: installer
+ManifestVersion: 1.9.0

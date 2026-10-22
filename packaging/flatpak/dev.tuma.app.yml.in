@@ -1,0 +1,51 @@
+# Flatpak manifest for Flathub. It repackages the release's .deb (built from this repository by the release workflow);
+# the metainfo and desktop files sit next to it in the Flathub repository. Filled in by scripts/render-packaging.py.
+id: dev.tuma.app
+runtime: org.gnome.Platform
+runtime-version: '48'
+sdk: org.gnome.Sdk
+command: tuma-app
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # Workspaces are folders anywhere, often inside code repositories.
+  - --filesystem=home
+  # Secrets and OAuth tokens are kept in the keychain (Secret Service).
+  - --talk-name=org.freedesktop.secrets
+modules:
+  - name: tuma
+    buildsystem: simple
+    sources:
+      - type: file
+        url: @URL:deb-amd64@
+        sha256: @SHA256:deb-amd64@
+        dest-filename: tuma.deb
+        only-arches: [x86_64]
+      - type: file
+        url: @URL:deb-arm64@
+        sha256: @SHA256:deb-arm64@
+        dest-filename: tuma.deb
+        only-arches: [aarch64]
+      - type: file
+        path: dev.tuma.app.metainfo.xml
+      - type: file
+        path: dev.tuma.app.desktop
+    build-commands:
+      - ar -x tuma.deb
+      - tar -xf data.tar.*
+      - install -Dm755 usr/bin/tuma-app /app/bin/tuma-app
+      - install -Dm755 usr/bin/tuma /app/bin/tuma
+      # Standard sizes only: Tauri also makes a "256x256@2" folder, which isn't one.
+      - |
+        for icon in usr/share/icons/hicolor/*/apps/*.png; do
+          size="$(basename "$(dirname "$(dirname "$icon")")")"
+          case "$size" in *@*) continue ;; esac
+          install -Dm644 "$icon" "/app/share/icons/hicolor/$size/apps/dev.tuma.app.png"
+        done
+      - install -Dm644 dev.tuma.app.desktop /app/share/applications/dev.tuma.app.desktop
+      # Flatpaks name the desktop entry after the app ID.
+      - sed -i 's|<launchable type="desktop-id">Tuma.desktop</launchable>|<launchable type="desktop-id">dev.tuma.app.desktop</launchable>|' dev.tuma.app.metainfo.xml
+      - install -Dm644 dev.tuma.app.metainfo.xml /app/share/metainfo/dev.tuma.app.metainfo.xml

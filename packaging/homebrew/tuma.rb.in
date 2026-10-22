@@ -1,0 +1,39 @@
+# The tuma command, for a Homebrew tap (brew install morriskm/tuma/tuma). Filled in by scripts/render-packaging.py.
+class Tuma < Formula
+  desc "Fast, local-first API client for terminals, CI and AI agents"
+  homepage "https://github.com/MorrisKM/Tuma"
+  version "@VERSION@"
+  license any_of: ["MIT", "Apache-2.0"]
+
+  on_macos do
+    on_arm do
+      url "@URL:cli-macos-arm@"
+      sha256 "@SHA256:cli-macos-arm@"
+    end
+    on_intel do
+      url "@URL:cli-macos-intel@"
+      sha256 "@SHA256:cli-macos-intel@"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "@URL:cli-linux-arm@"
+      sha256 "@SHA256:cli-linux-arm@"
+    end
+    on_intel do
+      url "@URL:cli-linux-intel@"
+      sha256 "@SHA256:cli-linux-intel@"
+    end
+  end
+
+  def install
+    bin.install "tuma"
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/tuma --version")
+    system bin/"tuma", "init", "--name", "Test"
+    assert_path_exists testpath/".tuma/workspace.yaml"
+  end
+end

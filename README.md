@@ -17,12 +17,32 @@ Rust and Tauri.
 - **Built for AI agents.** Coding agents test the API they are building through Tuma's MCP server or CLI, and save
   passing requests as tests.
 
-> **Status:** early development (milestone M6: more protocols and auth). See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
+> **Status:** version 1.0.0 is being prepared for release. See [CHANGELOG.md](CHANGELOG.md) for what's in it and [docs/PLAN.md](docs/PLAN.md) for the roadmap.
+
+## Install
+
+Download the app for your system from the [latest release](https://github.com/MorrisKM/Tuma/releases/latest):
+
+| System  | Download                                                                                     |
+| ------- | -------------------------------------------------------------------------------------------- |
+| Linux   | `.deb` (Debian, Ubuntu), `.rpm` (Fedora, openSUSE) or `.AppImage` (anything), for x64 or arm64 |
+| macOS   | `.dmg` for Apple Silicon (`aarch64`) or Intel (`x64`)                                         |
+| Windows | `-setup.exe` (or `.msi`)                                                                      |
+
+Or with a package manager:
+
+```bash
+brew install --cask morriskm/tuma/tuma-app   # macOS: the app and the tuma command
+brew install morriskm/tuma/tuma              # macOS and Linux: the tuma command only
+winget install MorrisKM.Tuma                 # Windows
+```
+
+Every package includes the `tuma` command. The app updates itself; check under Settings → Updates.
 
 ## The `tuma` command
 
 ```bash
-cargo install --path crates/cli
+cargo install --path crates/cli   # or use the one that comes with the app
 
 tuma send POST /users -d '{"name":"Ann"}' --var baseUrl=http://localhost:3000 \
   -x status=201 -x '$.id exists' --save "Users/create user"   # Save it as a test if the checks pass

@@ -1,0 +1,238 @@
+# Builds a release from a version tag (v1.2.3) into a draft GitHub release: the app for Linux, macOS and Windows with
+# its update manifest, the tuma CLI for five targets, checksums, and filled-in Homebrew, winget and Flatpak manifests.
+# Nothing is public until the draft is published. See docs/RELEASING.md for the secrets it uses.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The tag to build, such as v1.0.0 (it must exist)"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release_id: ${{ steps.release.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: The tag matches the version in Cargo.toml
+        id: version
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::The tag is $TAG but Cargo.toml says $version; run scripts/set-version.sh first"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: The update signing key is set
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          PUBKEY: ${{ vars.TUMA_UPDATER_PUBKEY }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$PUBKEY" ]; then
+            echo "::error::Set the TAURI_SIGNING_PRIVATE_KEY secret and the TUMA_UPDATER_PUBKEY variable (docs/RELEASING.md)"
+            exit 1
+          fi
+      - name: Draft the release with this version's changelog
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # The section between this version's heading and the next one.
+          awk -v v="$VERSION" '
+            $0 ~ "^## " v "( |$)" { on = 1; next }
+            on && /^## / { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then echo "::error::CHANGELOG.md has no section for $VERSION"; exit 1; fi
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "The release for $TAG exists; adding to it."
+          else
+            gh release create "$TAG" --draft --verify-tag --title "Tuma $VERSION" --notes-file notes.md
+          fi
+          echo "id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.tag_name == \"$TAG\") | .id")" >> "$GITHUB_OUTPUT"
+
+  app:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 22.04's older glibc lets the packages run on more distributions.
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libdbus-1-dev pkg-config rpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: app
+      - name: Import the Windows signing certificate
+        if: runner.os == 'Windows'
+        env:
+          CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        shell: pwsh
+        run: |
+          if (-not $env:CERTIFICATE) { Write-Output "No WINDOWS_CERTIFICATE secret: the installers will be unsigned."; exit 0 }
+          $pfx = Join-Path $env:RUNNER_TEMP "certificate.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERTIFICATE))
+          $password = ConvertTo-SecureString -String $env:PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          Remove-Item $pfx
+          # Tauri signs with the certificate whose thumbprint the config names.
+          $config = @{ bundle = @{ windows = @{ certificateThumbprint = $cert.Thumbprint; digestAlgorithm = "sha256"; timestampUrl = "http://timestamp.digicert.com" } } }
+          $config | ConvertTo-Json -Depth 5 | Set-Content app/src-tauri/tauri.windows-signing.conf.json
+      - name: Choose the build configs
+        id: configs
+        shell: bash
+        env:
+          TUMA_UPDATER_PUBKEY: ${{ vars.TUMA_UPDATER_PUBKEY }}
+        run: |
+          # The update key's public half goes into the app's config, which its updater checks updates against.
+          node app/scripts/updater-config.mjs
+          args="--target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json --config src-tauri/tauri.updater.conf.json"
+          if [ -f app/src-tauri/tauri.windows-signing.conf.json ]; then
+            args="$args --config src-tauri/tauri.windows-signing.conf.json"
+          fi
+          echo "args=$args" >> "$GITHUB_OUTPUT"
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          # Signs the update artifacts; the app checks them against the public key in its config.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS signing and notarization; without them the app is unsigned.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: app
+          releaseId: ${{ needs.prepare.outputs.release_id }}
+          args: ${{ steps.configs.outputs.args }}
+          # latest.json, which the app's updater reads, with an entry per platform.
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
+
+  cli:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: cli-${{ matrix.target }}
+      - run: cargo build --release --locked -p tuma-cli --target ${{ matrix.target }}
+      - name: Package and upload
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          name="tuma-$VERSION-${{ matrix.target }}"
+          mkdir "$name"
+          cp LICENSE-MIT LICENSE-APACHE README.md "$name/"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp "target/${{ matrix.target }}/release/tuma.exe" "$name/"
+            7z a "$name.zip" "$name" > /dev/null
+            file="$name.zip"
+          else
+            cp "target/${{ matrix.target }}/release/tuma" "$name/"
+            tar czf "$name.tar.gz" "$name"
+            file="$name.tar.gz"
+          fi
+          gh release upload "$TAG" "$file" --clobber
+
+  finish:
+    needs: [prepare, app, cli]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: Checksums and packaging manifests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          mkdir assets
+          gh release download "$TAG" --dir assets --skip-existing
+          (cd assets && rm -f SHA256SUMS && sha256sum -- * > SHA256SUMS)
+          python3 scripts/render-packaging.py --version "$VERSION" --assets assets --out packaging-out
+          (cd packaging-out && zip -qr ../packaging-manifests.zip .)
+          gh release upload "$TAG" assets/SHA256SUMS packaging-manifests.zip --clobber
+          echo "Draft ready: publish it on GitHub, then submit the manifests (docs/RELEASING.md)." >> "$GITHUB_STEP_SUMMARY"

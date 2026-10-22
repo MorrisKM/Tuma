@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import * as api from "../api";
 import { useStore } from "../store";
 import type { CertificateSetting, CookieView, MachineSettings, TokenInfo } from "../types";
+import { autoCheckEnabled, type Available, checkForUpdate, install, setAutoCheck, type UpdateStatus, updateStatus } from "../updates";
 
 /** This machine's network settings: proxy, client certificates, CA certificates and cookies. */
 export function SettingsView() {
@@ -85,6 +86,7 @@ export function SettingsView() {
         </button>
       </div>
       <div className="panel-body settings">
+        <Updates />
         <h3>Proxy</h3>
         <div className="segmented">
           {(["system", "none", "custom"] as const).map((mode) => (
@@ -311,5 +313,70 @@ export function SettingsView() {
         )}
       </div>
     </section>
+  );
+}
+
+/** The version, and checking for and installing updates. */
+function Updates() {
+  const [status, setStatus] = useState<UpdateStatus | null>(null);
+  const [auto, setAuto] = useState(autoCheckEnabled);
+  const [checking, setChecking] = useState(false);
+  const [result, setResult] = useState<Available | null | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    updateStatus().then(setStatus, () => setStatus(null));
+  }, []);
+  if (!status) return null;
+  const check = async () => {
+    setChecking(true);
+    setError(null);
+    try {
+      setResult(await checkForUpdate());
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setChecking(false);
+    }
+  };
+  return (
+    <>
+      <h3>Updates</h3>
+      <p className="hint">
+        Tuma {status.current}.{" "}
+        {status.enabled
+          ? "Updates are signed, and checked against the key built into this version before they are installed."
+          : "This build doesn't update itself (it was built from source); update it the way you installed it."}
+      </p>
+      {status.enabled && (
+        <>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={auto}
+              onChange={(e) => {
+                setAuto(e.target.checked);
+                setAutoCheck(e.target.checked);
+              }}
+            />
+            Check for updates when Tuma starts
+          </label>
+          <div className="toolbar">
+            <button className="button small" disabled={checking} onClick={() => void check()}>
+              {checking ? "Checking…" : "Check now"}
+            </button>
+            {result === null && <span className="muted small">You have the newest version.</span>}
+            {result && (
+              <>
+                <span className="small">Tuma {result.version} is available.</span>
+                <button className="button small primary" onClick={() => void install()}>
+                  Update and restart
+                </button>
+              </>
+            )}
+          </div>
+          {error && <p className="notice error">{error}</p>}
+        </>
+      )}
+    </>
   );
 }

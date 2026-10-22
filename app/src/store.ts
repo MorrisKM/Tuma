@@ -43,6 +43,8 @@ export interface Notice {
   tone: "info" | "error";
   text: string;
   details?: string[];
+  /** A button in the notice, such as "Update and restart". */
+  action?: { label: string; run: () => void };
 }
 
 /** An open request tab. The active tab's live state is kept in the store's top-level fields. */

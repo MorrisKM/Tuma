@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>dev.tuma.app</id>
+  <name>Tuma</name>
+  <summary>A fast, local-first API client</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+  <developer id="io.github.morriskm">
+    <name>The Tuma Contributors</name>
+  </developer>
+  <description>
+    <p>
+      Tuma sends HTTP, GraphQL, WebSocket, server-sent event and gRPC requests, and keeps them as plain files you can
+      commit to git. It needs no account, works offline, and sends no telemetry.
+    </p>
+    <ul>
+      <li>Imports Postman collections and environments, OpenAPI and Swagger specs, HAR recordings and cURL commands</li>
+      <li>Runs Postman pre-request and test scripts, and whole collections with data files</li>
+      <li>Environments and variables, with secrets kept in the system keychain</li>
+      <li>OAuth 2.0, JWT, AWS Signature, Digest and OAuth 1.0 auth; proxies, client certificates and cookies</li>
+      <li>A command line tool and an MCP server, so coding agents can test the API they are building</li>
+    </ul>
+  </description>
+  <!-- The name the .deb and .rpm install; the Flatpak installs it as dev.tuma.app.desktop and changes this. -->
+  <launchable type="desktop-id">Tuma.desktop</launchable>
+  <url type="homepage">https://github.com/MorrisKM/Tuma</url>
+  <url type="bugtracker">https://github.com/MorrisKM/Tuma/issues</url>
+  <url type="vcs-browser">https://github.com/MorrisKM/Tuma</url>
+  <categories>
+    <category>Development</category>
+  </categories>
+  <keywords>
+    <keyword>API</keyword>
+    <keyword>HTTP</keyword>
+    <keyword>REST</keyword>
+    <keyword>GraphQL</keyword>
+    <keyword>gRPC</keyword>
+    <keyword>WebSocket</keyword>
+    <keyword>Postman</keyword>
+  </keywords>
+  <provides>
+    <binary>tuma</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">900</display_length>
+  </requires>
+  <releases>
+    <release version="1.0.0" date="2026-10-22">
+      <description>
+        <p>The first stable release.</p>
+      </description>
+    </release>
+  </releases>
+</component>

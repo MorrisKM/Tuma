@@ -16,3 +16,5 @@ node_modules
 .idea
 .DS_Store
 *.sw?
+/app/src-tauri/binaries/
+/app/src-tauri/tauri.updater.conf.json

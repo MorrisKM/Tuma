@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.9.0.schema.json
+PackageIdentifier: MorrisKM.Tuma
+PackageVersion: @VERSION@
+PackageLocale: en-US
+Publisher: The Tuma Contributors
+PublisherUrl: https://github.com/MorrisKM
+PublisherSupportUrl: https://github.com/MorrisKM/Tuma/issues
+PackageName: Tuma
+PackageUrl: https://github.com/MorrisKM/Tuma
+License: MIT OR Apache-2.0
+LicenseUrl: https://github.com/MorrisKM/Tuma/blob/main/LICENSE-MIT
+ShortDescription: A fast, local-first API client
+Description: |-
+  Tuma sends HTTP, GraphQL, WebSocket, server-sent event and gRPC requests and keeps them as plain files you can
+  commit to git. No account, offline, no telemetry. It imports Postman collections, OpenAPI specs, HAR and cURL,
+  runs Postman scripts, and includes a command line tool and an MCP server for coding agents.
+Tags:
+- api
+- api-client
+- http
+- rest
+- graphql
+- grpc
+- websocket
+- postman
+ReleaseNotesUrl: https://github.com/MorrisKM/Tuma/releases/tag/v@VERSION@
+ManifestType: defaultLocale
+ManifestVersion: 1.9.0

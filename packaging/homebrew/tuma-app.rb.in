@@ -1,0 +1,29 @@
+# The Tuma app, with its tuma command, for a Homebrew tap (brew install --cask morriskm/tuma/tuma-app).
+# Filled in by scripts/render-packaging.py.
+cask "tuma-app" do
+  arch arm: "aarch64", intel: "x64"
+
+  version "@VERSION@"
+  sha256 arm:   "@SHA256:dmg-arm@",
+         intel: "@SHA256:dmg-intel@"
+
+  url "https://github.com/MorrisKM/Tuma/releases/download/v#{version}/Tuma_#{version}_#{arch}.dmg"
+  name "Tuma"
+  desc "Fast, local-first API client"
+  homepage "https://github.com/MorrisKM/Tuma"
+
+  # The app updates itself.
+  auto_updates true
+  conflicts_with formula: "tuma"
+  depends_on macos: ">= :big_sur"
+
+  app "Tuma.app"
+  binary "#{appdir}/Tuma.app/Contents/MacOS/tuma"
+
+  zap trash: [
+    "~/Library/Application Support/dev.tuma.app",
+    "~/Library/Caches/dev.tuma.app",
+    "~/Library/Preferences/dev.tuma.app.plist",
+    "~/Library/WebKit/dev.tuma.app",
+  ]
+end

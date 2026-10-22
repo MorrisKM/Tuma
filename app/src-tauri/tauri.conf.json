@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Tuma",
-  "version": "0.1.0",
   "identifier": "dev.tuma.app",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -35,6 +34,58 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "The Tuma Contributors",
+    "copyright": "Copyright © 2026 The Tuma Contributors",
+    "homepage": "https://github.com/MorrisKM/Tuma",
+    "license": "MIT OR Apache-2.0",
+    "longDescription": "Tuma sends HTTP, GraphQL, WebSocket, server-sent event and gRPC requests and keeps them as plain files you can commit to git. No account, offline, no telemetry. Imports Postman, OpenAPI, HAR and cURL; runs Postman scripts; includes a CLI and an MCP server for coding agents.",
+    "linux": {
+      "deb": {
+        "section": "devel",
+        "files": {
+          "/usr/share/metainfo/dev.tuma.app.metainfo.xml": "../../packaging/linux/dev.tuma.app.metainfo.xml"
+        },
+        "depends": [
+          "libdbus-1-3"
+        ]
+      },
+      "rpm": {
+        "release": "1",
+        "files": {
+          "/usr/share/metainfo/dev.tuma.app.metainfo.xml": "../../packaging/linux/dev.tuma.app.metainfo.xml"
+        },
+        "depends": [
+          "dbus-libs"
+        ]
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0",
+      "hardenedRuntime": true
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      },
+      "wix": {
+        "upgradeCode": "30d4bb00-8ec5-480a-9dba-94728a6c17ed"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/MorrisKM/Tuma/releases/latest/download/latest.json"
+      ],
+      "pubkey": "",
+      "requireSignedVersion": true,
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

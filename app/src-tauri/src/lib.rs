@@ -5,6 +5,7 @@ mod oauth;
 mod runs;
 mod settings;
 mod sockets;
+mod updates;
 mod visualizer;
 mod workspace;
 
@@ -255,12 +256,14 @@ fn history_clear(history: tauri::State<'_, History>) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(updates::plugin())
         .manage(InFlight::default())
         .manage(workspace::Open::default())
         .manage(visualizer::Store::default())
         .manage(runs::Running::default())
         .manage(sockets::Sockets::default())
         .manage(grpc::Calls::default())
+        .manage(updates::Pending::default())
         .register_uri_scheme_protocol(visualizer::SCHEME, visualizer::serve)
         .setup(|app| {
             app.manage(History::new(app.path().app_data_dir()?));
@@ -308,6 +311,9 @@ pub fn run() {
             oauth::oauth2_tokens,
             oauth::oauth2_forget,
             oauth::graphql_schema,
+            updates::update_status,
+            updates::update_check,
+            updates::update_install,
             grpc::grpc_describe,
             grpc::grpc_start,
             grpc::grpc_send,

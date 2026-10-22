@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Tuma
+GenericName=API Client
+Comment=A fast, local-first API client
+Exec=tuma-app %U
+Icon=dev.tuma.app
+Terminal=false
+Categories=Development;
+Keywords=api;http;rest;graphql;grpc;websocket;postman;
+StartupWMClass=tuma-app

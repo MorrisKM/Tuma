@@ -20,6 +20,7 @@ import { useStore } from "./store";
 import type { GrpcEvent, SseEvent, WsEvent } from "./types";
 import { listen } from "@tauri-apps/api/event";
 import { applyTheme, loadTheme } from "./theme";
+import { checkAtStart } from "./updates";
 import "./App.css";
 
 applyTheme(loadTheme());
@@ -57,6 +58,8 @@ function App() {
   useEffect(() => {
     appVersion().then(setVersion);
     void useStore.getState().init();
+    // After the workspace is up, so a slow network doesn't hold anything back.
+    const updates = setTimeout(() => void checkAtStart(), 5000);
     // Server-sent events of requests in flight.
     const stop = listen<{ id: string; event: SseEvent | null }>("sse-event", ({ payload }) =>
       useStore.setState((s) => ({
@@ -86,6 +89,7 @@ function App() {
     // Capture phase, so editors' own bindings (such as CodeMirror's Ctrl+Enter) don't get these first.
     window.addEventListener("keydown", onKey, true);
     return () => {
+      clearTimeout(updates);
       window.removeEventListener("keydown", onKey, true);
       void stop.then((f) => f());
       void stopWs.then((f) => f());

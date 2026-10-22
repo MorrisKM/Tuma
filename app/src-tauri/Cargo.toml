@@ -20,6 +20,7 @@ tauri-build = { version = "2", features = [] }
 tuma-core.workspace = true
 tauri = { version = "2.12", features = [] }
 tauri-plugin-dialog = "2.8"
+tauri-plugin-updater = "=2.13.2"
 tokio = { workspace = true, features = ["sync"] }
 base64 = "0.23"
 handlebars = "6.4"

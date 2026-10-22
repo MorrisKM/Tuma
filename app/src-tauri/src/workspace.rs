@@ -275,12 +275,19 @@ pub struct AgentSetup {
 #[tauri::command]
 pub fn agent_setup(open: tauri::State<'_, Open>) -> AgentSetup {
     let exe = if cfg!(windows) { "tuma.exe" } else { "tuma" };
-    let cli = std::env::var_os("PATH").and_then(|paths| {
+    let on_path = std::env::var_os("PATH").and_then(|paths| {
         std::env::split_paths(&paths)
             .map(|dir| dir.join(exe))
             .find(|p| p.is_file())
-            .map(|p| p.to_string_lossy().into_owned())
     });
+    // Release packages ship the CLI next to the app (on Linux that is /usr/bin, on the PATH already).
+    let bundled = std::env::current_exe()
+        .ok()
+        .and_then(|app| app.parent().map(|dir| dir.join(exe)))
+        .filter(|p| p.is_file());
+    let cli = on_path
+        .or(bundled)
+        .map(|p| p.to_string_lossy().into_owned());
     let project = open.0.lock().unwrap().as_ref().map(|w| {
         let root = w.root();
         let project = if root.ends_with(tuma_core::runner::HIDDEN_WORKSPACE) {
