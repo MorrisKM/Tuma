@@ -19,5 +19,8 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tuma-core.workspace = true
 tauri = { version = "2.12", features = [] }
+tauri-plugin-dialog = "2.8"
+tokio = { workspace = true, features = ["sync"] }
+base64 = "0.23"
 serde.workspace = true
 serde_json.workspace = true
