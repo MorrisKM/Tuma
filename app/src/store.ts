@@ -43,6 +43,8 @@ export type View =
   | { kind: "runner"; path: string }
   /** This machine's settings: proxy, certificates, cookies. */
   | { kind: "settings" }
+  /** A performance test of a request, folder or collection. */
+  | { kind: "perf"; path: string }
   /** A running mock server and the requests it answered. */
   | { kind: "mock"; id: string };
 

@@ -481,6 +481,9 @@ function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
             <button onClick={() => void useStore.getState().duplicate(node.path)}>Duplicate</button>
             <button onClick={() => useStore.setState({ docs: { scope: node.path } })}>Generate API docs…</button>
             {!isRequest && <button onClick={() => void mocks.start(node.path)}>Start a mock server</button>}
+            <button onClick={() => useStore.setState({ view: { kind: "perf", path: node.path } })}>
+              Performance test…
+            </button>
             <hr />
             <button className="danger" onClick={() => void remove(node)}>
               Delete

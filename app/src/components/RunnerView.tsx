@@ -1,4 +1,4 @@
-import { Play, Square } from "lucide-react";
+import { Gauge, Play, Square } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState } from "react";
@@ -104,6 +104,10 @@ export function RunnerView({ path }: { path: string }) {
           <span className="crumb current">Run {path}</span>
           <span className="muted small">{environment ? `Environment: ${environment}` : "No environment"}</span>
         </div>
+        <button className="button ghost" onClick={() => useStore.setState({ view: { kind: "perf", path } })}>
+          <Gauge size={14} />
+          Performance test
+        </button>
         {runId ? (
           <button className="button" onClick={() => void api.stopRun(runId)}>
             <Square size={13} />

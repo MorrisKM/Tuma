@@ -17,6 +17,7 @@ pub mod jsonc;
 pub mod mock;
 pub mod oauth2;
 pub mod openapi;
+pub mod perf;
 pub mod runner;
 pub mod runs;
 pub mod script;

@@ -51,6 +51,9 @@ export function CommandPalette() {
             { id: "mock-workspace", label: "Start a mock server for the workspace", hint: "Mock", run: () => void mocks.start(null) },
             { id: "docs-workspace", label: "Generate API docs for the workspace…", hint: "Docs", run: () => useStore.setState({ docs: { scope: null } }) },
             ...(s.draft.path
+              ? [{ id: "perf-request", label: "Performance test of this request…", hint: "Performance", run: () => useStore.setState({ view: { kind: "perf", path: s.draft.path! } }) }]
+              : []),
+            ...(s.draft.path
               ? [{ id: "docs-request", label: "Generate API docs for this request…", hint: "Docs", run: () => useStore.setState({ docs: { scope: s.draft.path } }) }]
               : []),
           ]

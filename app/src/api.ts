@@ -43,6 +43,58 @@ export interface WorkspaceList {
   folder: string;
   workspaces: { name: string; root: string; inFolder: boolean }[];
 }
+export interface PerfOptions {
+  users: number;
+  /** 0 runs `iterations` times instead. */
+  durationS: number;
+  iterations: number;
+  rampUpS: number;
+  delayMs: number;
+  maxP95Ms: number | null;
+  maxErrorRate: number | null;
+}
+export interface Latency {
+  min: number;
+  avg: number;
+  p50: number;
+  p90: number;
+  p95: number;
+  p99: number;
+  max: number;
+}
+export interface PerfReport {
+  name: string;
+  startedAt: number;
+  elapsedMs: number;
+  finished: boolean;
+  stopped: boolean;
+  options: PerfOptions;
+  environment: string | null;
+  requests: number;
+  errors: number;
+  errorRate: number;
+  throughput: number;
+  latency: Latency;
+  perRequest: {
+    name: string;
+    path: string;
+    method: string;
+    requests: number;
+    errors: number;
+    statuses: Record<string, number>;
+    latency: Latency;
+    throughput: number;
+  }[];
+  timeline: { second: number; requests: number; errors: number; avgMs: number; users: number }[];
+  findings: { severity: "high" | "medium" | "low" | "info"; check: string; request: string; detail: string; advice: string }[];
+  notes: string[];
+  passed: boolean | null;
+  failures: string[];
+}
+export const perfStart = (runId: string, scope: string, environment: string | null, options: PerfOptions) =>
+  invoke<PerfReport>("perf_start", { runId, scope, environment, options });
+export const perfStop = (runId: string) => invoke<void>("perf_stop", { runId });
+export const perfExport = (report: PerfReport, file: string) => invoke<void>("perf_export", { report, file });
 export interface MockInfo {
   id: string;
   scope: string | null;

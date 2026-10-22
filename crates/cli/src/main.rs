@@ -105,6 +105,39 @@ enum Command {
         #[arg(long, default_value_t = 0)]
         delay: u64,
     },
+    /// Load-test a request, folder or collection: virtual users send its requests over and over.
+    ///
+    /// Reports throughput, error rate and latency percentiles per request, with passive security checks of the
+    /// responses (headers, cookies, CORS, HTTPS, leaks). With --max-p95 or --max-errors, exits with 1 when they fail.
+    Perf {
+        /// A request ("Shop/Orders/List"), folder or collection.
+        scope: String,
+        /// Virtual users sending at the same time (at most 200).
+        #[arg(short, long, default_value_t = 10)]
+        users: u32,
+        /// How long to run, in seconds. 0 runs --iterations times instead.
+        #[arg(short, long, default_value_t = 30)]
+        duration: u64,
+        #[arg(short, long, default_value_t = 1)]
+        iterations: u32,
+        /// Start the users over this many seconds.
+        #[arg(long, default_value_t = 0)]
+        ramp_up: u64,
+        /// Think time between a user's requests, in milliseconds.
+        #[arg(long, default_value_t = 0)]
+        delay: u64,
+        #[arg(short, long)]
+        env: Option<String>,
+        /// Fail when the 95th percentile latency is above this many milliseconds.
+        #[arg(long)]
+        max_p95: Option<f64>,
+        /// Fail when more than this percentage of requests fail.
+        #[arg(long)]
+        max_errors: Option<f64>,
+        /// Write the report: .html or .json.
+        #[arg(short, long)]
+        report: Option<PathBuf>,
+    },
     /// Check every file in the workspace: YAML syntax, unknown keys (typos), and checks that can't work.
     Check {
         /// Print JSON instead of text.
@@ -500,6 +533,136 @@ async fn run(cli: Cli) -> anyhow::Result<bool> {
             tokio::signal::ctrl_c().await?;
             server.stop();
             Ok(true)
+        }
+        Command::Perf {
+            scope,
+            users,
+            duration,
+            iterations,
+            ramp_up,
+            delay,
+            env,
+            max_p95,
+            max_errors,
+            report,
+        } => {
+            let Some(workspace) = find_workspace(&start)? else {
+                bail!("no workspace here or above {}", start.display());
+            };
+            let scope = {
+                let s = scope.trim_matches('/').to_string();
+                if !s.ends_with(".yaml") && workspace.root().join(format!("{s}.yaml")).is_file() {
+                    format!("{s}.yaml")
+                } else {
+                    s
+                }
+            };
+            let network = tuma_core::settings::network_for(Some(&workspace), &EnvThenKeychain)
+                .map_err(anyhow::Error::msg)?;
+            let (targets, notes) = tuma_core::perf::prepare(
+                &workspace,
+                Some(&scope),
+                env.as_deref(),
+                &EnvThenKeychain,
+                Some(&network),
+            )
+            .await
+            .map_err(anyhow::Error::msg)?;
+            for note in &notes {
+                eprintln!("  ! {note}");
+            }
+            let options = tuma_core::perf::Options {
+                users,
+                duration_s: duration,
+                iterations,
+                ramp_up_s: ramp_up,
+                delay_ms: delay,
+                max_p95_ms: max_p95,
+                max_error_rate: max_errors,
+            };
+            let (stop, stopped) = tokio::sync::watch::channel(false);
+            tokio::spawn(async move {
+                if tokio::signal::ctrl_c().await.is_ok() {
+                    let _ = stop.send(true);
+                }
+            });
+            let last_line = std::sync::Mutex::new(std::time::Instant::now());
+            let name = scope.trim_end_matches(".yaml").to_string();
+            eprintln!(
+                "Load testing {name}: {} request(s), {users} users. Ctrl+C stops.",
+                targets.len()
+            );
+            let result = tuma_core::perf::run(
+                &name,
+                targets,
+                options,
+                env.clone(),
+                notes,
+                network,
+                std::sync::Arc::new(move |r: tuma_core::perf::Report| {
+                    let mut last = last_line.lock().unwrap();
+                    if !r.finished && last.elapsed().as_secs() >= 2 {
+                        *last = std::time::Instant::now();
+                        eprintln!(
+                            "  {:>4}s  {:>7} requests  {:>7.1}/s  p95 {:>6.0} ms  errors {:.2}%",
+                            r.elapsed_ms / 1000,
+                            r.requests,
+                            r.throughput,
+                            r.latency.p95,
+                            r.error_rate
+                        );
+                    }
+                }),
+                stopped,
+            )
+            .await;
+            println!(
+                "\n{} requests in {:.1} s: {:.1}/s, {:.2}% errors, avg {:.0} ms, p50 {:.0}, p95 {:.0}, p99 {:.0} ms{}",
+                result.requests,
+                result.elapsed_ms as f64 / 1000.0,
+                result.throughput,
+                result.error_rate,
+                result.latency.avg,
+                result.latency.p50,
+                result.latency.p95,
+                result.latency.p99,
+                if result.stopped {
+                    " (stopped early)"
+                } else {
+                    ""
+                }
+            );
+            for r in &result.per_request {
+                println!(
+                    "  {:<6} {:<32} {:>7} req  {:>5} err  p95 {:>6.0} ms",
+                    r.method, r.name, r.requests, r.errors, r.latency.p95
+                );
+            }
+            if !result.findings.is_empty() {
+                println!("\nSecurity checks (passive):");
+                for f in &result.findings {
+                    println!(
+                        "  {:<6} {}: {} ({})",
+                        format!("{:?}", f.severity),
+                        f.check,
+                        f.request,
+                        f.detail
+                    );
+                }
+            }
+            for failure in &result.failures {
+                println!("FAILED: {failure}");
+            }
+            if let Some(path) = report {
+                let text = if path.extension().is_some_and(|e| e == "json") {
+                    tuma_core::perf::report::json(&result)
+                } else {
+                    tuma_core::perf::report::html(&result)
+                };
+                std::fs::write(&path, text)?;
+                eprintln!("Wrote {}", path.display());
+            }
+            Ok(result.passed != Some(false))
         }
         Command::Check { json } => {
             let Some(root) = runner::find_workspace(&start) else {

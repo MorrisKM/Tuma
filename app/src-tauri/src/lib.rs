@@ -3,6 +3,7 @@
 mod grpc;
 mod mocks;
 mod oauth;
+mod perf;
 mod runs;
 mod settings;
 mod sockets;
@@ -288,6 +289,7 @@ pub fn run() {
         .manage(sockets::Sockets::default())
         .manage(grpc::Calls::default())
         .manage(mocks::Mocks::default())
+        .manage(perf::Running::default())
         .manage(updates::Pending::default())
         .register_uri_scheme_protocol(visualizer::SCHEME, visualizer::serve)
         .setup(|app| {
@@ -314,6 +316,9 @@ pub fn run() {
             workspace::folder_create,
             workspace::item_rename,
             mocks::mock_start,
+            perf::perf_start,
+            perf::perf_stop,
+            perf::perf_export,
             mocks::mock_stop,
             mocks::mock_list,
             mocks::mock_routes,
