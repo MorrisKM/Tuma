@@ -309,7 +309,8 @@ impl From<&Body> for http::Body {
         };
         match body {
             Body::None => http::Body::None,
-            Body::Json { content } => raw(content, "json"),
+            // Comments are for the people reading the request, not the server.
+            Body::Json { content } => raw(&crate::jsonc::strip(content), "json"),
             Body::Xml { content } => raw(content, "xml"),
             Body::Html { content } => raw(content, "html"),
             Body::Text { content } => raw(content, "text"),

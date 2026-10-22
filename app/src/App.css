@@ -423,6 +423,11 @@ hr {
   color: var(--text);
 }
 
+.icon-button.on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
 .icon-button:disabled {
   visibility: hidden;
 }
@@ -3234,4 +3239,11 @@ iframe.visualizer {
   margin-top: 3px;
   padding-top: 4px;
   font-weight: 600;
+}
+
+/* Comments in a JSON body, which the JSON grammar doesn't know: the same color whatever they contain. */
+.cm-json-comment,
+.cm-json-comment * {
+  color: var(--muted) !important;
+  font-style: italic;
 }

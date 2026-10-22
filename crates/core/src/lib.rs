@@ -11,6 +11,7 @@ pub mod grpc;
 pub mod history;
 pub mod http;
 pub mod import;
+pub mod jsonc;
 pub mod oauth2;
 pub mod openapi;
 pub mod runner;

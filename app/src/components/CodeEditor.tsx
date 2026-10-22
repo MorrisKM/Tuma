@@ -1,7 +1,7 @@
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { html } from "@codemirror/lang-html";
 import { javascript } from "@codemirror/lang-javascript";
-import { json } from "@codemirror/lang-json";
+import { json, jsonLanguage } from "@codemirror/lang-json";
 import { xml } from "@codemirror/lang-xml";
 import { bracketMatching, foldGutter, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
@@ -9,6 +9,7 @@ import { Annotation, Compartment, EditorState, type Extension } from "@codemirro
 import { EditorView, keymap, lineNumbers, placeholder as placeholderExt } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { useEffect, useRef } from "react";
+import { jsonComments } from "../jsonc";
 
 export type Language = "json" | "xml" | "html" | "javascript" | "text";
 
@@ -16,7 +17,12 @@ export type Language = "json" | "xml" | "html" | "javascript" | "text";
 export const external = Annotation.define<boolean>();
 
 const languages: Record<Language, () => Extension> = {
-  json: () => json(),
+  // Comments are allowed (and removed before sending), so Ctrl+/ comments out a line.
+  json: () => [
+    json(),
+    jsonLanguage.data.of({ commentTokens: { line: "//", block: { open: "/*", close: "*/" } } }),
+    jsonComments,
+  ],
   xml: () => xml(),
   html: () => html(),
   javascript: () => javascript(),

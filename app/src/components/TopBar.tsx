@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Code2, Eye, Layers, Plus, Save } from "lucide-react";
+import { Check, ChevronDown, Code2, Eye, EyeOff, Layers, Plus, Save } from "lucide-react";
 import { Fragment, useState } from "react";
 import { useStore } from "../store";
 import { Menu } from "./ui";
@@ -47,6 +47,7 @@ export function EnvironmentPicker() {
   const environments = useStore((s) => s.environments);
   const environment = useStore((s) => s.environment);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const viewing = useStore((s) => s.view.kind === "variables");
   const { setEnvironment, openVariables, addEnvironment } = useStore.getState();
   if (!workspace) return null;
   const choose = (name: string | null) => (
@@ -71,12 +72,15 @@ export function EnvironmentPicker() {
         <ChevronDown size={14} className="muted" />
       </button>
       <button
-        className="icon-button"
-        onClick={() => void openVariables(environment)}
-        title="Edit variables"
-        aria-label="Edit variables"
+        className={`icon-button${viewing ? " on" : ""}`}
+        onClick={() =>
+          viewing ? useStore.setState({ view: { kind: "request" } }) : void openVariables(environment)
+        }
+        title={viewing ? "Close the variables" : "Show the variables"}
+        aria-label={viewing ? "Close the variables" : "Show the variables"}
+        aria-pressed={viewing}
       >
-        <Eye size={15} />
+        {viewing ? <EyeOff size={15} /> : <Eye size={15} />}
       </button>
       {menu && (
         <Menu at={menu} onClose={() => setMenu(null)} className="env-menu">

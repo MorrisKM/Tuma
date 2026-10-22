@@ -1,6 +1,7 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
 import { type BodyMode, isGrpc, isTextMode, isWebSocket, toRequestFile } from "../draft";
+import { formatJsonc } from "../jsonc";
 import { useStore } from "../store";
 import type { KeyValue } from "../types";
 import { AuthForm } from "./AuthForm";
@@ -120,7 +121,7 @@ function BodyEditor() {
           ))}
         </select>
         {mode === "json" && (
-          <button className="link-button" onClick={() => update({ raw: prettyJson(draft.raw) })}>
+          <button className="link-button" onClick={() => update({ raw: formatJsonc(draft.raw) })}>
             Format
           </button>
         )}
@@ -196,14 +197,6 @@ function BodyEditor() {
       )}
     </div>
   );
-}
-
-function prettyJson(text: string): string {
-  try {
-    return JSON.stringify(JSON.parse(text), null, 2);
-  } catch {
-    return text;
-  }
 }
 
 function AuthEditor() {
