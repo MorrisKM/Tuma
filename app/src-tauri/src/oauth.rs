@@ -147,6 +147,7 @@ pub async fn graphql_schema(
             ..Default::default()
         },
         network: Some(network.clone()),
+        observer: None,
     })
     .await;
     let _ = tuma_core::settings::keep_cookies(&network, ws.as_ref());

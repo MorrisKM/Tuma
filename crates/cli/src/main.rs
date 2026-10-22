@@ -377,6 +377,19 @@ async fn send(start: &Path, args: SendArgs) -> anyhow::Result<bool> {
     let detail = args.common.detail();
     let network =
         settings::network_for(workspace.as_ref(), &EnvThenKeychain).map_err(anyhow::Error::msg)?;
+    // Server-sent events are printed as they arrive; the summary follows when the stream ends.
+    let parser = std::sync::Mutex::new(tuma_core::sse::Parser::default());
+    let print_events = |event: tuma_core::http::StreamEvent<'_>| match event {
+        tuma_core::http::StreamEvent::Open { status } => {
+            eprintln!("Connected ({status}); events follow. Ctrl+C stops.")
+        }
+        tuma_core::http::StreamEvent::Data(data) => {
+            for e in parser.lock().unwrap().feed(data) {
+                let id = e.id.map(|id| format!(" #{id}")).unwrap_or_default();
+                println!("{}{id}: {}", e.event, e.data);
+            }
+        }
+    };
     let outcome = runner::send(
         Job {
             workspace: workspace.as_ref(),
@@ -392,6 +405,7 @@ async fn send(start: &Path, args: SendArgs) -> anyhow::Result<bool> {
             allow_host: None,
             scripting: Default::default(),
             network: Some(network.clone()),
+            observer: (!args.common.json).then_some(&print_events as &tuma_core::http::Observer),
         },
         &detail,
     )

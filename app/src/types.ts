@@ -198,6 +198,17 @@ export interface Response extends ScriptResults {
   unresolved: string[];
   /** Results of the request's `expect:` checks. */
   checks: CheckResult[];
+  /** For a text/event-stream response: its events. */
+  events?: SseEvent[] | null;
+}
+
+/** A server-sent event. `at` is when it arrived (Unix ms), for live ones. */
+export interface SseEvent {
+  event: string;
+  data: string;
+  id?: string;
+  retry?: number;
+  at?: number;
 }
 
 /** What the collection's, folders' and request's scripts did. Sent with responses and with errors. */

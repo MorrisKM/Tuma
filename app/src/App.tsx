@@ -17,6 +17,8 @@ import { TopBar } from "./components/TopBar";
 import { focusUrl } from "./components/UrlEditor";
 import { VariablesEditor } from "./components/VariablesEditor";
 import { useStore } from "./store";
+import type { SseEvent } from "./types";
+import { listen } from "@tauri-apps/api/event";
 import { applyTheme, loadTheme } from "./theme";
 import "./App.css";
 
@@ -55,9 +57,21 @@ function App() {
   useEffect(() => {
     appVersion().then(setVersion);
     void useStore.getState().init();
+    // Server-sent events of requests in flight.
+    const stop = listen<{ id: string; event: SseEvent | null }>("sse-event", ({ payload }) =>
+      useStore.setState((s) => ({
+        live: {
+          ...s.live,
+          [payload.id]: [...(s.live[payload.id] ?? []), ...(payload.event ? [{ ...payload.event, at: Date.now() }] : [])],
+        },
+      })),
+    );
     // Capture phase, so editors' own bindings (such as CodeMirror's Ctrl+Enter) don't get these first.
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      void stop.then((f) => f());
+    };
   }, []);
 
   return (

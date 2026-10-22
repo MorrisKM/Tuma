@@ -475,6 +475,7 @@ impl Server {
                     },
                     network: tuma_core::settings::network_for(workspace.as_ref(), &EnvThenKeychain)
                         .ok(),
+                    observer: None,
                 },
                 &Detail::default(),
             )
@@ -755,6 +756,7 @@ impl Server {
                 allow_host: Some(self.host_policy(workspace, environment)),
                 scripting: Default::default(),
                 network: Some(network.clone()),
+                observer: None,
             },
             detail,
         )

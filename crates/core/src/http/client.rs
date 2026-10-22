@@ -33,17 +33,48 @@ pub async fn send(request: &Request) -> Result<Response, Error> {
 
 /// Sends `request` the way `network` says: through its proxy, with its certificates and cookie jar.
 pub async fn send_with(request: &Request, network: &Network) -> Result<Response, Error> {
+    send_observed(request, network, None).await
+}
+
+/// Something that happens while a streamed response (server-sent events) arrives.
+#[derive(Debug)]
+pub enum StreamEvent<'a> {
+    /// The headers arrived; the body follows in [`StreamEvent::Data`] chunks.
+    Open {
+        status: u16,
+    },
+    Data(&'a [u8]),
+}
+
+/// Watches streamed responses as they arrive.
+pub type Observer<'a> = dyn Fn(StreamEvent<'_>) + Send + Sync + 'a;
+
+/// How much of a streamed body is kept for the response, which can be endless.
+const STREAM_KEEP: usize = 4 << 20;
+
+/// [`send_with`], and a `text/event-stream` response is passed to `observer` chunk by chunk as it arrives, until the
+/// server closes it or the future is dropped. Other responses are read whole, as usual.
+pub async fn send_observed(
+    request: &Request,
+    network: &Network,
+    observer: Option<&Observer<'_>>,
+) -> Result<Response, Error> {
     match request.settings.timeout_ms {
-        Some(ms) if ms > 0 => {
-            tokio::time::timeout(Duration::from_millis(ms), send_inner(request, network))
-                .await
-                .map_err(|_| Error::Timeout(ms))?
-        }
-        _ => send_inner(request, network).await,
+        Some(ms) if ms > 0 => tokio::time::timeout(
+            Duration::from_millis(ms),
+            send_inner(request, network, observer),
+        )
+        .await
+        .map_err(|_| Error::Timeout(ms))?,
+        _ => send_inner(request, network, observer).await,
     }
 }
 
-async fn send_inner(request: &Request, network: &Network) -> Result<Response, Error> {
+async fn send_inner(
+    request: &Request,
+    network: &Network,
+    observer: Option<&Observer<'_>>,
+) -> Result<Response, Error> {
     let start = Instant::now();
     let prepared = prepare(request).await?;
     let (mut method, mut url, mut headers, mut body) = (
@@ -87,6 +118,7 @@ async fn send_inner(request: &Request, network: &Network) -> Result<Response, Er
             body.clone(),
             request.settings.verify_tls,
             network,
+            observer,
         )
         .await?;
         if let Some(jar) = &network.cookies {
@@ -192,6 +224,7 @@ async fn exchange(
     body: Bytes,
     verify_tls: bool,
     network: &Network,
+    observer: Option<&Observer<'_>>,
 ) -> Result<Exchange, Error> {
     let host = url.host_str().unwrap_or_default().to_string();
     let port = url.port_or_known_default().unwrap_or(80);
@@ -254,6 +287,7 @@ async fn exchange(
             body,
             remote_addr,
             timing,
+            observer,
         )
         .await
     } else {
@@ -267,6 +301,7 @@ async fn exchange(
             body,
             remote_addr,
             timing,
+            observer,
         )
         .await
     }
@@ -415,6 +450,7 @@ async fn exchange_over<T>(
     body: Bytes,
     remote_addr: Option<SocketAddr>,
     mut timing: Timing,
+    observer: Option<&Observer<'_>>,
 ) -> Result<Exchange, Error>
 where
     T: HyperRead + HyperWrite + Unpin + Send + 'static,
@@ -472,7 +508,32 @@ where
 
     let (parts, incoming) = response.into_parts();
     let started = Instant::now();
-    let body = incoming.collect().await?.to_bytes();
+    let event_stream = parts
+        .headers
+        .get(CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|ct| ct.trim_start().starts_with("text/event-stream"))
+        // A compressed stream can't be shown chunk by chunk; it is read whole and decoded instead.
+        && !parts.headers.contains_key(CONTENT_ENCODING);
+    let body = match observer.filter(|_| event_stream) {
+        Some(observer) => {
+            observer(StreamEvent::Open {
+                status: parts.status.as_u16(),
+            });
+            let mut kept = bytes::BytesMut::new();
+            let mut incoming = incoming;
+            while let Some(frame) = incoming.frame().await {
+                if let Some(data) = frame?.data_ref() {
+                    observer(StreamEvent::Data(data));
+                    if kept.len() < STREAM_KEEP {
+                        kept.extend_from_slice(data);
+                    }
+                }
+            }
+            kept.freeze()
+        }
+        None => incoming.collect().await?.to_bytes(),
+    };
     timing.download = started.elapsed();
 
     Ok(Exchange {

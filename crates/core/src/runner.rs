@@ -152,6 +152,8 @@ pub struct Job<'a> {
     /// Proxy, certificates and cookie jar, from [`crate::settings::MachineSettings::network`]. `None` sends
     /// directly, with no cookies.
     pub network: Option<Arc<http::Network>>,
+    /// Sees a server-sent event stream as it arrives (see [`http::send_observed`]).
+    pub observer: Option<&'a http::Observer<'a>>,
 }
 
 /// How scripts run for a job.
@@ -556,10 +558,9 @@ pub async fn execute(job: Job<'_>) -> Execution {
     }
 
     // The request
-    let result = match &job.network {
-        Some(network) => http::send_with(&prepared.request, network).await,
-        None => http::send(&prepared.request).await,
-    };
+    let direct = http::Network::default();
+    let network = job.network.as_deref().unwrap_or(&direct);
+    let result = http::send_observed(&prepared.request, network, job.observer).await;
     execution.sent = Some(prepared.request.clone());
     if let Some(history) = job.history {
         let entry = Entry {

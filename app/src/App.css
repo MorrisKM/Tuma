@@ -1808,3 +1808,51 @@ iframe.visualizer {
 .warning-text {
   color: var(--redirect);
 }
+
+/* Server-sent events */
+
+.events-view {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.event-list li {
+  border-bottom: 1px solid var(--border);
+  padding: 5px 2px;
+  cursor: pointer;
+}
+
+.event-head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.event-name {
+  color: var(--syntax-property);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.event-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.event-data {
+  margin: 6px 0 2px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

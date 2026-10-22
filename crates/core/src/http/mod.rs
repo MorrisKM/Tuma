@@ -8,7 +8,7 @@ pub mod network;
 mod prepare;
 mod tls;
 
-pub use client::{send, send_with};
+pub use client::{Observer, StreamEvent, send, send_observed, send_with};
 pub use error::Error;
 pub use model::{
     ApiKeyLocation, Auth, Body, Header, KeyValue, Part, Redirect, Request, Response, SentRequest,

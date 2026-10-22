@@ -139,6 +139,7 @@ pub async fn run(
                 source: options.source,
                 allow_host: options.allow_host.clone(),
                 network: options.network.clone(),
+                observer: None,
                 scripting: Scripting {
                     enabled: options.scripts,
                     iteration,

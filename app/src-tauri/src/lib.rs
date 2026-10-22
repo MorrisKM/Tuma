@@ -11,7 +11,7 @@ use std::sync::Mutex;
 
 use base64::Engine;
 use serde::Serialize;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tokio::sync::oneshot;
 use tuma_core::expect::CheckResult;
 use tuma_core::history::{Entry, History};
@@ -53,8 +53,19 @@ struct ResponseView {
     unresolved: Vec<String>,
     /// The results of the request's `expect:` checks.
     checks: Vec<CheckResult>,
+    /// For a `text/event-stream` response: its events.
+    events: Option<Vec<tuma_core::sse::Event>>,
     #[serde(flatten)]
     scripts: ScriptsView,
+}
+
+/// A server-sent event as it arrives, for the request with this id.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct LiveEvent<'a> {
+    id: &'a str,
+    /// `None` when the stream opened.
+    event: Option<tuma_core::sse::Event>,
 }
 
 /// What scripts did, for the Tests, Console and Visualize tabs.
@@ -95,6 +106,7 @@ impl ErrorView {
 // Tauri serializes the error straight away, so its size does not matter.
 #[allow(clippy::too_many_arguments, clippy::result_large_err)]
 async fn send_request(
+    app: tauri::AppHandle,
     id: String,
     request: RequestFile,
     path: Option<String>,
@@ -110,6 +122,30 @@ async fn send_request(
         .map_err(|e| ErrorView::new("settings", format!("network settings: {e}")))?;
     let (cancel, cancelled) = oneshot::channel();
     in_flight.0.lock().unwrap().insert(id.clone(), cancel);
+    // Server-sent events go to the UI as they arrive.
+    let parser = Mutex::new(tuma_core::sse::Parser::default());
+    let observer = |event: tuma_core::http::StreamEvent<'_>| match event {
+        tuma_core::http::StreamEvent::Open { .. } => {
+            let _ = app.emit(
+                "sse-event",
+                LiveEvent {
+                    id: &id,
+                    event: None,
+                },
+            );
+        }
+        tuma_core::http::StreamEvent::Data(data) => {
+            for event in parser.lock().unwrap().feed(data) {
+                let _ = app.emit(
+                    "sse-event",
+                    LiveEvent {
+                        id: &id,
+                        event: Some(event),
+                    },
+                );
+            }
+        }
+    };
     let job = Job {
         workspace: ws.as_ref(),
         request: &request,
@@ -124,6 +160,7 @@ async fn send_request(
         allow_host: None,
         scripting: Default::default(),
         network: Some(network.clone()),
+        observer: Some(&observer),
     };
     let execution = tokio::select! {
         execution = runner::execute(job) => Some(execution),
@@ -159,6 +196,14 @@ async fn send_request(
             });
         }
     };
+    let events = response
+        .headers
+        .iter()
+        .any(|h| {
+            h.name.eq_ignore_ascii_case("content-type")
+                && h.value.trim_start().starts_with("text/event-stream")
+        })
+        .then(|| tuma_core::sse::parse_all(&response.body));
     let (body, body_base64) = match std::str::from_utf8(&response.body) {
         Ok(text) => (text.to_string(), false),
         Err(_) => (
@@ -182,6 +227,7 @@ async fn send_request(
         sent: response.sent,
         unresolved,
         checks: execution.checks,
+        events,
         scripts,
     })
 }

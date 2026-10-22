@@ -1,20 +1,36 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useStore } from "../store";
 import type { Header, Response, Timing } from "../types";
 import { select } from "../jsonpath";
 import { CodeEditor, type Language } from "./CodeEditor";
+import { EventsView } from "./EventsView";
 import { ConsoleView, TestsView, testsLabel, VisualizerView } from "./ScriptResults";
 import { Tabs } from "./Tabs";
 
-type Tab = "body" | "tests" | "console" | "visualize" | "headers" | "timing" | "request";
+type Tab = "body" | "events" | "tests" | "console" | "visualize" | "headers" | "timing" | "request";
 type View = "pretty" | "raw" | "preview";
 
 export function ResponsePanel() {
   const response = useStore((s) => s.response);
   const error = useStore((s) => s.error);
   const sending = useStore((s) => s.sending);
+  const live = useStore((s) => (s.sending ? s.live[s.sending] : undefined));
   const [tab, setTab] = useState<Tab>("body");
+  // A finished event stream opens on its events.
+  useEffect(() => {
+    if (response?.events) setTab("events");
+  }, [response]);
 
+  // An event stream shows its events while it is open.
+  if (sending && live) {
+    return (
+      <section className="response-panel">
+        <div className="panel-body">
+          <EventsView events={live} live />
+        </div>
+      </section>
+    );
+  }
   if (sending && !response) return <Placeholder>Sending…</Placeholder>;
   if (error && error.kind !== "cancelled") {
     const skipped = error.kind === "skipped";
@@ -44,6 +60,7 @@ export function ResponsePanel() {
   const tests = testsLabel(response.checks, response.tests, response.scriptErrors);
   // A tab that this response doesn't have shows the body instead.
   const shown: Tab =
+    (tab === "events" && !response.events) ||
     (tab === "tests" && !tests) ||
     (tab === "console" && !response.console.length && !response.scriptErrors.length) ||
     (tab === "visualize" && !response.visualizer)
@@ -56,6 +73,7 @@ export function ResponsePanel() {
         active={shown}
         onChange={setTab}
         tabs={[
+          ...(response.events ? [{ id: "events" as Tab, label: "Events", count: response.events.length }] : []),
           { id: "body", label: "Body" },
           ...(tests ? [{ id: "tests" as Tab, label: tests }] : []),
           ...(response.console.length || response.scriptErrors.length
@@ -71,6 +89,7 @@ export function ResponsePanel() {
       </Tabs>
       <Unresolved names={response.unresolved} />
       <div className="panel-body">
+        {shown === "events" && response.events && <EventsView events={response.events} live={false} />}
         {shown === "body" && <BodyView response={response} />}
         {shown === "tests" && (
           <TestsView checks={response.checks} tests={response.tests} errors={response.scriptErrors} />

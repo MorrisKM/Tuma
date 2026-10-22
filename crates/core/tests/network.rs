@@ -410,3 +410,68 @@ fn pfx(cert: &rcgen::Certificate, key: &KeyPair, passphrase: &str) -> Vec<u8> {
     store.add_entry("client", KeyStoreEntry::PrivateKeyChain(chain));
     store.writer(passphrase).write().unwrap()
 }
+
+/// Sends three events, 150 ms apart.
+async fn sse_server() -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        loop {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            tokio::spawn(async move {
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf).await;
+                let _ = stream
+                    .write_all(b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ntransfer-encoding: chunked\r\n\r\n")
+                    .await;
+                for i in 1..=3 {
+                    let event = format!("event: tick\ndata: {{\"n\": {i}}}\nid: {i}\n\n");
+                    let _ = stream
+                        .write_all(format!("{:x}\r\n{event}\r\n", event.len()).as_bytes())
+                        .await;
+                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                }
+                let _ = stream.write_all(b"0\r\n\r\n").await;
+            });
+        }
+    });
+    format!("http://{addr}")
+}
+
+#[tokio::test]
+async fn server_sent_events_arrive_as_they_are_sent() {
+    let base = sse_server().await;
+    let started = std::time::Instant::now();
+    let seen: Arc<Mutex<Vec<(u128, tuma_core::sse::Event)>>> = Arc::default();
+    let parser = Mutex::new(tuma_core::sse::Parser::default());
+    let record = seen.clone();
+    let observer = move |event: tuma_core::http::StreamEvent<'_>| {
+        if let tuma_core::http::StreamEvent::Data(data) = event {
+            for e in parser.lock().unwrap().feed(data) {
+                record
+                    .lock()
+                    .unwrap()
+                    .push((started.elapsed().as_millis(), e));
+            }
+        }
+    };
+    let response = tuma_core::http::send_observed(
+        &get(&format!("{base}/events")),
+        &Network::default(),
+        Some(&observer),
+    )
+    .await
+    .unwrap();
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.len(), 3);
+    assert_eq!(seen[2].1.data, "{\"n\": 3}");
+    assert_eq!(seen[2].1.event, "tick");
+    // The first event came long before the stream ended.
+    assert!(
+        seen[0].0 + 200 < seen[2].0,
+        "{:?}",
+        seen.iter().map(|s| s.0).collect::<Vec<_>>()
+    );
+    // The whole stream is kept in the response too.
+    assert_eq!(tuma_core::sse::parse_all(&response.body).len(), 3);
+}

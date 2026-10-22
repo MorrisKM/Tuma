@@ -15,6 +15,7 @@ import type {
   KeyValue,
   RequestError,
   Response,
+  SseEvent,
   TreeNode,
   VariableHint,
   WorkspaceInfo,
@@ -83,6 +84,8 @@ interface State {
   snippetOpen: boolean;
   history: HistoryEntry[];
   notice: Notice | null;
+  /** Server-sent events arriving for requests in flight, by send id. */
+  live: Record<string, SseEvent[]>;
 
   init: () => Promise<void>;
   openWorkspace: () => Promise<void>;
@@ -279,6 +282,7 @@ export const useStore = create<State>((set, get) => {
     snippetOpen: false,
     history: [],
     notice: null,
+    live: {},
 
     init: () =>
       attempt(async () => {
@@ -565,6 +569,10 @@ export const useStore = create<State>((set, get) => {
         patchTab(activeTab, { response: null, error: e as RequestError });
       } finally {
         patchTab(activeTab, { sending: null });
+        set((s) => {
+          const { [id]: _, ...live } = s.live;
+          return { live };
+        });
         void get().loadHistory();
       }
     },

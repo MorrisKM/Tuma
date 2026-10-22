@@ -296,6 +296,7 @@ async fn oauth2_tokens_through_the_runner() {
             allow_host: None,
             scripting: Default::default(),
             network: None,
+            observer: None,
         })
     };
     // Client credentials: fetched without asking.
@@ -334,6 +335,7 @@ async fn oauth2_tokens_through_the_runner() {
         allow_host: None,
         scripting: Default::default(),
         network: None,
+        observer: None,
     })
     .await;
     let failure = execution.response.unwrap_err();
