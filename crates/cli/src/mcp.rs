@@ -117,7 +117,7 @@ struct RunParams {
     /// A collection, folder or request path such as "Users API/Admin". Empty runs the whole workspace.
     #[serde(default)]
     path: String,
-    /// Only run requests that have checks.
+    /// Only run requests that test something: checks, or a test script of their own or inherited.
     #[serde(default)]
     only_tests: bool,
     environment: Option<String>,
@@ -266,8 +266,9 @@ impl Server {
     }
 
     #[tool(
-        description = "Run saved requests under a collection or folder (or all of them) with their checks. \
-        Returns totals, and details only for failures."
+        description = "Run saved requests under a collection or folder (or all of them) with their checks and \
+        test scripts, in order (scripts can change it with pm.execution.setNextRequest). Returns totals, and details \
+        only for failures, including test results and script errors."
     )]
     async fn run_saved(
         &self,

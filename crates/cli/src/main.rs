@@ -481,7 +481,8 @@ async fn run_saved(start: &Path, args: RunArgs, only_tests: bool) -> anyhow::Res
     };
     let history = History::default_location();
     let json = args.common.json;
-    let mut printed_iteration = 0;
+    let several = args.iterations.max(data.len()) > 1;
+    let mut printed_iteration = None;
     let report = runs::run(
         runs::RunOptions {
             workspace: &workspace,
@@ -505,9 +506,14 @@ async fn run_saved(start: &Path, args: RunArgs, only_tests: bool) -> anyhow::Res
             if json {
                 return;
             }
-            if step.iteration != printed_iteration {
-                printed_iteration = step.iteration;
-                println!("\nIteration {}", step.iteration + 1);
+            if several && printed_iteration != Some(step.iteration) {
+                let gap = if printed_iteration.is_some() {
+                    "\n"
+                } else {
+                    ""
+                };
+                printed_iteration = Some(step.iteration);
+                println!("{gap}Iteration {}", step.iteration + 1);
             }
             output::outcome(&step.outcome, false);
         },

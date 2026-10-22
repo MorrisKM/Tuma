@@ -192,6 +192,9 @@ function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
             {!isRequest && <button onClick={() => void addRequest(node.path)}>New request</button>}
             {!isRequest && <button onClick={() => void addFolder(node.path)}>New folder</button>}
             {!isRequest && <button onClick={() => void openFolder(node.path)}>Settings</button>}
+            {!isRequest && (
+              <button onClick={() => useStore.setState({ view: { kind: "runner", path: node.path } })}>Run…</button>
+            )}
             {node.kind === "collection" && (
               <button onClick={() => void useStore.getState().exportCollection(node.path)}>Export to Postman…</button>
             )}

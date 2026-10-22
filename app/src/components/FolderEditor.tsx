@@ -5,10 +5,11 @@ import { useStore } from "../store";
 import type { FolderFile, KeyValue, VariableValue } from "../types";
 import { AuthForm } from "./AuthForm";
 import { blankRow, KeyValueEditor } from "./KeyValueEditor";
+import { ScriptsEditor } from "./ScriptsEditor";
 import { Tabs } from "./Tabs";
 import { VariableTable } from "./VariableTable";
 
-type Tab = "auth" | "headers" | "variables" | "description";
+type Tab = "auth" | "headers" | "variables" | "scripts" | "description";
 
 /** Settings shared by every request in a collection or folder. */
 export function FolderEditor({ path }: { path: string }) {
@@ -54,9 +55,18 @@ export function FolderEditor({ path }: { path: string }) {
           <span className="muted small">{isCollection ? "Collection settings" : "Folder settings"}</span>
           {dirty && <span className="dirty">●</span>}
         </div>
-        <button className="button primary" disabled={!dirty} onClick={() => void save()}>
-          Save
-        </button>
+        <div className="toolbar">
+          <button
+            className="button"
+            onClick={() => useStore.setState({ view: { kind: "runner", path } })}
+            title="Run every request inside, with its scripts and checks"
+          >
+            Run…
+          </button>
+          <button className="button primary" disabled={!dirty} onClick={() => void save()}>
+            Save
+          </button>
+        </div>
       </div>
       <Tabs
         active={tab}
@@ -65,6 +75,11 @@ export function FolderEditor({ path }: { path: string }) {
           { id: "auth", label: "Auth" },
           { id: "headers", label: "Headers", count: headers.filter((h) => h.enabled && h.name).length },
           { id: "variables", label: "Variables", count: variables.length },
+          {
+            id: "scripts",
+            label: "Scripts",
+            count: [folder.scripts?.preRequest, folder.scripts?.test].filter((s) => s?.trim()).length,
+          },
           { id: "description", label: "Description" },
         ]}
       />
@@ -98,6 +113,13 @@ export function FolderEditor({ path }: { path: string }) {
               over both. Put secrets in an environment instead: these values are saved in the workspace files.
             </p>
           </>
+        )}
+        {tab === "scripts" && (
+          <ScriptsEditor
+            scripts={folder.scripts ?? {}}
+            onChange={(scripts) => setFolder({ ...folder, scripts })}
+            scope={isCollection ? "collection" : "folder"}
+          />
         )}
         {tab === "description" && (
           <textarea

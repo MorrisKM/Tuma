@@ -27,7 +27,9 @@ export type View =
   /** Global variables, or an environment's. */
   | { kind: "variables"; environment: string | null }
   /** How to connect a coding agent over MCP. */
-  | { kind: "agents" };
+  | { kind: "agents" }
+  /** The collection runner, for a collection or folder. */
+  | { kind: "runner"; path: string };
 
 export interface Notice {
   tone: "info" | "error";

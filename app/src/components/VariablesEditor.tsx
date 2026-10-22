@@ -126,7 +126,53 @@ export function VariablesEditor({ environment }: { environment: string | null })
             : "Available to every request in the workspace, with the lowest priority."}
         </p>
         <VariableTable variables={variables} onChange={setVariables} allowSecrets />
+        <CurrentValues environment={environment} />
       </div>
     </section>
+  );
+}
+
+/** Values scripts set in this scope (pm.environment.set, pm.globals.set). They win over the table, on this machine
+ * only, until reset. */
+function CurrentValues({ environment }: { environment: string | null }) {
+  const [values, setValues] = useState<Record<string, string | null>>({});
+  const load = () =>
+    api.currentValues().then(
+      (all) => setValues((environment === null ? all.globals : all.environments[environment]) ?? {}),
+      () => setValues({}),
+    );
+  useEffect(() => {
+    void load();
+  }, [environment]);
+  const entries = Object.entries(values);
+  if (entries.length === 0) return null;
+  const reset = async () => {
+    await api.resetCurrentValues(environment === null ? { kind: "globals" } : { kind: "environment", name: environment });
+    await load();
+    void useStore.getState().loadScope();
+  };
+  return (
+    <div className="current-values">
+      <div className="toolbar spaced">
+        <h3>Set by scripts</h3>
+        <button className="link-button" onClick={() => void reset()}>
+          Reset to the values above
+        </button>
+      </div>
+      <p className="hint">
+        Scripts changed these. The new values are used instead of the ones above, on this machine only: they are not
+        saved in the workspace files, so tokens don't end up in git.
+      </p>
+      <table className="current-table">
+        <tbody>
+          {entries.map(([name, value]) => (
+            <tr key={name}>
+              <td className="mono">{name}</td>
+              <td className="mono">{value === null ? <span className="muted">(unset)</span> : value}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

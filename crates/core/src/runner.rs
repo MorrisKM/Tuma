@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::expect::{self, CheckResult, Expectations};
@@ -74,8 +74,8 @@ pub struct Detail {
 }
 
 /// One request's result, safe to show to an agent: secret values are masked everywhere.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct Outcome {
     /// The saved request, when it is one.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -865,8 +865,8 @@ pub fn requests_under(workspace: &Workspace, path: &str) -> Result<Vec<String>, 
 }
 
 /// The totals of a run.
-#[derive(Debug, Default, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct Summary {
     pub requests: usize,
     pub passed: usize,

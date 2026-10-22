@@ -169,7 +169,7 @@ pub struct ScriptError {
     pub message: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LogLine {
     /// `log`, `info`, `warn`, `error` or `debug`.
     pub level: String,
@@ -404,6 +404,41 @@ fn exception(ctx: &Ctx, error: rquickjs::Error) -> String {
         .as_string()
         .and_then(|s| s.to_string().ok())
         .unwrap_or_else(|| format!("{value:?}"))
+}
+
+/// A script's syntax error, with its line (from 1) when the engine says, or `None` if it parses.
+pub fn syntax_error(source: &str) -> Option<(String, Option<usize>)> {
+    if source.trim().is_empty() {
+        return None;
+    }
+    let runtime = Runtime::new().ok()?;
+    let context = Context::full(&runtime).ok()?;
+    context.with(|ctx| {
+        // Compiled, not run: the same wrapper the sandbox uses, one line above the script.
+        let wrapped = format!("(async function () {{\n{source}\n}})");
+        ctx.eval::<(), _>(wrapped).err()?;
+        let value = ctx.catch();
+        let e = value.as_exception()?;
+        let name: String = e.get("name").unwrap_or_default();
+        let message = format!("{name}: {}", e.message().unwrap_or_default());
+        // The stack ends with "<input>:LINE:COLUMN"; the wrapper adds one line.
+        let line = e
+            .stack()
+            .and_then(|stack| {
+                let digits: Vec<&str> = stack
+                    .split(|c: char| !c.is_ascii_digit())
+                    .filter(|d| !d.is_empty())
+                    .collect();
+                digits
+                    .iter()
+                    .rev()
+                    .nth(1)
+                    .and_then(|l| l.parse::<usize>().ok())
+            })
+            // An unclosed block is reported at the end of input, past the script.
+            .map(|l| l.saturating_sub(1).clamp(1, source.lines().count().max(1)));
+        Some((message, line))
+    })
 }
 
 /// `pm.sendRequest`: sends a request described by the sandbox and returns `{response}` or `{error}`. It runs on its own

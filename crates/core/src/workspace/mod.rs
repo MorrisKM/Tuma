@@ -129,6 +129,7 @@ pub struct Prepared {
     pub unresolved: BTreeSet<String>,
 }
 
+#[derive(Debug, Clone)]
 pub struct Workspace {
     root: PathBuf,
     file: WorkspaceFile,
@@ -199,6 +200,11 @@ impl Workspace {
 
     pub fn name(&self) -> &str {
         &self.file.name
+    }
+
+    /// The workspace's id, the same in every clone of it.
+    pub fn id(&self) -> &str {
+        &self.file.id
     }
 
     /// Turns a relative path from the UI into an absolute one, refusing anything that would leave the workspace.

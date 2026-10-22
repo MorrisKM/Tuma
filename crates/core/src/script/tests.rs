@@ -383,3 +383,20 @@ fn send_request_respects_allowed_hosts() {
     s.sort();
     assert_eq!(s, [("blocked".into(), true), ("blocked too".into(), true)]);
 }
+
+#[test]
+fn syntax_errors_are_found_without_running() {
+    assert_eq!(
+        syntax_error("pm.test('a', () => {});\nwhile (true) {}"),
+        None
+    );
+    let (message, _) = syntax_error("let x = ;").unwrap();
+    assert!(message.starts_with("SyntaxError"), "{message}");
+    assert_eq!(syntax_error(""), None);
+    assert_eq!(
+        syntax_error("pm.test('a');\nconst a = 1;\nlet x = ;\n")
+            .unwrap()
+            .1,
+        Some(3)
+    );
+}

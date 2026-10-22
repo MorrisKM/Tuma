@@ -50,7 +50,7 @@
       "$ref": "#/$defs/Expectations"
     },
     "scripts": {
-      "description": "Kept from Postman imports; they run once scripting arrives (milestone M5).",
+      "description": "Pre-request and test scripts (JavaScript, Postman's `pm.*` API). Collections and folders can have them too.",
       "$ref": "#/$defs/Scripts"
     }
   },

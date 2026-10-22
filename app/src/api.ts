@@ -1,6 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AgentSetup,
+  CurrentValues,
+  PastRun,
+  RunReport,
   Language,
   Snippet,
   VariableHint,
@@ -70,3 +73,28 @@ export const snippet = (request: RequestFile, path: string | null, environment: 
 export const parseCurl = (command: string) => invoke<[RequestFile, string[]]>("parse_curl", { command });
 
 export const exportPostman = (collection: string, file: string) => invoke<void>("export_postman", { collection, file });
+
+export interface RunRequest {
+  runId: string;
+  /** A collection or folder. */
+  path: string;
+  environment: string | null;
+  iterations: number;
+  delayMs: number;
+  dataFile: string | null;
+  onlyTests: boolean;
+}
+
+/** Runs a collection or folder. Progress arrives as "run-step" events. */
+export const runCollection = (r: RunRequest) =>
+  invoke<{ file: string | null; report: RunReport }>("run_collection", { ...r });
+export const stopRun = (runId: string) => invoke<void>("stop_run", { runId });
+export const runsList = () => invoke<PastRun[]>("runs_list");
+export const runRead = (file: string) => invoke<RunReport>("run_read", { file });
+export const runExport = (file: string, target: string, format: "junit" | "json") =>
+  invoke<void>("run_export", { file, target, format });
+
+export const currentValues = () => invoke<CurrentValues>("current_values");
+/** Resets one scope, or every scope with no argument. */
+export const resetCurrentValues = (scope?: { kind: "environment" | "collection" | "globals"; name?: string }) =>
+  invoke<void>("reset_current_values", { scope: scope ?? null });

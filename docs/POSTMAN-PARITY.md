@@ -82,9 +82,10 @@ confirmed). Hawk, NTLM, Akamai EdgeGrid and ASAP come from the long-standing doc
 | ----------------------------------------------------------------------------------------------- | --------------- |
 | Pre-request and post-response scripts at request, folder and collection level                  | Yes, M5         |
 | Assertions without code (`expect:` in request files); contract checks against OpenAPI          | Tuma extra, M3  |
-| `pm.*` API: `pm.test`, `pm.expect` (Chai), `pm.response`, `pm.request`, `pm.environment`/`collectionVariables`/`globals`/`variables`, `pm.sendRequest`, `pm.cookies`, `pm.info`, `pm.iterationData`, `pm.execution` (skip request, set next request), `pm.visualizer` | Yes, M5 |
-| `pm.vault`, `pm.state`                                                                          | Yes, M5         |
-| Bundled libraries (lodash, moment, crypto-js, ajv, xml2js, cheerio, tv4 and others)             | Yes, M5         |
+| `pm.*` API: `pm.test`, `pm.expect` (Chai), `pm.response`, `pm.request`, `pm.environment`/`collectionVariables`/`globals`/`variables`, `pm.sendRequest`, `pm.cookies`, `pm.info`, `pm.iterationData`, `pm.execution` (skip request, set next request), `pm.visualizer`; the older `postman.*`, `tests[...]`, `responseBody` API | Yes, M5; `pm.cookies.jar()` not yet |
+| Variables set by scripts are "current values": on this machine only, never in the files        | Yes, M5         |
+| `pm.vault`, `pm.state`                                                                          | `pm.vault.get` reads secret variables, M5; setting vault values and `pm.state` not yet |
+| Bundled libraries (lodash, moment, crypto-js, ajv, xml2js, cheerio, tv4 and others)             | lodash, moment, crypto-js, chai, ajv, tv4, uuid, atob/btoa and `xml2Json`, M5; cheerio, xml2js and others not yet |
 | `pm.require`: shared script packages (team Package Library, or npm/jsr)                         | Local: a scripts folder in the workspace; npm later |
 | Snippets and AI help writing tests                                                              | Snippets M5; AI no |
 | Console (logs, raw request and response sent over the wire)                                     | Yes, M1         |
@@ -94,8 +95,8 @@ confirmed). Hawk, NTLM, Akamai EdgeGrid and ASAP come from the long-standing doc
 | Feature                                                                               | Tuma                         |
 | ------------------------------------------------------------------------------------- | ---------------------------- |
 | Run a collection or folder: order, iterations, delay, data file (CSV or JSON)         | Yes, M5                      |
-| Persisted results, export of results                                                  | Yes, M5                      |
-| Postman CLI / Newman: run collections in CI, JUnit and HTML reporters                 | Yes, `tuma` CLI M3; JUnit M5 |
+| Persisted results, export of results                                                  | Yes, M5: the last 50 runs per workspace; JSON and JUnit export |
+| Postman CLI / Newman: run collections in CI, JUnit and HTML reporters                 | Yes, `tuma` CLI M3; JUnit M5; HTML not yet |
 | Performance testing: virtual users, ramp-up, latency and error charts                 | Local: in the runner, after v1.0 |
 | Scheduled runs and Monitors (run from Postman's cloud on a schedule)                  | No: the CLI plus cron or CI does this |
 

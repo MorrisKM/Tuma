@@ -60,13 +60,19 @@ export function CommandPalette() {
       theme("dark", "Dark theme"),
       theme("system", "Theme: follow the system"),
     ];
+    const runs: Item[] = tree.map((c) => ({
+      id: `run-${c.path}`,
+      label: `Run collection: ${c.name}`,
+      hint: "Runner",
+      run: () => useStore.setState({ view: { kind: "runner", path: c.path } }),
+    }));
     const saved: Item[] = requests(tree).map((r) => ({
       id: `req-${r.path}`,
       label: r.name,
       hint: `${r.method} · ${r.path.replace(/\/[^/]*$/, "")}`,
       run: () => void s.openRequest(r.path),
     }));
-    return [...saved, ...commands];
+    return [...saved, ...commands, ...runs];
     // The store's actions are stable; tree, environments and workspace change what is listed.
   }, [tree, environments, workspace]);
 

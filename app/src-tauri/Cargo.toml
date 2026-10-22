@@ -22,5 +22,6 @@ tauri = { version = "2.12", features = [] }
 tauri-plugin-dialog = "2.8"
 tokio = { workspace = true, features = ["sync"] }
 base64 = "0.23"
+handlebars = "6.4"
 serde.workspace = true
 serde_json.workspace = true

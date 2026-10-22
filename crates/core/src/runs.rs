@@ -6,7 +6,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::history::History;
@@ -44,7 +44,7 @@ pub struct RunOptions<'a> {
 }
 
 /// One request in a run.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Step {
     /// Counting from 0.
@@ -54,7 +54,7 @@ pub struct Step {
     pub outcome: Outcome,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Report {
     /// What was run: a collection, folder or request, or empty for the whole workspace.
@@ -67,7 +67,7 @@ pub struct Report {
     pub summary: Summary,
     pub steps: Vec<Step>,
     /// Why the run ended early, if it did.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stopped: Option<String>,
 }
 

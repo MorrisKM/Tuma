@@ -68,7 +68,7 @@ pub struct RequestFile {
     /// Checks that `tuma test` and `tuma run` apply to the response.
     #[serde(skip_serializing_if = "Expectations::is_empty")]
     pub expect: Expectations,
-    /// Kept from Postman imports; they run once scripting arrives (milestone M5).
+    /// Pre-request and test scripts (JavaScript, Postman's `pm.*` API). Collections and folders can have them too.
     #[serde(skip_serializing_if = "Scripts::is_empty")]
     pub scripts: Scripts,
 }

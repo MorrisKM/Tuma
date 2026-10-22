@@ -399,3 +399,33 @@ pub fn export_postman(
         .map_err(|e| e.to_string())?;
     std::fs::write(&file, json + "\n").map_err(|e| format!("{}: {e}", file.display()))
 }
+
+/// What scripts have set on this machine, by scope.
+#[tauri::command]
+pub fn current_values(open: tauri::State<'_, Open>) -> Result<tuma_core::workspace::CurrentValues> {
+    with(&open, |w| Ok(w.current_values()))
+}
+
+/// A scope to reset: `environment` or `collection` with a name, or `globals`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScopeArg {
+    kind: String,
+    name: Option<String>,
+}
+
+/// Forgets current values, going back to the values in the files: for one scope, or all of them.
+#[tauri::command]
+pub fn reset_current_values(open: tauri::State<'_, Open>, scope: Option<ScopeArg>) -> Result<()> {
+    use tuma_core::workspace::Scope;
+    with(&open, |w| {
+        let scope = scope
+            .as_ref()
+            .map(|s| match (s.kind.as_str(), s.name.as_deref()) {
+                ("environment", Some(name)) => Scope::Environment(name),
+                ("collection", Some(name)) => Scope::Collection(name),
+                _ => Scope::Globals,
+            });
+        w.reset_current_values(scope)
+    })
+}

@@ -293,3 +293,84 @@ fn mcp_read_only_refuses_writes() {
     assert!(err, "{out}");
     assert!(!project.app().join(".tuma").exists());
 }
+
+#[test]
+fn test_scripts_data_files_and_junit() {
+    let base = stub_server();
+    let project = Project::new("scripts");
+    let ws = project.app().join(".tuma");
+    std::fs::create_dir_all(ws.join("Users")).unwrap();
+    std::fs::write(
+        ws.join("workspace.yaml"),
+        "name: Scripts\nid: scripts-test\n",
+    )
+    .unwrap();
+    std::fs::write(
+        ws.join("Users/_folder.yaml"),
+        format!("variables:\n- name: baseUrl\n  value: {base}\n"),
+    )
+    .unwrap();
+    // A test script and no expect: block still makes it a test.
+    std::fs::write(
+        ws.join("Users/create.yaml"),
+        r#"method: POST
+url: "{{baseUrl}}/users"
+body:
+  type: json
+  content: '{"name": "{{name}}"}'
+scripts:
+  test: |-
+    pm.test("created", () => pm.response.to.have.status(201));
+    pm.test("echoes the name", () => pm.expect(pm.response.json().echo.name).to.equal(pm.iterationData.get("name")));
+    console.log("made", pm.iterationData.get("name"));
+"#,
+    )
+    .unwrap();
+    std::fs::write(project.0.join("names.csv"), "name\nAnn\nBob\n").unwrap();
+    let data = project.0.join("names.csv");
+    let junit = project.0.join("results.xml");
+
+    let (code, out) = project.tuma(&[
+        "test",
+        "--data",
+        data.to_str().unwrap(),
+        "--junit",
+        junit.to_str().unwrap(),
+    ]);
+    assert_eq!(code, 0, "{out}");
+    assert!(
+        out.contains("Iteration 1\n✓ POST Users/create.yaml"),
+        "{out}"
+    );
+    assert!(out.contains("Iteration 2"), "{out}");
+    assert!(out.contains("2 requests passed, 4 checks"), "{out}");
+    let xml = std::fs::read_to_string(&junit).unwrap();
+    assert!(xml.contains(r#"tests="4" failures="0""#), "{xml}");
+    assert!(
+        xml.contains(r#"<testcase name="echoes the name" classname="Users/create"/>"#),
+        "{xml}"
+    );
+
+    // Without the data file the name check fails, and so does the command.
+    let (code, out) = project.tuma(&["test", "--json"]);
+    assert_eq!(code, 1, "{out}");
+    let result: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(result["summary"]["failedChecks"], 1);
+    assert_eq!(result["results"][0]["tests"][1]["passed"], false);
+    assert_eq!(result["results"][0]["console"][0]["text"], "made undefined");
+
+    // Scripts with syntax errors are caught before they run.
+    std::fs::write(
+        ws.join("Users/broken.yaml"),
+        "method: GET\nscripts:\n  test: |-\n    pm.test('x', () => {\n",
+    )
+    .unwrap();
+    let (code, out) = project.tuma(&["check"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(
+        out.contains(
+            "Users/broken.yaml:4: error: the post-response script has an error: SyntaxError"
+        ),
+        "{out}"
+    );
+}

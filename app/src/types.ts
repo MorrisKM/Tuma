@@ -115,7 +115,7 @@ export interface Timing {
   total: number;
 }
 
-export interface Response {
+export interface Response extends ScriptResults {
   status: number;
   reason: string;
   version: string;
@@ -132,6 +132,33 @@ export interface Response {
   unresolved: string[];
   /** Results of the request's `expect:` checks. */
   checks: CheckResult[];
+}
+
+/** What the collection's, folders' and request's scripts did. Sent with responses and with errors. */
+export interface ScriptResults {
+  tests: TestResult[];
+  scriptErrors: ScriptError[];
+  console: LogLine[];
+  /** A rendered pm.visualizer template. */
+  visualizer: { url: string | null; error: string | null } | null;
+}
+
+export interface TestResult {
+  name: string;
+  passed: boolean;
+  skipped?: boolean;
+  error?: string;
+}
+
+export interface ScriptError {
+  /** Such as "collection Users API", "folder Admin" or "request". */
+  script: string;
+  message: string;
+}
+
+export interface LogLine {
+  level: "log" | "info" | "warn" | "error" | "debug";
+  text: string;
 }
 
 export interface CheckResult {
@@ -166,10 +193,68 @@ export interface AgentSetup {
   project: string | null;
 }
 
-export interface RequestError {
+export interface RequestError extends Partial<ScriptResults> {
   kind: string;
   message: string;
   unresolved?: string[];
+}
+
+/** One request of a collection run. */
+export interface RunStep {
+  iteration: number;
+  name: string;
+  path?: string;
+  method: string;
+  url: string;
+  status?: number;
+  reason?: string;
+  timeMs?: number;
+  size?: number;
+  error?: string;
+  skipped?: boolean;
+  checks?: CheckResult[];
+  tests?: TestResult[];
+  scriptErrors?: ScriptError[];
+  console?: LogLine[];
+  body?: string;
+  passed: boolean;
+}
+
+export interface RunSummary {
+  requests: number;
+  passed: number;
+  failed: number;
+  checks: number;
+  failedChecks: number;
+}
+
+export interface RunReport {
+  path: string;
+  environment: string | null;
+  iterations: number;
+  startedAt: number;
+  durationMs: number;
+  summary: RunSummary;
+  steps: RunStep[];
+  stopped?: string;
+}
+
+export interface PastRun {
+  file: string;
+  path: string;
+  environment: string | null;
+  iterations: number;
+  startedAt: number;
+  durationMs: number;
+  summary: RunSummary;
+  stopped: string | null;
+}
+
+/** Values scripts set on this machine, by scope. null means unset. */
+export interface CurrentValues {
+  environments: Record<string, Record<string, string | null>>;
+  collections: Record<string, Record<string, string | null>>;
+  globals: Record<string, string | null>;
 }
 
 export interface HistoryEntry {

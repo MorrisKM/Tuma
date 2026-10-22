@@ -1,21 +1,22 @@
 //! The desktop shell: Tauri commands that call into `tuma_core`. Keep logic out of here.
 
+mod runs;
+mod visualizer;
 mod workspace;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use serde::Serialize;
 use tauri::Manager;
 use tokio::sync::oneshot;
-use tuma_core::expect::{self, CheckResult};
+use tuma_core::expect::CheckResult;
 use tuma_core::history::{Entry, History};
-use tuma_core::http::{self, Header, Redirect, SentRequest, Timing};
-use tuma_core::runner;
+use tuma_core::http::{Header, Redirect, SentRequest, Timing};
+use tuma_core::runner::{self, Job};
+use tuma_core::script::{LogLine, ScriptError, TestResult};
 use tuma_core::workspace::files::RequestFile;
-use tuma_core::workspace::prepare_standalone;
 
 /// How many history entries the sidebar shows.
 const HISTORY_LIMIT: usize = 500;
@@ -50,28 +51,47 @@ struct ResponseView {
     unresolved: Vec<String>,
     /// The results of the request's `expect:` checks.
     checks: Vec<CheckResult>,
+    #[serde(flatten)]
+    scripts: ScriptsView,
+}
+
+/// What scripts did, for the Tests, Console and Visualize tabs.
+#[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct ScriptsView {
+    tests: Vec<TestResult>,
+    script_errors: Vec<ScriptError>,
+    console: Vec<LogLine>,
+    /// The URL of the rendered `pm.visualizer` template, or why it could not be rendered.
+    visualizer: Option<visualizer::Rendered>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ErrorView {
-    kind: &'static str,
+    kind: String,
     message: String,
     unresolved: Vec<String>,
+    #[serde(flatten)]
+    scripts: ScriptsView,
 }
 
 impl ErrorView {
-    fn new(kind: &'static str, message: impl Into<String>) -> Self {
+    fn new(kind: &str, message: impl Into<String>) -> Self {
         Self {
-            kind,
+            kind: kind.into(),
             message: message.into(),
             unresolved: vec![],
+            scripts: ScriptsView::default(),
         }
     }
 }
 
-/// Sends a request. `path` is where it is saved, so it inherits from its folders; `environment` supplies variables.
+/// Sends a request with its scripts. `path` is where it is saved, so it inherits from its folders; `environment`
+/// supplies variables.
 #[tauri::command]
+// Tauri serializes the error straight away, so its size does not matter.
+#[allow(clippy::too_many_arguments, clippy::result_large_err)]
 async fn send_request(
     id: String,
     request: RequestFile,
@@ -80,78 +100,57 @@ async fn send_request(
     in_flight: tauri::State<'_, InFlight>,
     history: tauri::State<'_, History>,
     open: tauri::State<'_, workspace::Open>,
+    visualizations: tauri::State<'_, visualizer::Store>,
 ) -> Result<ResponseView, ErrorView> {
-    let sent_at = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or_default();
-    // A path such as /users is relative to the baseUrl variable, as in the CLI.
-    let file = RequestFile {
-        url: runner::absolute_url(&request.url),
-        ..request.clone()
-    };
-    let prepared = match open.0.lock().unwrap().as_ref() {
-        Some(ws) => ws
-            .prepare(
-                &file,
-                path.clone()
-                    .or_else(|| runner::implicit_location(ws, &file.url))
-                    .as_deref(),
-                environment.as_deref(),
-                &[],
-                workspace::secrets(),
-            )
-            .map_err(|e| ErrorView::new("workspace", e.to_string()))?,
-        None => prepare_standalone(&file, &[]),
-    };
-    let unresolved: Vec<String> = prepared.unresolved.into_iter().collect();
-
+    // A copy, so the workspace is not locked while the request is out.
+    let ws = open.0.lock().unwrap().clone();
     let (cancel, cancelled) = oneshot::channel();
     in_flight.0.lock().unwrap().insert(id.clone(), cancel);
-    let result = tokio::select! {
-        result = http::send(&prepared.request) => Some(result),
+    let job = Job {
+        workspace: ws.as_ref(),
+        request: &request,
+        path: path.as_deref(),
+        context: None,
+        environment: environment.as_deref(),
+        overrides: &[],
+        extra_checks: None,
+        secrets: workspace::secrets(),
+        history: Some(&history),
+        source: "",
+        allow_host: None,
+        scripting: Default::default(),
+    };
+    let execution = tokio::select! {
+        execution = runner::execute(job) => Some(execution),
         _ = cancelled => None,
     };
     in_flight.0.lock().unwrap().remove(&id);
-
     // A cancelled request is not worth remembering.
-    let Some(result) = result else {
+    let Some(execution) = execution else {
         return Err(ErrorView::new("cancelled", "Request cancelled"));
     };
-    let entry = Entry {
-        id,
-        sent_at,
-        request,
-        path: path.clone(),
-        status: result.as_ref().ok().map(|r| r.status),
-        error: result.as_ref().err().map(|e| e.to_string()),
-        total_ms: result
-            .as_ref()
-            .ok()
-            .map(|r| r.timing.total.as_secs_f64() * 1000.0),
-        size: result.as_ref().ok().map(|r| r.body.len()),
-        source: None,
-    };
-    // Failing to record history must not fail the request.
-    if let Err(error) = history.append(&entry) {
-        eprintln!("could not save history: {error}");
-    }
 
-    let response = result.map_err(|e| ErrorView {
-        kind: e.kind(),
-        message: e.to_string(),
-        unresolved: unresolved.clone(),
-    })?;
-    let mut checks = expect::evaluate(&file.expect, &response);
-    if file.expect.schema {
-        let guard = open.0.lock().unwrap();
-        checks.push(runner::contract_check(
-            guard.as_ref(),
-            path.as_deref(),
-            &file,
-            &response,
-        ));
-    }
+    let scripts = ScriptsView {
+        visualizer: execution
+            .visualizer
+            .as_ref()
+            .map(|v| visualizations.render(&id, v)),
+        tests: execution.tests,
+        script_errors: execution.script_errors,
+        console: execution.console,
+    };
+    let unresolved: Vec<String> = execution.unresolved.into_iter().collect();
+    let response = match execution.response {
+        Ok(response) => response,
+        Err(failure) => {
+            return Err(ErrorView {
+                kind: failure.kind,
+                message: failure.message,
+                unresolved,
+                scripts,
+            });
+        }
+    };
     let (body, body_base64) = match std::str::from_utf8(&response.body) {
         Ok(text) => (text.to_string(), false),
         Err(_) => (
@@ -174,7 +173,8 @@ async fn send_request(
         redirects: response.redirects,
         sent: response.sent,
         unresolved,
-        checks,
+        checks: execution.checks,
+        scripts,
     })
 }
 
@@ -201,6 +201,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(InFlight::default())
         .manage(workspace::Open::default())
+        .manage(visualizer::Store::default())
+        .manage(runs::Running::default())
+        .register_uri_scheme_protocol(visualizer::SCHEME, visualizer::serve)
         .setup(|app| {
             app.manage(History::new(app.path().app_data_dir()?));
             workspace::restore(app.handle());
@@ -239,6 +242,13 @@ pub fn run() {
             workspace::snippet,
             workspace::parse_curl,
             workspace::export_postman,
+            workspace::current_values,
+            workspace::reset_current_values,
+            runs::run_collection,
+            runs::stop_run,
+            runs::runs_list,
+            runs::run_read,
+            runs::run_export,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

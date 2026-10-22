@@ -117,7 +117,7 @@ pub struct BodyCheck {
 }
 
 /// The outcome of one check.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckResult {
     /// What was checked, such as `status is 201` or `$.id exists`.

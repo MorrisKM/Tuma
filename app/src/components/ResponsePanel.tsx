@@ -3,9 +3,10 @@ import { useStore } from "../store";
 import type { Header, Response, Timing } from "../types";
 import { select } from "../jsonpath";
 import { CodeEditor, type Language } from "./CodeEditor";
+import { ConsoleView, TestsView, testsLabel, VisualizerView } from "./ScriptResults";
 import { Tabs } from "./Tabs";
 
-type Tab = "body" | "checks" | "headers" | "timing" | "request";
+type Tab = "body" | "tests" | "console" | "visualize" | "headers" | "timing" | "request";
 type View = "pretty" | "raw" | "preview";
 
 export function ResponsePanel() {
@@ -16,28 +17,51 @@ export function ResponsePanel() {
 
   if (sending && !response) return <Placeholder>Sending…</Placeholder>;
   if (error && error.kind !== "cancelled") {
+    const skipped = error.kind === "skipped";
     return (
       <section className="response-panel">
-        <div className="error-box">
-          <strong>Could not send the request</strong>
+        <div className={skipped ? "notice" : "error-box"}>
+          <strong>
+            {skipped ? "Not sent" : error.kind === "script" ? "A pre-request script failed" : "Could not send the request"}
+          </strong>
           <p className="mono">{error.message}</p>
         </div>
         <Unresolved names={error.unresolved ?? []} />
+        {(error.tests?.length ?? 0) > 0 && (
+          <div className="panel-body">
+            <TestsView checks={[]} tests={error.tests ?? []} errors={[]} />
+          </div>
+        )}
+        {(error.console?.length ?? 0) > 0 && (
+          <div className="panel-body">
+            <ConsoleView lines={error.console ?? []} />
+          </div>
+        )}
       </section>
     );
   }
   if (!response) return <Placeholder>Send a request to see the response here.</Placeholder>;
+  const tests = testsLabel(response.checks, response.tests, response.scriptErrors);
+  // A tab that this response doesn't have shows the body instead.
+  const shown: Tab =
+    (tab === "tests" && !tests) ||
+    (tab === "console" && !response.console.length && !response.scriptErrors.length) ||
+    (tab === "visualize" && !response.visualizer)
+      ? "body"
+      : tab;
 
   return (
     <section className={`response-panel${sending ? " stale" : ""}`}>
       <Tabs
-        active={tab}
+        active={shown}
         onChange={setTab}
         tabs={[
           { id: "body", label: "Body" },
-          ...(response.checks.length
-            ? [{ id: "checks" as Tab, label: checksLabel(response) }]
+          ...(tests ? [{ id: "tests" as Tab, label: tests }] : []),
+          ...(response.console.length || response.scriptErrors.length
+            ? [{ id: "console" as Tab, label: "Console", count: response.console.length }]
             : []),
+          ...(response.visualizer ? [{ id: "visualize" as Tab, label: "Visualize" }] : []),
           { id: "headers", label: "Headers", count: response.headers.length },
           { id: "timing", label: "Timing" },
           { id: "request", label: "Request" },
@@ -47,37 +71,19 @@ export function ResponsePanel() {
       </Tabs>
       <Unresolved names={response.unresolved} />
       <div className="panel-body">
-        {tab === "body" && <BodyView response={response} />}
-        {tab === "checks" && <ChecksView response={response} />}
-        {tab === "headers" && <HeaderTable headers={response.headers} />}
-        {tab === "timing" && <TimingView response={response} />}
-        {tab === "request" && <SentView response={response} />}
+        {shown === "body" && <BodyView response={response} />}
+        {shown === "tests" && (
+          <TestsView checks={response.checks} tests={response.tests} errors={response.scriptErrors} />
+        )}
+        {shown === "console" && <ConsoleView lines={response.console} />}
+        {shown === "visualize" && response.visualizer && (
+          <VisualizerView url={response.visualizer.url} error={response.visualizer.error} />
+        )}
+        {shown === "headers" && <HeaderTable headers={response.headers} />}
+        {shown === "timing" && <TimingView response={response} />}
+        {shown === "request" && <SentView response={response} />}
       </div>
     </section>
-  );
-}
-
-function checksLabel(response: Response): string {
-  const failed = response.checks.filter((c) => !c.passed).length;
-  return failed ? `Checks ✗ ${failed}/${response.checks.length}` : `Checks ✓ ${response.checks.length}`;
-}
-
-/** The results of the request's saved checks (its expect: block). */
-function ChecksView({ response }: { response: Response }) {
-  return (
-    <ul className="checks">
-      {response.checks.map((c, i) => (
-        <li key={i} className={c.passed ? "ok" : "fail"}>
-          <span className="check-mark">{c.passed ? "✓" : "✗"}</span>
-          <span className="check-name">{c.check}</span>
-          {!c.passed && (
-            <span className="check-detail mono">
-              expected {c.expected}, got {c.actual}
-            </span>
-          )}
-        </li>
-      ))}
-    </ul>
   );
 }
 

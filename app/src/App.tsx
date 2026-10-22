@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { appVersion } from "./api";
 import { AgentsView } from "./components/AgentsView";
 import { CommandPalette } from "./components/CommandPalette";
+import { RunnerView } from "./components/RunnerView";
 import { FolderEditor } from "./components/FolderEditor";
 import { NoticeBar } from "./components/NoticeBar";
 import { RequestBar } from "./components/RequestBar";
@@ -77,6 +78,7 @@ function App() {
         {view.kind === "folder" && <FolderEditor key={view.path} path={view.path} />}
         {view.kind === "variables" && <VariablesEditor key={view.environment ?? ""} environment={view.environment} />}
         {view.kind === "agents" && <AgentsView />}
+        {view.kind === "runner" && <RunnerView key={view.path} path={view.path} />}
         <footer className="statusbar">
           <span>Ctrl+K commands · Ctrl+Enter send · Ctrl+S save · Ctrl+T new tab</span>
           <span>

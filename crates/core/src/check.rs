@@ -214,7 +214,34 @@ fn check_file(
     if !problems.is_empty() {
         return problems;
     }
-    // The schema passed; now what it can't express.
+    // The schema passed; now what it can't express. Scripts must at least parse.
+    let scripts = match kind {
+        "request" => parse::<RequestFile>(&text).map(|r| r.scripts),
+        "folder" => parse::<crate::workspace::files::FolderFile>(&text).map(|f| f.scripts),
+        _ => None,
+    };
+    for (key, source) in scripts
+        .iter()
+        .flat_map(|s| [("preRequest", &s.pre_request), ("test", &s.test)])
+    {
+        if let Some((message, line)) = crate::script::syntax_error(source) {
+            // A block scalar's first line is the one after the key.
+            let key_line = line_of(&text, &format!("/scripts/{key}"));
+            let line = match (key_line, line) {
+                (Some(k), Some(l)) => Some(k + l),
+                (k, _) => k,
+            };
+            let which = if key == "test" {
+                "post-response"
+            } else {
+                "pre-request"
+            };
+            problems.push(problem(
+                line,
+                format!("the {which} script has an error: {message}"),
+            ));
+        }
+    }
     if kind == "request"
         && let Some(request) = parse::<RequestFile>(&text)
     {
@@ -382,6 +409,10 @@ mod tests {
             ),
             ("API/c.yaml", "method: GET\nauth:\n  type: oauth9\n"),
             ("API/d.yaml", "method: [GET\n"),
+            (
+                "API/e.yaml",
+                "method: GET\nscripts:\n  test: |-\n    pm.test('ok', () => {});\n    let x = ;\n",
+            ),
         ]);
         let problems = check_workspace(&root);
         let lines: Vec<String> = problems
@@ -420,6 +451,11 @@ mod tests {
             lines
                 .iter()
                 .any(|l| l.starts_with("API/d.yaml:1 not valid YAML") && !l.contains('\n')),
+            "{lines:#?}"
+        );
+        assert!(
+            lines.iter().any(|l| l
+                .starts_with("API/e.yaml:5 the post-response script has an error: SyntaxError")),
             "{lines:#?}"
         );
         std::fs::remove_dir_all(root).unwrap();

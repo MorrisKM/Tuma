@@ -6,9 +6,10 @@ import type { KeyValue } from "../types";
 import { AuthForm } from "./AuthForm";
 import { CodeEditor, type Language } from "./CodeEditor";
 import { blankPart, blankRow, KeyValueEditor } from "./KeyValueEditor";
+import { ScriptsEditor } from "./ScriptsEditor";
 import { Tabs } from "./Tabs";
 
-type Tab = "params" | "headers" | "body" | "auth" | "settings";
+type Tab = "params" | "headers" | "body" | "auth" | "scripts" | "settings";
 
 const active = (rows: KeyValue[]) => rows.filter((r) => r.enabled && r.name).length;
 
@@ -26,6 +27,11 @@ export function RequestPanel() {
           { id: "headers", label: "Headers", count: active(draft.headers) },
           { id: "body", label: "Body" },
           { id: "auth", label: "Auth" },
+          {
+            id: "scripts",
+            label: "Scripts",
+            count: [draft.scripts.preRequest, draft.scripts.test].filter((s) => s?.trim()).length,
+          },
           { id: "settings", label: "Settings" },
         ]}
       />
@@ -34,6 +40,13 @@ export function RequestPanel() {
         {tab === "headers" && <Headers />}
         {tab === "body" && <BodyEditor />}
         {tab === "auth" && <AuthEditor />}
+        {tab === "scripts" && (
+          <ScriptsEditor
+            scripts={draft.scripts}
+            onChange={(scripts) => useStore.getState().update({ scripts })}
+            scope="request"
+          />
+        )}
         {tab === "settings" && <SettingsEditor />}
       </div>
     </section>
