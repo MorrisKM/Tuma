@@ -87,7 +87,6 @@ function Rail() {
           key={id}
           className={`rail-button${sidebarOpen && section === id ? " active" : ""}`}
           onClick={() => layout.show(id)}
-          title={label}
           aria-label={label}
           aria-pressed={sidebarOpen && section === id}
         >
@@ -99,26 +98,26 @@ function Rail() {
       <button
         className={`rail-button${view === "agents" ? " active" : ""}`}
         onClick={() => useStore.setState({ view: { kind: "agents" } })}
-        title="Connect a coding agent"
         aria-label="Connect a coding agent"
       >
         <Bot size={18} strokeWidth={1.75} />
+        <span className="rail-label">Connect an agent</span>
       </button>
       <button
         className="rail-button"
         onClick={() => applyTheme(next.id)}
-        title={`${current.label} (click for ${next.id})`}
         aria-label={current.label}
       >
         <current.icon size={18} strokeWidth={1.75} />
+        <span className="rail-label">{current.label}</span>
       </button>
       <button
         className={`rail-button${view === "settings" ? " active" : ""}`}
         onClick={() => useStore.setState({ view: { kind: "settings" } })}
-        title="Settings: proxy, certificates, cookies, updates"
         aria-label="Settings"
       >
         <Settings size={18} strokeWidth={1.75} />
+        <span className="rail-label">Settings</span>
       </button>
     </nav>
   );

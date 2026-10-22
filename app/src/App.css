@@ -435,7 +435,7 @@ hr {
 }
 
 .rail {
-  width: 70px;
+  width: 52px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -461,8 +461,8 @@ hr {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  width: 62px;
-  min-height: 44px;
+  width: 38px;
+  min-height: 38px;
   padding: 5px 0;
   border: none;
   border-radius: 8px;
@@ -484,18 +484,42 @@ hr {
 .rail-button.active::before {
   content: "";
   position: absolute;
-  left: -4px;
-  top: 10px;
-  bottom: 10px;
+  left: -7px;
+  top: 9px;
+  bottom: 9px;
   width: 3px;
   border-radius: 0 3px 3px 0;
   background: var(--accent);
 }
 
+/* The name shows beside the icon on hover or keyboard focus. */
 .rail-label {
-  font-size: 9.5px;
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  z-index: 50;
+  padding: 4px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.01em;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-4px, -50%);
+  transition:
+    opacity 0.1s,
+    transform 0.1s;
+}
+
+.rail-button:hover .rail-label,
+.rail-button:focus-visible .rail-label {
+  opacity: 1;
+  transform: translate(0, -50%);
+  transition-delay: 0.15s;
 }
 
 .rail-spacer {
@@ -504,7 +528,7 @@ hr {
 
 .sidebar {
   flex-shrink: 0;
-  max-width: calc(100vw - 590px);
+  max-width: calc(100vw - 572px);
   background: var(--bg-sidebar);
   display: flex;
   flex-direction: column;
