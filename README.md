@@ -8,6 +8,8 @@ Rust and Tauri.
 - **Fast.** Native Rust networking and the system webview instead of a bundled browser.
 - **Easy to switch.** Imports Postman, Insomnia and Bruno exports, OpenAPI / Swagger specs, HAR recordings, cURL
   commands and plain JSON environments; exports collections back to Postman format and workspaces as .zip files.
+- **Load and security checks.** Performance tests with latency percentiles and passive security checks, exported as
+  HTML reports; fields encrypted and decrypted for APIs that need it.
 - **Docs and mocks from your requests.** Generates OpenAPI, Markdown or HTML docs from a collection, and runs a mock
   server that answers with the responses you saved as examples.
 - **Keyboard-first.** Ctrl+K finds any request or command; Ctrl+Enter sends, Ctrl+S saves, Ctrl+T opens a tab.
@@ -57,6 +59,7 @@ tuma ws wss://example.com/socket -m '{"type":"ping"}'                  # WebSock
 tuma auth login "Users API"     # OAuth 2.0: get a token for a collection's auth (browser grants open a browser)
 tuma docs "Users API" -o openapi.yaml   # API docs: OpenAPI, Markdown or HTML (from the file extension)
 tuma mock "Users API" --port 4010       # A mock server answering with the saved examples
+tuma perf "Users API" -u 20 -d 60 --max-p95 300 --report perf.html   # A load test, failing CI when too slow
 tuma check                      # Validate the workspace files
 tuma mcp                        # MCP server for coding agents
 ```

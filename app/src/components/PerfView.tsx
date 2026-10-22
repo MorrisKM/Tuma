@@ -188,6 +188,8 @@ function PerfResults({ report }: { report: api.PerfReport }) {
         Failed: {report.failures.join("; ")}
       </span>
     ) : null;
+  // The last second is cut short when the test ends; drawn, it looks like a drop in throughput.
+  const seconds = report.finished && report.timeline.length > 2 ? report.timeline.slice(0, -1) : report.timeline;
   const cards: [string, string][] = [
     ["Requests", report.requests.toLocaleString()],
     ["Throughput", `${report.throughput.toFixed(1)}/s`],
@@ -212,9 +214,9 @@ function PerfResults({ report }: { report: api.PerfReport }) {
         ))}
       </div>
       <div className="perf-charts">
-        <Chart title="Requests per second" points={report.timeline.map((s) => [s.second, s.requests])} tone="accent" />
-        <Chart title="Average response time (ms)" points={report.timeline.map((s) => [s.second, s.avgMs])} tone="put" />
-        <Chart title="Errors per second" points={report.timeline.map((s) => [s.second, s.errors])} tone="fail" />
+        <Chart title="Requests per second" points={seconds.map((s) => [s.second, s.requests])} tone="accent" />
+        <Chart title="Average response time (ms)" points={seconds.map((s) => [s.second, s.avgMs])} tone="put" />
+        <Chart title="Errors per second" points={seconds.map((s) => [s.second, s.errors])} tone="fail" />
       </div>
       <table className="header-table perf-table">
         <thead>

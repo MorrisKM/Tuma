@@ -126,8 +126,21 @@ export function useScrollRow<T extends HTMLElement>(active: string, deps: unknow
       el.scrollLeft += e.deltaY;
       e.preventDefault();
     };
+    // Fade the edges that have more tabs beyond them.
+    const edges = () => {
+      el.classList.toggle("more-left", el.scrollLeft > 2);
+      el.classList.toggle("more-right", el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+    };
+    const resized = new ResizeObserver(edges);
+    resized.observe(el);
     el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    el.addEventListener("scroll", edges, { passive: true });
+    edges();
+    return () => {
+      resized.disconnect();
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("scroll", edges);
+    };
   }, []);
   useEffect(() => {
     ref.current?.querySelector(active)?.scrollIntoView({ block: "nearest", inline: "nearest" });

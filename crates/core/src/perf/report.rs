@@ -113,11 +113,17 @@ pub fn html(report: &Report) -> String {
         );
     }
     out.push_str("</section>");
+    // The last second is cut short when the test ends; drawn, it looks like a drop.
+    let seconds = if report.timeline.len() > 2 {
+        &report.timeline[..report.timeline.len() - 1]
+    } else {
+        &report.timeline[..]
+    };
     let _ = write!(
         out,
         "<section class=\"charts\"><div><h2>Requests per second</h2>{}</div><div><h2>Average response time</h2>{}</div></section>",
-        chart(&report.timeline, |s| s.requests as f64, "req/s", "#0c9a6e"),
-        chart(&report.timeline, |s| s.avg_ms, "ms", "#2759b8"),
+        chart(seconds, |s| s.requests as f64, "req/s", "#0c9a6e"),
+        chart(seconds, |s| s.avg_ms, "ms", "#2759b8"),
     );
     out.push_str("<h2>Requests</h2><table><thead><tr><th>Request</th><th>Count</th><th>Errors</th><th>Avg</th><th>p50</th><th>p90</th><th>p95</th><th>p99</th><th>Max</th><th>Statuses</th></tr></thead><tbody>");
     for r in &report.per_request {

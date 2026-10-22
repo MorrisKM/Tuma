@@ -886,20 +886,26 @@ body.resizing-y * {
   scrollbar-width: none;
 }
 
-/* When the tabs overflow, a thin scrollbar shows on hover; the wheel scrolls them too. */
-.tabs-list:hover,
-.tab-strip:hover {
-  scrollbar-width: thin;
-}
-
+/* Tabs that don't fit scroll with the mouse wheel; the edges with more tabs beyond them fade out. */
 .tabs-list::-webkit-scrollbar,
 .tab-strip::-webkit-scrollbar {
   height: 0;
+  display: none;
 }
 
-.tabs-list:hover::-webkit-scrollbar,
-.tab-strip:hover::-webkit-scrollbar {
-  height: 5px;
+.more-right {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+}
+
+.more-left {
+  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+}
+
+.more-left.more-right {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
 }
 
 .tab {

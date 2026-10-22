@@ -30,6 +30,7 @@ The first stable release.
   (with discovery and sync), HAR, cURL, and JSON files of names and values as environments; export to Postman and
   cURL, Python and JavaScript snippets
 - Duplicate requests, folders and collections; rename anything by clicking its name
+- A cookie manager: see, add, edit and delete cookies by domain, clear a domain or everything
 - Responses saved as examples on requests
 - Comments (`//` and `/* */`) in JSON bodies, removed before sending; Ctrl+/ toggles them
 
@@ -40,6 +41,16 @@ The first stable release.
   agent through MCP
 - Mock servers that answer with saved examples, matched by method and path, in the app or with `tuma mock`
 
+### Performance and security
+
+- Performance tests: virtual users, a duration or iterations, ramp-up and think time; throughput, error rate and
+  latency percentiles per request and per second, live charts, pass/fail limits, and reports as HTML or JSON; in the
+  app or with `tuma perf`
+- Passive security checks of the responses a test receives: HTTPS, security headers, cookie flags, CORS, information
+  that leaks, secrets in URLs
+- Encryption of chosen request body fields and decryption of response fields (AES-GCM or AES-CBC, the key from a
+  secret variable)
+
 ### Scripts and testing
 
 - Postman's pre-request and test scripts (`pm.*`, the older `postman.*` and `tests[...]`), sandboxed, with lodash,
@@ -49,10 +60,11 @@ The first stable release.
 
 ### For terminals, CI and agents
 
-- The `tuma` command: `send`, `run`, `test`, `check`, `import`, `export`, `docs`, `mock`, `openapi`, `grpc`, `ws`,
-  `auth`, with `--json` output and exit codes for CI
-- `tuma mcp`: an MCP server so coding agents can test the API they are building and document it (describe requests,
-  save examples, generate docs), with host rules and secrets masked
+- The `tuma` command: `send`, `run`, `test`, `check`, `import`, `export`, `docs`, `mock`, `perf`, `openapi`, `grpc`,
+  `ws`, `auth`, with `--json` output and exit codes for CI
+- `tuma mcp`: an MCP server so coding agents can test the API they are building, write its scripts and tests, and
+  document it (describe requests, save examples, generate docs), with host rules and secrets masked; the app's Scripts
+  tab writes the prompt for them
 
 ### App
 
