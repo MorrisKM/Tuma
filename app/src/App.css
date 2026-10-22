@@ -1742,14 +1742,15 @@ label.check {
 }
 
 .crumb.current {
+  display: flex;
+  min-width: 0;
   font-weight: 600;
   color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .editable-name,
 .crumb-link {
+  min-width: 0;
   border: 1px solid transparent;
   border-radius: 5px;
   background: none;
@@ -1758,7 +1759,6 @@ label.check {
   font: inherit;
   color: inherit;
   cursor: text;
-  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3528,4 +3528,19 @@ td.mock-method {
   background: var(--bg-active);
   padding: 1px 4px;
   border-radius: 4px;
+}
+
+.crashed {
+  max-width: 640px;
+  margin: 12vh auto;
+  padding: 0 24px;
+}
+
+.crashed pre {
+  white-space: pre-wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--fail);
 }

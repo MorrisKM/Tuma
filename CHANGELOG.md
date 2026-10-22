@@ -24,8 +24,21 @@ The first stable release.
   `tuma check`
 - Environments, folder, collection and global variables, dynamic variables, secrets in the OS keychain, and current
   values that scripts set kept on this machine only
-- Import from Postman (collections, environments, globals), OpenAPI and Swagger (with discovery and sync), HAR and
-  cURL; export to Postman and cURL, Python and JavaScript snippets
+- Workspaces created from the app in a workspaces folder (Documents/Tuma Workspaces by default), a workspace menu
+  to switch between them, and workspaces imported from a folder or a .zip and exported as a .zip
+- Import from Postman (collections with their examples, environments, globals), Insomnia, Bruno, OpenAPI and Swagger
+  (with discovery and sync), HAR, cURL, and JSON files of names and values as environments; export to Postman and
+  cURL, Python and JavaScript snippets
+- Duplicate requests, folders and collections; rename anything by clicking its name
+- Responses saved as examples on requests
+- Comments (`//` and `/* */`) in JSON bodies, removed before sending; Ctrl+/ toggles them
+
+### Docs and mocks
+
+- API docs generated from requests, folders, collections or the whole workspace: OpenAPI 3.1 (YAML or JSON) with
+  schemas inferred from examples, Markdown, or a standalone HTML page; in the app, with `tuma docs`, or by a coding
+  agent through MCP
+- Mock servers that answer with saved examples, matched by method and path, in the app or with `tuma mock`
 
 ### Scripts and testing
 
@@ -36,9 +49,10 @@ The first stable release.
 
 ### For terminals, CI and agents
 
-- The `tuma` command: `send`, `run`, `test`, `check`, `import`, `export`, `openapi`, `grpc`, `ws`, `auth`, with
-  `--json` output and exit codes for CI
-- `tuma mcp`: an MCP server so coding agents can test the API they are building, with host rules and secrets masked
+- The `tuma` command: `send`, `run`, `test`, `check`, `import`, `export`, `docs`, `mock`, `openapi`, `grpc`, `ws`,
+  `auth`, with `--json` output and exit codes for CI
+- `tuma mcp`: an MCP server so coding agents can test the API they are building and document it (describe requests,
+  save examples, generate docs), with host rules and secrets masked
 
 ### App
 

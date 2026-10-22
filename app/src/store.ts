@@ -14,6 +14,7 @@ import {
   toRequestFile,
   withQuery,
 } from "./draft";
+import { stripJsonc } from "./jsonc";
 import { useLayout } from "./layout";
 import type {
   HistoryEntry,
@@ -833,6 +834,8 @@ export const grpcTarget = (url: string, method: string | null | undefined) =>
 
 /** The body as written in the editor, for the console; files and forms are described rather than shown. */
 function draftBody(draft: Draft): string | undefined {
+  // JSON goes out without its comments.
+  if (draft.bodyMode === "json") return stripJsonc(draft.raw) || undefined;
   if (isTextMode(draft.bodyMode) || draft.bodyMode === "graphql") return draft.raw || undefined;
   if (draft.bodyMode === "form") return draft.form.filter((r) => r.enabled && r.name).map((r) => `${r.name}=${r.value}`).join("&");
   if (draft.bodyMode === "multipart") {

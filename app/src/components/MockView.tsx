@@ -5,10 +5,13 @@ import { mockName, mocks, useMocks } from "../mocks";
 import { useStore } from "../store";
 import { MethodTag } from "./ui";
 
+// The same empty list each time, so the selector's result is stable.
+const NO_EVENTS: api.MockEvent[] = [];
+
 /** A running mock server: its address, what it answers, and the requests it answered. */
 export function MockView({ id }: { id: string }) {
   const server = useMocks((s) => s.servers.find((m) => m.id === id));
-  const events = useMocks((s) => s.events[id] ?? []);
+  const events = useMocks((s) => s.events[id] ?? NO_EVENTS);
   const environments = useStore((s) => s.environments);
   const [routes, setRoutes] = useState<api.MockRoute[]>([]);
   const [copied, setCopied] = useState(false);

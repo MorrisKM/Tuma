@@ -56,6 +56,37 @@ function tokens(text: string): Token[] | null {
   return out;
 }
 
+/** The text without its comments, as it is sent (the same as crates/core/src/jsonc.rs). */
+export function stripJsonc(text: string): string {
+  if (!text.includes("//") && !text.includes("/*")) return text;
+  let out = "";
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      out += c;
+      if (c === "\\") out += text[++i] ?? "";
+      else if (c === '"') inString = false;
+    } else if (c === '"') {
+      inString = true;
+      out += c;
+    } else if (text.startsWith("//", i)) {
+      const end = text.indexOf("\n", i);
+      if (end < 0) break;
+      out += "\n";
+      i = end;
+    } else if (text.startsWith("/*", i)) {
+      const end = text.indexOf("*/", i + 2);
+      out += "\n".repeat((text.slice(i, end < 0 ? undefined : end).match(/\n/g) ?? []).length);
+      if (end < 0) break;
+      i = end + 1;
+    } else {
+      out += c;
+    }
+  }
+  return out;
+}
+
 /** Indents JSON with two spaces, keeping comments where they were. Returns the text unchanged if it isn't JSON. */
 export function formatJsonc(text: string): string {
   const all = tokens(text);

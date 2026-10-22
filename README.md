@@ -6,8 +6,10 @@ Rust and Tauri.
 - **Local-first.** No account, no cloud, no telemetry.
 - **Plain files.** Workspaces are folders of readable files you can commit to git.
 - **Fast.** Native Rust networking and the system webview instead of a bundled browser.
-- **Easy to switch.** Imports Postman collections and environments, OpenAPI / Swagger specs, HAR recordings and cURL
-  commands; exports collections back to Postman format.
+- **Easy to switch.** Imports Postman, Insomnia and Bruno exports, OpenAPI / Swagger specs, HAR recordings, cURL
+  commands and plain JSON environments; exports collections back to Postman format and workspaces as .zip files.
+- **Docs and mocks from your requests.** Generates OpenAPI, Markdown or HTML docs from a collection, and runs a mock
+  server that answers with the responses you saved as examples.
 - **Keyboard-first.** Ctrl+K finds any request or command; Ctrl+Enter sends, Ctrl+S saves, Ctrl+T opens a tab.
 - **More than REST.** GraphQL (with introspection and a schema explorer), WebSocket, server-sent events and gRPC
   (by reflection or `.proto` files), plus OAuth 2.0, JWT, Digest, AWS Signature and OAuth 1.0 auth, proxies, client
@@ -53,6 +55,8 @@ tuma send GET /todos/7 -x schema                                  # Check the re
 tuma grpc grpc://localhost:50051 shop.v1.Shop/GetItem -d '{"id": 7}'   # gRPC, methods by reflection
 tuma ws wss://example.com/socket -m '{"type":"ping"}'                  # WebSocket: send, print what comes back
 tuma auth login "Users API"     # OAuth 2.0: get a token for a collection's auth (browser grants open a browser)
+tuma docs "Users API" -o openapi.yaml   # API docs: OpenAPI, Markdown or HTML (from the file extension)
+tuma mock "Users API" --port 4010       # A mock server answering with the saved examples
 tuma check                      # Validate the workspace files
 tuma mcp                        # MCP server for coding agents
 ```
