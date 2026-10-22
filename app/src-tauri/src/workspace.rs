@@ -245,24 +245,15 @@ pub enum ImportResult {
     Globals { warnings: Vec<String> },
 }
 
-/// Imports a file: an OpenAPI or Swagger spec, or a Postman collection, environment or globals export.
+/// Imports a file: an OpenAPI or Swagger spec, a Postman collection, environment or globals export, or a HAR file.
 #[tauri::command]
 pub fn import_file(open: tauri::State<'_, Open>, file: PathBuf) -> Result<ImportResult> {
     let json = std::fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file.display()))?;
     let mut guard = open.0.lock().unwrap();
     let workspace = guard.as_mut().ok_or("Open a workspace first")?;
-    if let Ok(spec) = tuma_core::openapi::Spec::parse(&json) {
-        let cwd = std::env::current_dir().unwrap_or_default();
-        let source =
-            tuma_core::openapi::source_for(&file.to_string_lossy(), &cwd, workspace.root());
-        let (path, warnings) = tuma_core::openapi::import(workspace, &spec, Some(&source))
-            .map_err(|e| e.to_string())?;
-        return Ok(ImportResult::Collection {
-            path,
-            warnings: warnings.0,
-        });
-    }
-    let (imported, warnings) = import::postman(workspace, &json, secrets())?;
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let source = tuma_core::openapi::source_for(&file.to_string_lossy(), &cwd, workspace.root());
+    let (imported, warnings) = import::any(workspace, &json, &source, secrets())?;
     let warnings = warnings.0;
     Ok(match imported {
         Imported::Collection(path) => ImportResult::Collection { path, warnings },

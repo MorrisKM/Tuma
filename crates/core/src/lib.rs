@@ -2,7 +2,10 @@
 //! desktop app, the CLI and the tests all share it. See docs/PLAN.md.
 
 pub mod check;
+pub mod codegen;
+pub mod curl;
 pub mod expect;
+pub mod export;
 pub mod history;
 pub mod http;
 pub mod import;

@@ -334,3 +334,60 @@ fn secrets_stay_out_of_files() {
         Some("s3cret")
     );
 }
+
+#[test]
+fn postman_export_round_trips() {
+    let dir = TempDir::new("export");
+    let secrets = MemoryStore::default();
+    let workspace = imported_workspace(&dir, &secrets);
+    let original = workspace.read_tree("Shop API").unwrap();
+
+    let exported = tuma_core::export::postman::collection(&original).to_string();
+    let mut warnings = tuma_core::import::Warnings::default();
+    let tuma_core::import::postman::Export::Collection(again) =
+        tuma_core::import::postman::parse(&exported, &mut warnings).unwrap()
+    else {
+        panic!("not a collection");
+    };
+    assert!(warnings.0.is_empty(), "{warnings:?}");
+    // Order lists are rebuilt on write; everything else survives.
+    let strip = |mut tree: tuma_core::workspace::FolderTree| {
+        fn walk(tree: &mut tuma_core::workspace::FolderTree) {
+            tree.folder.order.clear();
+            for item in &mut tree.items {
+                if let tuma_core::workspace::TreeItem::Folder(f) = item {
+                    walk(f);
+                }
+            }
+        }
+        walk(&mut tree);
+        tree
+    };
+    assert_eq!(strip(*again), strip(original));
+}
+
+#[test]
+fn variables_in_scope_say_where_they_come_from() {
+    let dir = TempDir::new("scope");
+    let secrets = MemoryStore::default();
+    let workspace = imported_workspace(&dir, &secrets);
+    let vars = workspace
+        .variables_in_scope(
+            Some("Shop API/Orders/Create order.yaml"),
+            Some("Staging"),
+            &secrets,
+        )
+        .unwrap();
+    let summary: Vec<(&str, &str, bool)> = vars
+        .iter()
+        .map(|v| (v.name.as_str(), v.source.as_str(), v.secret))
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            ("baseUrl", "environment Staging", false),
+            ("token", "environment Staging", true),
+            ("retries", "collection Shop API", false),
+        ]
+    );
+}

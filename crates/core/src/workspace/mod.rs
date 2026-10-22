@@ -109,6 +109,17 @@ pub struct VariableValue {
     pub enabled: bool,
 }
 
+/// A variable as a request sees it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScopedVariable {
+    pub name: String,
+    pub value: String,
+    pub secret: bool,
+    /// Such as "environment Staging", "folder Admin", "collection Users API" or "globals".
+    pub source: String,
+}
+
 /// A request ready to send, and the variables that had no value.
 #[derive(Debug, Clone)]
 pub struct Prepared {
@@ -415,6 +426,32 @@ impl Workspace {
         write_yaml(&file, &folder)
     }
 
+    /// Reads a collection or folder and everything in it, in display order. The opposite of
+    /// [`Workspace::add_collection`]; exporters use it.
+    pub fn read_tree(&self, path: &str) -> Result<FolderTree> {
+        let dir = self.abs(path)?;
+        let node = self.folder_node(&dir, NodeKind::Folder)?;
+        self.tree_from(&node)
+    }
+
+    fn tree_from(&self, node: &Node) -> Result<FolderTree> {
+        let mut items = Vec::new();
+        for child in &node.children {
+            items.push(match child.kind {
+                NodeKind::Request => TreeItem::Request {
+                    name: child.name.clone(),
+                    file: self.read_request(&child.path)?,
+                },
+                _ => TreeItem::Folder(self.tree_from(child)?),
+            });
+        }
+        Ok(FolderTree {
+            name: node.name.clone(),
+            folder: self.read_folder(&node.path)?,
+            items,
+        })
+    }
+
     /// Writes an in-memory collection, such as an import, and returns its path.
     pub fn add_collection(&self, tree: &FolderTree) -> Result<String> {
         let path = self.create_folder(None, &tree.name)?;
@@ -605,6 +642,61 @@ impl Workspace {
             secrets,
         )?;
         remove_if_exists(&path)
+    }
+
+    /// Every variable a request at `path` (or an unsaved one) can use, highest priority first, each name once:
+    /// what `{{name}}` resolves to and where it comes from. Secret values are included; callers decide whether to
+    /// show them.
+    pub fn variables_in_scope(
+        &self,
+        path: Option<&str>,
+        environment: Option<&str>,
+        secrets: &dyn SecretStore,
+    ) -> Result<Vec<ScopedVariable>> {
+        let mut out: Vec<ScopedVariable> = Vec::new();
+        let mut add = |vars: Vec<VariableValue>, source: String| {
+            for v in vars.into_iter().filter(|v| v.enabled) {
+                if !out.iter().any(|o| o.name == v.name) {
+                    out.push(ScopedVariable {
+                        name: v.name,
+                        value: v.value,
+                        secret: v.secret,
+                        source: source.clone(),
+                    });
+                }
+            }
+        };
+        if let Some(environment) = environment {
+            add(
+                self.read_environment(environment, secrets)?,
+                format!("environment {environment}"),
+            );
+        }
+        if let Some(path) = path {
+            let mut dir = self.abs(path)?.parent().map(Path::to_path_buf);
+            while let Some(d) = dir.filter(|d| *d != self.root && d.starts_with(&self.root)) {
+                let folder: FolderFile = read_yaml_or_default(&d.join(FOLDER_FILE))?;
+                let kind = if d.parent() == Some(self.root.as_path()) {
+                    "collection"
+                } else {
+                    "folder"
+                };
+                let vars = folder
+                    .variables
+                    .into_iter()
+                    .map(|v| VariableValue {
+                        name: v.name,
+                        value: v.value,
+                        secret: false,
+                        enabled: v.enabled,
+                    })
+                    .collect();
+                add(vars, format!("{kind} {}", dir_name(&d)));
+                dir = d.parent().map(Path::to_path_buf);
+            }
+        }
+        add(self.read_globals(secrets)?, "globals".into());
+        Ok(out)
     }
 
     pub fn read_globals(&self, secrets: &dyn SecretStore) -> Result<Vec<VariableValue>> {

@@ -1,5 +1,6 @@
 //! Importers from other API clients.
 
+pub mod har;
 pub mod postman;
 
 use crate::secrets::SecretStore;
@@ -71,4 +72,46 @@ pub fn postman(
         }
     };
     Ok((imported, warnings))
+}
+
+/// Imports any file Tuma understands, telling them apart by content: an OpenAPI or Swagger spec (JSON or YAML), a
+/// Postman collection, environment or globals export, or a HAR recording. `source` is the file's location as the
+/// workspace should remember it (for syncing a spec later); its last part names a HAR collection.
+pub fn any(
+    workspace: &mut Workspace,
+    text: &str,
+    source: &str,
+    secrets: &dyn SecretStore,
+) -> Result<(Imported, Warnings), String> {
+    let json: Option<serde_json::Value> = serde_json::from_str(text).ok();
+    if json
+        .as_ref()
+        .is_some_and(|j| j.pointer("/log/entries").is_some())
+    {
+        let name = std::path::Path::new(source)
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "Recording".into());
+        let mut warnings = Warnings::default();
+        let tree = har::parse(text, &name, &mut warnings)?;
+        return Ok((
+            Imported::Collection(workspace.add_collection(&tree).map_err(|e| e.to_string())?),
+            warnings,
+        ));
+    }
+    if json.as_ref().is_some_and(|j| {
+        (j.get("info").is_some() && j.get("item").is_some()) || j.get("values").is_some()
+    }) {
+        return postman(workspace, text, secrets);
+    }
+    match crate::openapi::Spec::parse(text) {
+        Ok(spec) => {
+            let (path, warnings) = crate::openapi::import(workspace, &spec, Some(source))
+                .map_err(|e| e.to_string())?;
+            Ok((Imported::Collection(path), warnings))
+        }
+        Err(e) => Err(format!(
+            "not an OpenAPI spec, Postman export or HAR file ({e})"
+        )),
+    }
 }

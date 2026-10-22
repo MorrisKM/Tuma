@@ -62,6 +62,16 @@ enum Command {
         #[arg(long)]
         read_only: bool,
     },
+    /// Import a file into the workspace: an OpenAPI/Swagger spec, a Postman collection or environment, or a HAR file.
+    Import { file: PathBuf },
+    /// Export a collection as Postman Collection v2.1 JSON, which Postman, Insomnia and Bruno can import.
+    Export {
+        /// The collection to export.
+        collection: String,
+        /// Write to this file instead of standard output.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
     /// Check every file in the workspace: YAML syntax, unknown keys (typos), and checks that can't work.
     Check {
         /// Print JSON instead of text.
@@ -212,6 +222,45 @@ async fn run(cli: Cli) -> anyhow::Result<bool> {
         Command::Run(args) => run_saved(&start, args, false).await,
         Command::Test(args) => run_saved(&start, args, true).await,
         Command::Openapi(command) => openapi(&start, command).await,
+        Command::Import { file } => {
+            let mut workspace = runner::open_or_create(&start, None)?;
+            let text = std::fs::read_to_string(&file)
+                .with_context(|| format!("could not read {}", file.display()))?;
+            let source =
+                tuma_core::openapi::source_for(&file.to_string_lossy(), &start, workspace.root());
+            let (imported, warnings) =
+                tuma_core::import::any(&mut workspace, &text, &source, &EnvThenKeychain)
+                    .map_err(anyhow::Error::msg)?;
+            match imported {
+                tuma_core::import::Imported::Collection(path) => {
+                    println!("Imported collection \"{path}\"")
+                }
+                tuma_core::import::Imported::Environment(name) => {
+                    println!("Imported environment \"{name}\"")
+                }
+                tuma_core::import::Imported::Globals => println!("Imported global variables"),
+            }
+            for warning in warnings.0 {
+                println!("  ! {warning}");
+            }
+            Ok(true)
+        }
+        Command::Export { collection, output } => {
+            let Some(workspace) = find_workspace(&start)? else {
+                bail!("no workspace here or above {}", start.display());
+            };
+            let tree = workspace.read_tree(&collection)?;
+            let json =
+                serde_json::to_string_pretty(&tuma_core::export::postman::collection(&tree))?;
+            match output {
+                Some(path) => {
+                    std::fs::write(&path, json + "\n")?;
+                    eprintln!("Wrote {}", path.display());
+                }
+                None => println!("{json}"),
+            }
+            Ok(true)
+        }
         Command::Check { json } => {
             let Some(root) = runner::find_workspace(&start) else {
                 bail!(
