@@ -14,6 +14,9 @@ interface Layout {
   orientation: Orientation;
   /** The request's share of the space it shares with the response, 0 to 1. */
   split: number;
+  consoleOpen: boolean;
+  /** In pixels. */
+  consoleHeight: number;
 }
 
 const KEY = "tuma.layout";
@@ -22,12 +25,16 @@ const SIDEBAR_MIN = 220;
 const SIDEBAR_MAX = 640;
 /** Room the workbench keeps beside the rail and sidebar, however wide the sidebar is dragged. */
 const WORKBENCH_MIN = 520;
+/** Height kept above the console for the tabs, URL and some of the request and response. */
+const CONSOLE_ROOM = 340;
 const defaults: Layout = {
   section: "collections",
   sidebarOpen: true,
   sidebarWidth: 300,
   orientation: "stacked",
   split: 0.45,
+  consoleOpen: false,
+  consoleHeight: 240,
 };
 
 function load(): Layout {
@@ -70,6 +77,10 @@ export const layout = {
       orientation: s.orientation === "stacked" ? "side" : "stacked",
       split: defaults.split,
     })),
+  toggleConsole: () => useLayout.setState((s) => ({ consoleOpen: !s.consoleOpen })),
+  setConsoleHeight: (height: number) =>
+    useLayout.setState({ consoleHeight: clamp(Math.round(height), 120, window.innerHeight - CONSOLE_ROOM) }),
+  resetConsole: () => useLayout.setState({ consoleHeight: defaults.consoleHeight }),
   resetSplit: () => useLayout.setState({ split: defaults.split }),
   resetSidebar: () => useLayout.setState({ sidebarWidth: defaults.sidebarWidth }),
 };

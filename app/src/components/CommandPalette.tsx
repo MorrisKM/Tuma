@@ -58,6 +58,7 @@ export function CommandPalette() {
         : []),
       { id: "settings", label: "Settings: proxy, certificates, cookies", run: () => useStore.setState({ view: { kind: "settings" } }) },
       { id: "agents", label: "Connect a coding agent (MCP)", run: () => useStore.setState({ view: { kind: "agents" } }) },
+      { id: "console", label: "Show or hide the console", hint: "Ctrl+`", run: layout.toggleConsole },
       { id: "sidebar", label: "Show or hide the sidebar", hint: "Ctrl+B", run: layout.toggleSidebar },
       { id: "layout", label: "Response beside or below the request", hint: "Layout", run: layout.toggleOrientation },
       { id: "history", label: "Show history", hint: "Sidebar", run: () => layout.open("history") },

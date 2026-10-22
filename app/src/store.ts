@@ -1,10 +1,12 @@
 import { ask, open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { create } from "zustand";
 import * as api from "./api";
+import { cut, log } from "./console";
 import {
   type Draft,
   fromRequestFile,
   isGrpc,
+  isTextMode,
   isWebSocket,
   nameFromPath,
   newDraft,
@@ -12,6 +14,7 @@ import {
   toRequestFile,
   withQuery,
 } from "./draft";
+import { useLayout } from "./layout";
 import type {
   HistoryEntry,
   KeyValue,
@@ -336,6 +339,13 @@ export const useStore = create<State>((set, get) => {
         if (!method?.clientStreaming) await api.grpcEnd(activeTab);
       } catch (e) {
         setCall({ status: "done", events: get().calls[activeTab]?.events ?? [], error: message(e) });
+        consoleLog({
+          kind: "grpc",
+          method: "GRPC",
+          url: grpcTarget(draft.url, draft.grpc.method),
+          source: draft.name,
+          error: message(e),
+        });
         void api.grpcCancel(activeTab);
       }
     },
@@ -363,6 +373,7 @@ export const useStore = create<State>((set, get) => {
         });
       } catch (e) {
         set((s) => ({ sockets: { ...s.sockets, [activeTab]: { status: "closed", events: [], error: message(e) } } }));
+        consoleLog({ kind: "ws", method: "WS", url: draft.url, source: draft.name, error: message(e) });
       }
     },
 
@@ -669,11 +680,15 @@ export const useStore = create<State>((set, get) => {
       }
       const id = crypto.randomUUID();
       set({ sending: id, error: null, view: { kind: "request" }, preview: false });
+      const started = Date.now();
       try {
         const response = await api.sendRequest(id, toRequestFile(draft), draft.path, environment);
         patchTab(activeTab, { response, error: null });
+        logResponse(draft, response, started);
       } catch (e) {
-        patchTab(activeTab, { response: null, error: e as RequestError });
+        const error = e as RequestError;
+        patchTab(activeTab, { response: null, error });
+        if (error.kind !== "cancelled") logFailure(draft, error, started);
       } finally {
         patchTab(activeTab, { sending: null });
         set((s) => {
@@ -705,6 +720,67 @@ export const useStore = create<State>((set, get) => {
     notify: (notice) => set({ notice }),
   };
 });
+
+/** Adds to the console, counting it as unseen when the console is closed. */
+export const consoleLog = (entry: Parameters<typeof log>[0]) => log(entry, useLayout.getState().consoleOpen);
+
+/** A gRPC call's address and method, such as grpc://host:50051 shop.v1.Shop/Get. */
+export const grpcTarget = (url: string, method: string | null | undefined) =>
+  method ? `${url.replace(/\/+$/, "")} ${method}` : url;
+
+/** The body as written in the editor, for the console; files and forms are described rather than shown. */
+function draftBody(draft: Draft): string | undefined {
+  if (isTextMode(draft.bodyMode) || draft.bodyMode === "graphql") return draft.raw || undefined;
+  if (draft.bodyMode === "form") return draft.form.filter((r) => r.enabled && r.name).map((r) => `${r.name}=${r.value}`).join("&");
+  if (draft.bodyMode === "multipart") {
+    return draft.parts.filter((p) => p.enabled && p.name).map((p) => `${p.name}: ${p.file ? `file ${p.value}` : p.value}`).join("\n");
+  }
+  if (draft.bodyMode === "file") return draft.filePath ? `(the file ${draft.filePath})` : undefined;
+  return undefined;
+}
+
+function logResponse(draft: Draft, response: Response, started: number) {
+  consoleLog({
+    at: started,
+    kind: "http",
+    method: response.sent.method,
+    url: response.sent.url,
+    status: response.status,
+    reason: response.reason,
+    timeMs: response.timing.total,
+    size: response.size,
+    source: draft.name,
+    network: {
+      httpVersion: response.version,
+      remoteAddress: response.remoteAddr,
+      encodedSize: response.encodedSize,
+      timing: response.timing,
+    },
+    request: { headers: response.sent.headers, body: draftBody(draft), bodySize: response.sent.bodySize },
+    response: {
+      headers: response.headers,
+      body: response.bodyBase64 ? "(binary data)" : response.events ? `(${response.events.length} events)` : cut(response.body),
+      redirects: response.redirects,
+    },
+    logs: response.console,
+    scriptErrors: response.scriptErrors,
+  });
+}
+
+function logFailure(draft: Draft, error: RequestError, started: number) {
+  consoleLog({
+    at: started,
+    kind: "http",
+    method: draft.method,
+    url: draft.url,
+    timeMs: Date.now() - started,
+    source: draft.name,
+    error: error.kind === "skipped" ? `Not sent: ${error.message}` : error.message,
+    request: { headers: [], body: draftBody(draft) },
+    logs: error.console ?? [],
+    scriptErrors: error.scriptErrors ?? [],
+  });
+}
 
 /** Collections and folders, flattened with their depth, for pickers. */
 export function folders(tree: TreeNode[], depth = 0): { path: string; name: string; depth: number }[] {

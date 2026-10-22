@@ -1,8 +1,10 @@
-import { Columns2, PanelLeft, Rows2 } from "lucide-react";
+import { Columns2, PanelLeft, Rows2, SquareTerminal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { appVersion } from "./api";
 import { AgentsView } from "./components/AgentsView";
 import { CommandPalette } from "./components/CommandPalette";
+import { ConsolePanel } from "./components/ConsolePanel";
+import { useConsole } from "./console";
 import { RunnerView } from "./components/RunnerView";
 import { SettingsView } from "./components/SettingsView";
 import { FolderEditor } from "./components/FolderEditor";
@@ -19,8 +21,8 @@ import { TopBar } from "./components/TopBar";
 import { focusUrl } from "./components/UrlEditor";
 import { VariablesEditor } from "./components/VariablesEditor";
 import { layout, useLayout } from "./layout";
-import { useStore } from "./store";
-import type { GrpcEvent, SseEvent, WsEvent } from "./types";
+import { consoleLog, grpcTarget, useStore } from "./store";
+import type { GrpcEvent, RunStep, SseEvent, WsEvent } from "./types";
 import { listen } from "@tauri-apps/api/event";
 import { applyTheme, loadTheme } from "./theme";
 import { checkAtStart } from "./updates";
@@ -41,6 +43,7 @@ function onKey(e: KeyboardEvent) {
     else if (key === "w") void s.closeTab(s.activeTab);
     else if (key === "tab") s.cycleTab(e.shiftKey ? -1 : 1);
     else if (key === "b") layout.toggleSidebar();
+    else if (key === "`") layout.toggleConsole();
     else if (key === "l") {
       useStore.setState({ view: { kind: "request" } });
       setTimeout(focusUrl);
@@ -58,6 +61,7 @@ function App() {
   const snippetOpen = useStore((s) => s.snippetOpen);
   const workspace = useStore((s) => s.workspace);
   const environment = useStore((s) => s.environment);
+  const consoleOpen = useLayout((s) => s.consoleOpen);
 
   useEffect(() => {
     appVersion().then(setVersion);
@@ -74,22 +78,26 @@ function App() {
       })),
     );
     // WebSocket events, by tab.
-    const stopWs = listen<{ id: string; event: WsEvent }>("ws-event", ({ payload }) =>
+    const stopWs = listen<{ id: string; event: WsEvent }>("ws-event", ({ payload }) => {
+      logSocket(payload.id, payload.event);
       useStore.setState((s) => {
         const current = s.sockets[payload.id] ?? { status: "connecting" as const, events: [] };
         const status =
           payload.event.kind === "open" ? "open" : payload.event.kind === "closed" ? "closed" : current.status;
         return { sockets: { ...s.sockets, [payload.id]: { ...current, status, events: [...current.events, payload.event] } } };
-      }),
-    );
+      });
+    });
     // gRPC call events, by tab.
-    const stopGrpc = listen<{ id: string; event: GrpcEvent }>("grpc-event", ({ payload }) =>
+    const stopGrpc = listen<{ id: string; event: GrpcEvent }>("grpc-event", ({ payload }) => {
+      logCall(payload.id, payload.event);
       useStore.setState((s) => {
         const current = s.calls[payload.id] ?? { status: "open" as const, events: [] };
         const status = payload.event.kind === "done" ? "done" : current.status === "starting" ? "open" : current.status;
         return { calls: { ...s.calls, [payload.id]: { ...current, status, events: [...current.events, payload.event] } } };
-      }),
-    );
+      });
+    });
+    // Collection runs, whether or not the runner is on screen.
+    const stopRuns = listen<{ runId: string; step: RunStep }>("run-step", ({ payload }) => logStep(payload.step));
     // The web view's own menu (Back, Reload, Inspect) only where text can be edited, for copy and paste.
     const onContextMenu = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -105,6 +113,7 @@ function App() {
       void stop.then((f) => f());
       void stopWs.then((f) => f());
       void stopGrpc.then((f) => f());
+      void stopRuns.then((f) => f());
     };
   }, []);
 
@@ -126,6 +135,7 @@ function App() {
         {view.kind === "agents" && <AgentsView />}
         {view.kind === "runner" && <RunnerView key={view.path} path={view.path} />}
         {view.kind === "settings" && <SettingsView />}
+        {consoleOpen && <ConsolePanel />}
         <StatusBar version={version} environment={workspace ? environment : undefined} />
       </main>
       {savingAs && <SaveDialog />}
@@ -133,6 +143,62 @@ function App() {
       {snippetOpen && <SnippetDialog />}
     </div>
   );
+}
+
+/** The request a tab holds, for naming console entries. */
+const tabDraft = (id: string) => useStore.getState().allTabs().find((t) => t.id === id)?.draft;
+
+/** A WebSocket opening, closing or failing; messages stay in the request's own log. */
+function logSocket(tab: string, event: WsEvent) {
+  const draft = tabDraft(tab);
+  const base = { kind: "ws" as const, method: "WS", url: draft?.url ?? "", source: draft?.name };
+  if (event.kind === "open") {
+    consoleLog({ ...base, url: event.url, status: 101, reason: "Connected", response: { headers: event.headers } });
+  } else if (event.kind === "closed") {
+    const by = event.byServer ? "by the server" : "by you";
+    consoleLog({ ...base, reason: `Closed ${by}${event.code ? ` (${event.code}${event.reason ? ` ${event.reason}` : ""})` : ""}` });
+  } else if (event.kind === "error") {
+    consoleLog({ ...base, error: event.message });
+  }
+}
+
+/** A gRPC call's result. */
+function logCall(tab: string, event: GrpcEvent) {
+  if (event.kind !== "done") return;
+  const draft = tabDraft(tab);
+  const messages = useStore.getState().calls[tab]?.events.filter((e) => e.kind === "message" && e.incoming) ?? [];
+  consoleLog({
+    kind: "grpc",
+    method: "GRPC",
+    url: grpcTarget(draft?.url ?? "", draft?.grpc.method),
+    source: draft?.name,
+    status: event.code,
+    reason: event.message ? `${event.status}: ${event.message}` : event.status,
+    timeMs: event.elapsedMs,
+    request: { headers: [], body: draft?.raw || undefined },
+    response: {
+      headers: event.metadata,
+      body: messages.map((m) => (m.kind === "message" ? m.json : "")).join("\n") || undefined,
+    },
+  });
+}
+
+function logStep(step: RunStep) {
+  if (step.skipped) return;
+  consoleLog({
+    kind: "run",
+    method: step.method,
+    url: step.url,
+    status: step.status,
+    reason: step.reason,
+    timeMs: step.timeMs,
+    size: step.size,
+    error: step.error,
+    source: step.iteration > 1 ? `${step.name} (run, iteration ${step.iteration})` : `${step.name} (run)`,
+    response: step.body !== undefined ? { headers: [], body: step.body } : undefined,
+    logs: step.console ?? [],
+    scriptErrors: step.scriptErrors ?? [],
+  });
 }
 
 /** The request above the response, or beside it, with a handle between them. */
@@ -167,7 +233,8 @@ function Panes() {
 }
 
 function StatusBar({ version, environment }: { version?: string; environment?: string | null }) {
-  const { sidebarOpen, orientation } = useLayout();
+  const { sidebarOpen, orientation, consoleOpen } = useLayout();
+  const { unseen, unseenErrors } = useConsole();
   return (
     <footer className="statusbar">
       <button
@@ -185,6 +252,16 @@ function StatusBar({ version, environment }: { version?: string; environment?: s
         aria-label="Switch the layout"
       >
         {orientation === "stacked" ? <Columns2 size={14} /> : <Rows2 size={14} />}
+      </button>
+      <button
+        className={`status-button labelled${consoleOpen ? " on" : ""}`}
+        onClick={layout.toggleConsole}
+        title="Show or hide the console (Ctrl+`)"
+        aria-pressed={consoleOpen}
+      >
+        <SquareTerminal size={14} />
+        Console
+        {unseen > 0 && <span className={`badge${unseenErrors ? " fail" : ""}`}>{unseen > 99 ? "99+" : unseen}</span>}
       </button>
       <span className="status-hints">
         <span><kbd>Ctrl</kbd><kbd>K</kbd> commands</span>

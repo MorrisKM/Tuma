@@ -45,3 +45,5 @@ The first stable release.
 - Tabs, a command palette (Ctrl+K), keyboard shortcuts, light and dark themes, history, and automatic updates
 - A resizable sidebar with collections, environments and history (Ctrl+B hides it), the environment beside the tabs,
   and the request and response split by a handle you drag, one above the other or side by side
+- A console (Ctrl+`) logging every request, collection run, WebSocket connection and gRPC call, each expanding to
+  its network details and timing, request and response headers and bodies, and script output
