@@ -2192,6 +2192,23 @@ label.check {
   background: var(--bg-hover);
 }
 
+.tab-close-all {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  flex-shrink: 0;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.tab-close-all:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
 .spinner {
   width: 11px;
   height: 11px;

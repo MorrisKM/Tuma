@@ -1,4 +1,4 @@
-import { Plus, X } from "lucide-react";
+import { CopyX, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { isGrpc, isWebSocket } from "../draft";
@@ -76,6 +76,14 @@ export function TabStrip() {
           <button onClick={() => void closeAll(tabs.map((t) => t.id))}>Close all</button>
         </Menu>
       )}
+      <button
+        className="tab-close-all"
+        onClick={() => void closeAll(tabs.map((t) => t.id))}
+        title="Close all tabs (asks about unsaved changes)"
+        aria-label="Close all tabs"
+      >
+        <CopyX size={15} />
+      </button>
       <EnvironmentPicker />
     </div>
   );
