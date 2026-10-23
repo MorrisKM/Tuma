@@ -3,7 +3,7 @@
 All notable changes to Tuma. Versions follow [Semantic Versioning](https://semver.org/): the workspace file format
 and the `tuma` command's options and `--json` output are the public interface.
 
-## 1.0.0 (unreleased)
+## 1.0.0 (2026-10-23)
 
 The first stable release.
 
