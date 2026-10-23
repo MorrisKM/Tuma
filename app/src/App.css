@@ -4162,3 +4162,12 @@ td.mock-method {
   font-family: var(--mono);
   font-size: 11px;
 }
+
+.sent-body-title {
+  margin: 14px 0 4px;
+}
+
+.console-body.sent-body {
+  margin-left: 0;
+  max-height: 420px;
+}

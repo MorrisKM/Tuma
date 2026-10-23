@@ -54,6 +54,8 @@ struct ResponseView {
     timing: Timing,
     redirects: Vec<Redirect>,
     sent: SentRequest,
+    /// The body exactly as it went out: after variables, scripts and encryption. None for files and empty bodies.
+    sent_body: Option<String>,
     /// `{{variables}}` that had no value and were sent as written.
     unresolved: Vec<String>,
     /// The results of the request's `expect:` checks.
@@ -238,7 +240,9 @@ async fn send_request(
             true,
         ),
     };
+    let sent_body = execution.sent.as_ref().and_then(|r| sent_body(&r.body));
     Ok(ResponseView {
+        sent_body,
         status: response.status,
         reason: response.reason,
         version: response.version,
@@ -257,6 +261,59 @@ async fn send_request(
         events,
         decryption,
         scripts,
+    })
+}
+
+/// A request body as text for the Request tab and the console, cut short when large.
+fn sent_body(body: &tuma_core::http::Body) -> Option<String> {
+    use tuma_core::http::Body;
+    const LIMIT: usize = 64 * 1024;
+    let text = match body {
+        Body::None | Body::File { .. } => return None,
+        Body::Raw { content, .. } => content.clone(),
+        Body::FormUrlEncoded { fields } => fields
+            .iter()
+            .filter(|f| f.enabled && !f.name.is_empty())
+            .map(|f| format!("{}={}", f.name, f.value))
+            .collect::<Vec<_>>()
+            .join("&"),
+        Body::Multipart { parts } => parts
+            .iter()
+            .filter(|p| p.enabled && !p.name.is_empty())
+            .map(|p| {
+                format!(
+                    "{}: {}",
+                    p.name,
+                    if p.file {
+                        format!("(the file {})", p.value)
+                    } else {
+                        p.value.clone()
+                    }
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+        Body::Graphql {
+            query, variables, ..
+        } => {
+            if variables.trim().is_empty() {
+                query.clone()
+            } else {
+                format!("{query}\n\n{variables}")
+            }
+        }
+    };
+    if text.is_empty() {
+        return None;
+    }
+    Some(if text.len() > LIMIT {
+        let cut = (0..=LIMIT)
+            .rev()
+            .find(|i| text.is_char_boundary(*i))
+            .unwrap_or(0);
+        format!("{}\n… ({} more bytes)", &text[..cut], text.len() - cut)
+    } else {
+        text
     })
 }
 

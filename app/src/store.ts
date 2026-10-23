@@ -899,7 +899,8 @@ function logResponse(draft: Draft, response: Response, started: number) {
       encodedSize: response.encodedSize,
       timing: response.timing,
     },
-    request: { headers: response.sent.headers, body: draftBody(draft), bodySize: response.sent.bodySize },
+    // As it went out: encrypted fields encrypted, script changes made.
+    request: { headers: response.sent.headers, body: response.sentBody ?? draftBody(draft), bodySize: response.sent.bodySize },
     response: {
       headers: response.headers,
       body: response.bodyBase64 ? "(binary data)" : response.events ? `(${response.events.length} events)` : cut(response.body),

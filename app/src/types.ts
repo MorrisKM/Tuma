@@ -303,6 +303,8 @@ export interface Response extends ScriptResults {
   checks: CheckResult[];
   /** For a text/event-stream response: its events. */
   events?: SseEvent[] | null;
+  /** The body exactly as sent: after variables, scripts and encryption. */
+  sentBody?: string | null;
   /** What was decrypted, and the body as it came; or why it could not be decrypted. */
   decryption?: { original: string | null; fields: [string, number][]; error: string | null } | null;
 }

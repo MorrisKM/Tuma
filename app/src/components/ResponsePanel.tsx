@@ -543,9 +543,26 @@ function SentView({ response }: { response: Response }) {
         <strong>{sent.method}</strong> {sent.url}
       </p>
       <HeaderTable headers={sent.headers} />
-      <p className="muted">Body: {formatBytes(sent.bodySize)}</p>
+      {response.sentBody ? (
+        <>
+          <p className="muted sent-body-title">
+            Body, as sent ({formatBytes(sent.bodySize)}): after variables, scripts and encryption
+          </p>
+          <pre className="console-body sent-body">{prettyIfJson(response.sentBody)}</pre>
+        </>
+      ) : (
+        <p className="muted">Body: {formatBytes(sent.bodySize)}</p>
+      )}
     </div>
   );
+}
+
+function prettyIfJson(text: string): string {
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2);
+  } catch {
+    return text;
+  }
 }
 
 export function formatMs(ms: number): string {
