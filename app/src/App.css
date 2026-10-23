@@ -2440,6 +2440,52 @@ label.check {
   font-style: normal;
 }
 
+/* {{variable}} suggestions under plain inputs, styled like the editors' completions. */
+.var-suggest {
+  position: fixed;
+  z-index: 1000;
+  max-width: 420px;
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+.var-suggest li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.var-suggest li[aria-selected="true"] {
+  background: var(--selection);
+}
+
+.var-suggest li.note,
+.cm-completion-note {
+  color: var(--muted);
+  font-family: var(--sans, inherit);
+  font-style: italic;
+  cursor: default;
+}
+
+.var-suggest .detail {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Command palette */
 
 .palette-backdrop {

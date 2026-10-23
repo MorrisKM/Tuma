@@ -1,4 +1,5 @@
 import type { KeyValue, Part } from "../types";
+import { VariableInput } from "./VariableInput";
 
 interface Props<T extends KeyValue> {
   rows: T[];
@@ -47,20 +48,20 @@ export function KeyValueEditor<T extends KeyValue>({
               onChange={(e) => setRow({ enabled: e.target.checked } as Partial<T>)}
               aria-label="Enabled"
             />
-            <input
+            <VariableInput
               className="kv-name"
               value={row.name}
               placeholder={namePlaceholder}
               spellCheck={false}
-              onChange={(e) => setRow({ name: e.target.value } as Partial<T>)}
+              onChange={(name) => setRow({ name } as Partial<T>)}
             />
             {renderValue?.(row, setRow) ?? (
-              <input
+              <VariableInput
                 className="kv-value"
                 value={row.value}
                 placeholder={valuePlaceholder}
                 spellCheck={false}
-                onChange={(e) => setRow({ value: e.target.value } as Partial<T>)}
+                onChange={(value) => setRow({ value } as Partial<T>)}
               />
             )}
             {renderExtra?.(row, setRow)}

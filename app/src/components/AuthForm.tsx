@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import * as api from "../api";
 import { useStore } from "../store";
 import type { Auth, RequestFile, TokenStatus } from "../types";
+import { VariableInput } from "./VariableInput";
 
 const TYPES: { id: Auth["type"] | "inherit"; label: string }[] = [
   { id: "inherit", label: "Inherit from parent" },
@@ -196,25 +197,25 @@ export function AuthForm({ auth, onChange, inheritHint, tokenFor }: Props) {
       {auth?.type === "bearer" && (
         <label>
           <span>Token</span>
-          <input value={auth.token} spellCheck={false} onChange={(e) => onChange({ ...auth, token: e.target.value })} />
+          <VariableInput value={auth.token} spellCheck={false} onChange={(token) => onChange({ ...auth, token })} />
         </label>
       )}
       {(auth?.type === "basic" || auth?.type === "digest") && (
         <>
           <label>
             <span>Username</span>
-            <input
+            <VariableInput
               value={auth.username}
               spellCheck={false}
-              onChange={(e) => onChange({ ...auth, username: e.target.value })}
+              onChange={(username) => onChange({ ...auth, username })}
             />
           </label>
           <label>
             <span>Password</span>
-            <input
+            <VariableInput
               type="password"
               value={auth.password}
-              onChange={(e) => onChange({ ...auth, password: e.target.value })}
+              onChange={(password) => onChange({ ...auth, password })}
             />
           </label>
           {auth.type === "digest" && (
@@ -226,16 +227,16 @@ export function AuthForm({ auth, onChange, inheritHint, tokenFor }: Props) {
         <>
           <label>
             <span>Key</span>
-            <input
+            <VariableInput
               value={auth.key}
               placeholder="X-Api-Key"
               spellCheck={false}
-              onChange={(e) => onChange({ ...auth, key: e.target.value })}
+              onChange={(key) => onChange({ ...auth, key })}
             />
           </label>
           <label>
             <span>Value</span>
-            <input value={auth.value} spellCheck={false} onChange={(e) => onChange({ ...auth, value: e.target.value })} />
+            <VariableInput value={auth.value} spellCheck={false} onChange={(value) => onChange({ ...auth, value })} />
           </label>
           <label>
             <span>Add to</span>
@@ -278,12 +279,12 @@ export function AuthForm({ auth, onChange, inheritHint, tokenFor }: Props) {
                     onChange={(e) => set(f.key, e.target.value)}
                   />
                 ) : (
-                  <input
+                  <VariableInput
                     type={f.secret ? "password" : "text"}
                     spellCheck={false}
                     value={String(record[f.key] ?? "")}
                     placeholder={f.placeholder}
-                    onChange={(e) => set(f.key, e.target.value)}
+                    onChange={(value) => set(f.key, value)}
                   />
                 )}
               </>

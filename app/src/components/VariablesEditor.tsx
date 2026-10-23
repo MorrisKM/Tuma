@@ -29,6 +29,8 @@ export function VariablesEditor({ environment }: { environment: string | null })
     try {
       await (environment === null ? api.globalsWrite(variables) : api.environmentWrite(environment, variables));
       setSaved(JSON.stringify(variables));
+      // The URL bar's hints and the {{variable}} suggestions use the new values.
+      void useStore.getState().loadScope();
     } catch (e) {
       fail(e);
     }

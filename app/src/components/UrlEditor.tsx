@@ -1,4 +1,3 @@
-import { autocompletion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
 import { EditorState, StateEffect } from "@codemirror/state";
 import { external } from "./CodeEditor";
 import {
@@ -13,15 +12,7 @@ import {
 } from "@codemirror/view";
 import { useEffect, useRef } from "react";
 import type { VariableHint } from "../types";
-
-/** Postman-style variables Tuma generates on each send. */
-const DYNAMIC: Record<string, string> = {
-  $guid: "a new UUID",
-  $randomUUID: "a new UUID",
-  $timestamp: "the current Unix time in seconds",
-  $isoTimestamp: "the current time, ISO 8601",
-  $randomInt: "a random number from 0 to 1000",
-};
+import { DYNAMIC, variableCompletion } from "../variables";
 
 const VARIABLE = /\{\{\s*([^{}]+?)\s*\}\}/g;
 
@@ -113,25 +104,6 @@ export function UrlEditor({ value, onChange, onSubmit, onPasteCurl, scope, place
       return null;
     });
 
-    const complete = (context: CompletionContext): CompletionResult | null => {
-      const before = context.matchBefore(/\{\{\s*[\w$.-]*$/);
-      if (!before) return null;
-      // Complete the name typed after {{, which may be empty.
-      const typed = before.text.match(/[\w$.-]*$/)![0];
-      const start = before.to - typed.length;
-      const options = [
-        ...props.current.scope.map((v) => ({
-          label: v.name,
-          detail: v.source,
-          info: v.secret ? "secret" : v.value,
-          apply: `${v.name}}}`,
-          type: "variable",
-        })),
-        ...Object.entries(DYNAMIC).map(([name, info]) => ({ label: name, info, apply: `${name}}}`, type: "function" })),
-      ];
-      return { from: start, options, validFor: /^[\w$.-]*$/ };
-    };
-
     const state = EditorState.create({
       doc: value,
       extensions: [
@@ -170,7 +142,7 @@ export function UrlEditor({ value, onChange, onSubmit, onPasteCurl, scope, place
         }),
         highlight,
         tooltip,
-        autocompletion({ override: [complete], activateOnTyping: true }),
+        variableCompletion(() => props.current.scope),
         placeholder ? placeholderExt(placeholder) : [],
         EditorView.contentAttributes.of({ "aria-label": "URL", spellcheck: "false" }),
       ],

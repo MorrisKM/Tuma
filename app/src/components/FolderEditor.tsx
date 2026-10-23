@@ -66,6 +66,7 @@ export function FolderEditor({ path }: { path: string }) {
     try {
       await api.folderWrite(path, folder);
       setSaved(JSON.stringify(folder));
+      void useStore.getState().loadScope();
     } catch (e) {
       useStore.getState().notify({ tone: "error", text: String(e) });
     }

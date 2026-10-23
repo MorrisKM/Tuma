@@ -4,6 +4,7 @@ import { type BodyMode, type Draft, isGrpc, isTextMode, isWebSocket, toRequestFi
 import { formatJsonc } from "../jsonc";
 import { useStore } from "../store";
 import type { KeyValue } from "../types";
+import { requestVariableCompletion } from "../variables";
 import { AuthForm } from "./AuthForm";
 import { CryptoEditor } from "./CryptoEditor";
 import { ExamplesEditor } from "./ExamplesEditor";
@@ -107,6 +108,9 @@ function Headers() {
   );
 }
 
+/** Suggests {{variables}} in the body, as the URL bar does. */
+const bodyCompletion = requestVariableCompletion();
+
 const BODY_MODES: { id: BodyMode; label: string }[] = [
   { id: "none", label: "None" },
   { id: "json", label: "JSON" },
@@ -173,6 +177,7 @@ function BodyEditor() {
             value={draft.raw}
             onChange={(raw) => update({ raw })}
             language={mode === "raw" ? "text" : (mode as Language)}
+            extension={bodyCompletion}
           />
         </div>
       )}
