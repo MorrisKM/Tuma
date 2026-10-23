@@ -369,17 +369,14 @@
           <table>
             <tr><th>System</th><th>File</th><th>How</th></tr>
             <tr><td>Windows</td><td><code>-setup.exe</code> or <code>.msi</code></td><td>Run it. Your workspaces are kept when you install a newer version.</td></tr>
-            <tr><td>macOS</td><td><code>.dmg</code></td><td>Open it and drag Tuma to Applications. Apple Silicon (<code>aarch64</code>) or Intel (<code>x64</code>).</td></tr>
+            <tr><td>macOS</td><td><code>.dmg</code></td><td>Coming soon. Until then, <a href="#install">build from source</a> below.</td></tr>
             <tr><td>Debian, Ubuntu</td><td><code>.deb</code></td><td><code>sudo apt install ./Tuma_1.0.0_amd64.deb</code></td></tr>
             <tr><td>Fedora, openSUSE</td><td><code>.rpm</code></td><td><code>sudo dnf install ./Tuma-1.0.0-1.x86_64.rpm</code></td></tr>
             <tr><td>Any Linux</td><td><code>.AppImage</code></td><td><code>chmod +x Tuma_*.AppImage</code>, then run it.</td></tr>
           </table>
           <div class="note warn">With <code>apt</code>, write <code>./</code> in front of the file name. Without it, apt looks for a package of that name in its repositories and fails with "Unsupported file given on commandline".</div>
-          <p>Or with a package manager:</p>
-          <div class="code">brew install --cask morriskm/tuma/tuma-app   <span class="c"># macOS: the app and the tuma command</span>
-brew install morriskm/tuma/tuma              <span class="c"># macOS and Linux: the tuma command only</span>
-winget install MorrisKM.Tuma                 <span class="c"># Windows</span><button class="copy">Copy</button></div>
-          <p>Every package includes the <code>tuma</code> command. The app updates itself: see Settings → Updates.</p>
+          <p>Homebrew and winget packages are coming.</p>
+          <p>Every package includes the <code>tuma</code> command.</p>
           <h3>Build from source</h3>
           <p>You need Rust (stable), Node.js 20+, pnpm and the <a href="https://tauri.app/start/prerequisites/">Tauri system dependencies</a>.</p>
           <div class="code">git clone https://github.com/MorrisKM/Tuma.git
@@ -638,7 +635,7 @@ tuma test --env staging<button class="copy">Copy</button></div>
           <h3>Is Tuma really free?</h3>
           <p>Yes. It's open source under Apache-2.0, with no paid tier and no account. If it saves you time, consider <a data-donate href="https://github.com/sponsors/MorrisKM">donating</a>.</p>
           <h3>Does Tuma send my data anywhere?</h3>
-          <p>No. There's no telemetry and no cloud. It only connects to the APIs you send requests to, and to GitHub to check for updates.</p>
+          <p>No. There's no telemetry and no cloud. It only connects to the APIs you send requests to.</p>
           <h3>Will updating delete my work?</h3>
           <p>No. Workspaces are folders on your disk, and settings are in your user profile; installers never touch them.</p>
           <h3>How do I move from Postman?</h3>
