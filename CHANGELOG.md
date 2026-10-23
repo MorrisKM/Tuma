@@ -3,6 +3,22 @@
 All notable changes to Tuma. Versions follow [Semantic Versioning](https://semver.org/): the workspace file format
 and the `tuma` command's options and `--json` output are the public interface.
 
+## Unreleased
+
+### Added
+
+- Drag requests, folders and collections in the sidebar to arrange them, or to move them into another folder or
+  collection. Collections keep their order in `workspace.yaml`.
+
+### Fixed
+
+- Multipart bodies sent with a `Content-Type: multipart/form-data` header of their own (as Postman exports have) now
+  include the boundary, without which servers couldn't read the parts.
+- Relative file paths in multipart and binary bodies are read from the workspace folder, not from wherever Tuma was
+  started, so they work in the app and on other computers. Files picked inside the project are saved that way.
+- Undo (Ctrl+Z) in the URL bar, body, script and GraphQL editors no longer erases the text or brings back another
+  tab's; each request has its own history, and the URL bar has one at all.
+
 ## 1.0.0 (2026-10-23)
 
 The first stable release.

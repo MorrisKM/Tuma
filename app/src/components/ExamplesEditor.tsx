@@ -8,6 +8,7 @@ import { CodeEditor, type Language } from "./CodeEditor";
 /** The request's saved responses: what it documents and what mock servers answer with. */
 export function ExamplesEditor() {
   const examples = useStore((s) => s.draft.examples);
+  const generation = useStore((s) => s.generation);
   const [selected, setSelected] = useState(0);
   const set = (examples: Example[]) => useStore.getState().update({ examples });
   const current = examples[Math.min(selected, examples.length - 1)];
@@ -101,6 +102,7 @@ export function ExamplesEditor() {
         <div className="editor-frame">
           <CodeEditor
             key={index}
+            doc={generation}
             value={current.body ?? ""}
             onChange={(body) => patch({ body })}
             language={languageOf(type)}

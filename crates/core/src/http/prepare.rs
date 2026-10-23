@@ -30,10 +30,21 @@ pub(crate) async fn prepare(request: &Request) -> Result<Prepared, Error> {
     }
 
     let (mut body, content_type) = encode_body(&request.body).await?;
-    if let Some(content_type) = content_type
-        && !headers.contains_key(CONTENT_TYPE)
-    {
-        headers.insert(CONTENT_TYPE, header_value(&content_type)?);
+    if let Some(content_type) = content_type {
+        let own = headers.get(CONTENT_TYPE).and_then(|v| v.to_str().ok());
+        let boundary = content_type.split_once("boundary=").map(|(_, b)| b);
+        match (own, boundary) {
+            (None, _) => {
+                headers.insert(CONTENT_TYPE, header_value(&content_type)?);
+            }
+            // A multipart type typed by hand (or imported from Postman) has no boundary, without which the server
+            // can't find the parts: add the one the body was written with.
+            (Some(own), Some(boundary)) if is_multipart_without_boundary(own) => {
+                let value = format!("{}; boundary={boundary}", own.trim().trim_end_matches(';'));
+                headers.insert(CONTENT_TYPE, header_value(&value)?);
+            }
+            _ => {}
+        }
     }
 
     let version = concat!("Tuma/", env!("CARGO_PKG_VERSION"));
@@ -311,6 +322,11 @@ async fn encode_multipart(parts: &[Part], boundary: &str) -> Result<Bytes, Error
     Ok(Bytes::from(out))
 }
 
+fn is_multipart_without_boundary(content_type: &str) -> bool {
+    let lower = content_type.to_ascii_lowercase();
+    lower.trim_start().starts_with("multipart/") && !lower.contains("boundary=")
+}
+
 /// Escapes a field or file name the way browsers do (WHATWG multipart/form-data encoding).
 fn escape_quoted(name: &str) -> String {
     name.replace('"', "%22")
@@ -428,6 +444,47 @@ mod tests {
         assert_eq!(
             prepare(&request).await.unwrap().headers[CONTENT_TYPE],
             "application/vnd.api+json"
+        );
+    }
+
+    #[tokio::test]
+    async fn multipart_content_type_header_gets_the_boundary() {
+        let request = Request {
+            url: "example.com".into(),
+            headers: vec![KeyValue::new("Content-Type", "multipart/form-data")],
+            body: Body::Multipart {
+                parts: vec![Part {
+                    name: "a".into(),
+                    value: "1".into(),
+                    ..Default::default()
+                }],
+            },
+            ..Default::default()
+        };
+        let prepared = prepare(&request).await.unwrap();
+        let content_type = prepared.headers[CONTENT_TYPE].to_str().unwrap();
+        let boundary = content_type
+            .strip_prefix("multipart/form-data; boundary=")
+            .unwrap();
+        let body = String::from_utf8(prepared.body.to_vec()).unwrap();
+        assert!(body.starts_with(&format!("--{boundary}\r\n")), "{body}");
+        assert!(body.ends_with(&format!("--{boundary}--\r\n")), "{body}");
+    }
+
+    #[tokio::test]
+    async fn own_multipart_boundary_is_kept() {
+        let request = Request {
+            url: "example.com".into(),
+            headers: vec![KeyValue::new(
+                "content-type",
+                "multipart/form-data; boundary=mine",
+            )],
+            body: Body::Multipart { parts: vec![] },
+            ..Default::default()
+        };
+        assert_eq!(
+            prepare(&request).await.unwrap().headers[CONTENT_TYPE],
+            "multipart/form-data; boundary=mine"
         );
     }
 

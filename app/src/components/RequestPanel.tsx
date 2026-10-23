@@ -23,6 +23,7 @@ const active = (rows: KeyValue[]) => rows.filter((r) => r.enabled && r.name).len
 export function RequestPanel() {
   const [tab, setTab] = useState<Tab>("params");
   const draft = useStore((s) => s.draft);
+  const generation = useStore((s) => s.generation);
   if (isWebSocket(draft.url)) return <WebSocketPanel />;
   if (isGrpc(draft.url)) return <GrpcPanel />;
 
@@ -63,6 +64,7 @@ export function RequestPanel() {
             onChange={(scripts) => useStore.getState().update({ scripts })}
             scope="request"
             path={draft.path}
+            doc={generation}
           />
         )}
         {tab === "settings" && <SettingsEditor />}
@@ -127,11 +129,30 @@ const BODY_MODES: { id: BodyMode; label: string }[] = [
 
 async function pickFile(): Promise<string | null> {
   const path = await open({ multiple: false, directory: false });
-  return typeof path === "string" ? path : null;
+  if (typeof path !== "string") return null;
+  const root = useStore.getState().workspace?.root;
+  return root ? workspaceRelative(path, root) : path;
+}
+
+/**
+ * A file inside the workspace, or inside the project a `.tuma/` workspace belongs to, as a path relative to the
+ * workspace (which is how Tuma reads it), so the request sends the same file on a teammate's computer.
+ */
+export function workspaceRelative(path: string, root: string): string {
+  const parts = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "").split("/");
+  const file = parts(path);
+  const base = parts(root);
+  const same = (a: string, b: string) => (/^[a-z]:$/i.test(a) ? a.toLowerCase() === b.toLowerCase() : a === b);
+  const inside = (dir: string[]) => dir.length < file.length && dir.every((d, i) => same(d, file[i]));
+  if (inside(base)) return file.slice(base.length).join("/");
+  const project = base.slice(0, -1);
+  if (base[base.length - 1] === ".tuma" && inside(project)) return ["..", ...file.slice(project.length)].join("/");
+  return path;
 }
 
 function BodyEditor() {
   const draft = useStore((s) => s.draft);
+  const generation = useStore((s) => s.generation);
   const update = useStore.getState().update;
   const mode = draft.bodyMode;
 
@@ -174,6 +195,7 @@ function BodyEditor() {
       {isTextMode(mode) && (
         <div className="editor-frame">
           <CodeEditor
+            doc={generation}
             value={draft.raw}
             onChange={(raw) => update({ raw })}
             language={mode === "raw" ? "text" : (mode as Language)}

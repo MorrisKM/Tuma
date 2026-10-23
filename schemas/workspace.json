@@ -19,6 +19,13 @@
       "items": {
         "$ref": "#/$defs/Variable"
       }
+    },
+    "order": {
+      "description": "The collections' display order, by folder name, once they have been arranged; otherwise alphabetical.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "$defs": {

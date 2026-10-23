@@ -372,6 +372,7 @@ pub fn run() {
             workspace::folder_write,
             workspace::folder_create,
             workspace::item_rename,
+            workspace::item_move,
             mocks::mock_start,
             perf::perf_start,
             perf::perf_stop,

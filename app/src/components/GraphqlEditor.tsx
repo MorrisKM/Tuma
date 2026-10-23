@@ -26,6 +26,7 @@ const schemas = new Map<string, GraphQLSchema>();
 /** The query and variables of a GraphQL request, with autocomplete and a schema explorer once the schema is in. */
 export function GraphqlEditor() {
   const draft = useStore((s) => s.draft);
+  const generation = useStore((s) => s.generation);
   const environment = useStore((s) => s.environment);
   const update = useStore.getState().update;
   const [schema, setSchema] = useState<GraphQLSchema | undefined>(() => schemas.get(draft.url));
@@ -81,6 +82,7 @@ export function GraphqlEditor() {
       <div className="graphql-panes">
         <div className="editor-frame graphql-query">
           <CodeEditor
+            doc={generation}
             value={gql.query}
             onChange={(query) => set({ query })}
             extension={extension}
@@ -90,7 +92,7 @@ export function GraphqlEditor() {
         <div className="graphql-variables">
           <span className="muted small">Variables (JSON)</span>
           <div className="editor-frame">
-            <CodeEditor value={gql.variables} onChange={(variables) => set({ variables })} language="json" placeholder="{}" />
+            <CodeEditor doc={generation} value={gql.variables} onChange={(variables) => set({ variables })} language="json" placeholder="{}" />
           </div>
         </div>
         {schema && explorer && (

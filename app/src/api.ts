@@ -143,6 +143,9 @@ export const folderWrite = (path: string, folder: FolderFile) => invoke<void>("f
 export const folderCreate = (parent: string | null, name: string) => invoke<string>("folder_create", { parent, name });
 export const itemDuplicate = (path: string) => invoke<string>("item_duplicate", { path });
 export const itemRename = (path: string, name: string) => invoke<string>("item_rename", { path, name });
+/** Moves an item into `parent` (null: the top level, as a collection), before the item named `before` there. */
+export const itemMove = (path: string, parent: string | null, before: string | null) =>
+  invoke<string>("item_move", { path, parent, before });
 export const itemDelete = (path: string) => invoke<void>("item_delete", { path });
 
 export const environments = () => invoke<string[]>("environments");

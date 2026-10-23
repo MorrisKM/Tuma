@@ -223,6 +223,7 @@ impl Workspace {
             name: name.to_string(),
             id: uuid::Uuid::new_v4().to_string(),
             variables: vec![],
+            order: vec![],
         };
         write_yaml(&root.join(WORKSPACE_FILE), &file)?;
         let local_dir = current::default_local_dir(&root);
@@ -274,7 +275,14 @@ impl Workspace {
                 collections.push(self.folder_node(&entry, NodeKind::Collection)?);
             }
         }
-        collections.sort_by_key(|n| n.name.to_lowercase());
+        let order = self.order_of(&self.root)?;
+        collections.sort_by_key(|n| {
+            let position = order
+                .iter()
+                .position(|o| *o == n.name)
+                .unwrap_or(usize::MAX);
+            (position, n.name.to_lowercase())
+        });
         Ok(collections)
     }
 
@@ -384,7 +392,8 @@ impl Workspace {
         }
         let path = dir.join(&name);
         fs::create_dir(&path).map_err(io_err(&path))?;
-        if parent.is_some() {
+        // Collections stay alphabetical until they are arranged; then a new one goes last.
+        if parent.is_some() || !self.order_of(&dir)?.is_empty() {
             self.append_to_order(&dir, &name)?;
         }
         Ok(self.rel(&path))
@@ -457,13 +466,12 @@ impl Workspace {
             dir.join(&new_name)
         };
         fs::rename(&old, &new).map_err(io_err(&old))?;
-        if dir != self.root {
-            let dir_rel = self.rel(&dir);
-            let mut folder = self.read_folder(&dir_rel)?;
-            for entry in folder.order.iter_mut().filter(|o| **o == old_name) {
+        let mut order = self.order_of(&dir)?;
+        if order.contains(&old_name) {
+            for entry in order.iter_mut().filter(|o| **o == old_name) {
                 *entry = new_name.clone();
             }
-            self.write_folder(&dir_rel, &folder)?;
+            self.set_order(&dir, order)?;
         }
         Ok(self.rel(&new))
     }
@@ -479,11 +487,10 @@ impl Workspace {
             fs::remove_dir_all(&target).map_err(io_err(&target))?;
             dir_name(&target)
         };
-        if dir != self.root {
-            let dir_rel = self.rel(&dir);
-            let mut folder = self.read_folder(&dir_rel)?;
-            folder.order.retain(|o| *o != name);
-            self.write_folder(&dir_rel, &folder)?;
+        let mut order = self.order_of(&dir)?;
+        if order.contains(&name) {
+            order.retain(|o| *o != name);
+            self.set_order(&dir, order)?;
         }
         Ok(())
     }
@@ -512,33 +519,128 @@ impl Workspace {
             self.write_tree(&copy, &tree)?;
             copy
         };
-        // Collections are listed by name; in a folder with an order, the copy goes after the original.
-        if dir != self.root {
-            let dir_rel = self.rel(&dir);
-            let mut folder = self.read_folder(&dir_rel)?;
-            if let Some(i) = folder.order.iter().position(|o| *o == original) {
-                folder.order.insert(i + 1, name);
-                self.write_folder(&dir_rel, &folder)?;
-            }
+        // Where there is an order, the copy goes right after the original; otherwise it sorts by name.
+        let mut order = self.order_of(&dir)?;
+        if let Some(i) = order.iter().position(|o| *o == original) {
+            order.insert(i + 1, name);
+            self.set_order(&dir, order)?;
         }
         Ok(self.rel(&copy))
     }
 
     fn append_to_order(&self, dir: &Path, name: &str) -> Result<()> {
-        let file = dir.join(FOLDER_FILE);
-        let mut folder: FolderFile = read_yaml_or_default(&file)?;
+        let mut order = self.order_of(dir)?;
         // An empty order means "alphabetical"; start it from the current display order so nothing moves.
-        if folder.order.is_empty() {
-            folder.order = self
-                .folder_node(dir, NodeKind::Folder)?
-                .children
-                .into_iter()
-                .map(|n| n.name)
-                .filter(|n| n != name)
-                .collect();
+        if order.is_empty() {
+            order = self.display_order(dir)?;
+            order.retain(|n| n != name);
         }
-        folder.order.push(name.to_string());
-        write_yaml(&file, &folder)
+        order.push(name.to_string());
+        self.set_order(dir, order)
+    }
+
+    /// The names of what is in `dir` as they are shown: the collections for the workspace root.
+    fn display_order(&self, dir: &Path) -> Result<Vec<String>> {
+        let nodes = if dir == self.root {
+            self.tree()?
+        } else {
+            self.folder_node(dir, NodeKind::Folder)?.children
+        };
+        Ok(nodes.into_iter().map(|n| n.name).collect())
+    }
+
+    /// The saved order of what is in `dir`: `_folder.yaml`'s, or `workspace.yaml`'s for the collections. Empty means
+    /// alphabetical.
+    fn order_of(&self, dir: &Path) -> Result<Vec<String>> {
+        Ok(if dir == self.root {
+            read_yaml_or_default::<WorkspaceFile>(&self.root.join(WORKSPACE_FILE))?.order
+        } else {
+            read_yaml_or_default::<FolderFile>(&dir.join(FOLDER_FILE))?.order
+        })
+    }
+
+    fn set_order(&self, dir: &Path, order: Vec<String>) -> Result<()> {
+        if dir == self.root {
+            let file = self.root.join(WORKSPACE_FILE);
+            let mut workspace: WorkspaceFile = read_yaml(&file)?;
+            workspace.order = order;
+            write_yaml(&file, &workspace)
+        } else {
+            let rel = self.rel(dir);
+            let mut folder = self.read_folder(&rel)?;
+            folder.order = order;
+            self.write_folder(&rel, &folder)
+        }
+    }
+
+    /// Moves a request, folder or collection into the folder or collection `parent` (`None` for the top level, where
+    /// a folder becomes a collection), before the item named `before` there, or last. Returns its new path, which has
+    /// a number added if the name is taken in `parent`.
+    pub fn move_item(
+        &self,
+        path: &str,
+        parent: Option<&str>,
+        before: Option<&str>,
+    ) -> Result<String> {
+        let source = self.abs(path)?;
+        let is_request = source.is_file();
+        let from = source.parent().unwrap_or(&self.root).to_path_buf();
+        let to = match parent {
+            Some(parent) => self.abs(parent)?,
+            None if is_request => {
+                return Err(Error::InvalidPath(format!(
+                    "{path} (a request goes in a collection or folder)"
+                )));
+            }
+            None => self.root.clone(),
+        };
+        if !to.is_dir() || to.starts_with(&source) {
+            return Err(Error::InvalidPath(format!(
+                "{path} can't move into {}",
+                parent.unwrap_or("the top level")
+            )));
+        }
+        let old_name = if is_request {
+            stem(&source)
+        } else {
+            dir_name(&source)
+        };
+        let name = if to == from {
+            old_name.clone()
+        } else {
+            let mut name = unique_name(&to, &old_name)?;
+            if to == self.root && name == ENVIRONMENTS {
+                name = unique_name(&to, &format!("{name} collection"))?;
+            }
+            name
+        };
+        if name == before.unwrap_or_default() {
+            return Ok(path.to_string());
+        }
+
+        // Where it goes, in the order the destination is shown, before it changes.
+        let mut order = self.display_order(&to)?;
+        order.retain(|n| *n != old_name || to != from);
+        let at = before
+            .and_then(|b| order.iter().position(|n| n == b))
+            .unwrap_or(order.len());
+        order.insert(at, name.clone());
+
+        let target = if is_request {
+            to.join(format!("{name}.{EXTENSION}"))
+        } else {
+            to.join(&name)
+        };
+        if target != source {
+            fs::rename(&source, &target).map_err(io_err(&source))?;
+            let mut left = self.order_of(&from)?;
+            if left.contains(&old_name) {
+                left.retain(|n| *n != old_name);
+                self.set_order(&from, left)?;
+            }
+        }
+        self.set_order(&to, order)?;
+        Ok(self.rel(&target))
     }
 
     /// Reads a collection or folder and everything in it, in display order. The opposite of
@@ -819,6 +921,8 @@ impl Workspace {
         let variables = self.store_secrets("globals", &self.file.variables, vars, secrets)?;
         let file = WorkspaceFile {
             variables,
+            // Arranging collections writes the order straight to the file; keep it.
+            order: self.order_of(&self.root)?,
             ..self.file.clone()
         };
         write_yaml(&self.root.join(WORKSPACE_FILE), &file)?;
@@ -978,14 +1082,39 @@ impl Workspace {
             .as_ref()
             .or_else(|| folders.iter().find_map(|f| f.auth.as_ref()));
         let inherited: Vec<&KeyValue> = folders.iter().rev().flat_map(|f| &f.headers).collect();
-        let (http_request, mut unresolved) =
+        let (mut http_request, mut unresolved) =
             scopes.resolve_request(&to_http(request, auth, &inherited));
+        anchor_files(&mut http_request.body, &self.root);
         let crypto = prepare_crypto(request, &scopes, &mut unresolved);
         Ok(Prepared {
             request: http_request,
             unresolved,
             crypto,
         })
+    }
+}
+
+/// Makes the relative paths of files sent in a body relative to the workspace folder, as `.proto` paths are, rather
+/// than to wherever Tuma was started, so a workspace in git sends the same files on every computer.
+fn anchor_files(body: &mut http::Body, root: &Path) {
+    let anchor = |path: &str| -> Option<String> {
+        let p = Path::new(path);
+        (!path.is_empty() && p.is_relative()).then(|| root.join(p).to_string_lossy().into_owned())
+    };
+    match body {
+        http::Body::Multipart { parts } => {
+            for part in parts.iter_mut().filter(|p| p.file) {
+                if let Some(path) = anchor(&part.value) {
+                    part.value = path;
+                }
+            }
+        }
+        http::Body::File { path, .. } => {
+            if let Some(anchored) = anchor(&path.to_string_lossy()) {
+                *path = anchored.into();
+            }
+        }
+        _ => {}
     }
 }
 

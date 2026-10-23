@@ -7,6 +7,7 @@ const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 
 export function RequestBar() {
   const method = useStore((s) => s.draft.method);
+  const generation = useStore((s) => s.generation);
   const url = useStore((s) => s.draft.url);
   const sending = useStore((s) => s.sending);
   const scope = useStore((s) => s.scope);
@@ -35,6 +36,7 @@ export function RequestBar() {
           ))}
         </datalist>
         <UrlEditor
+          doc={generation}
           value={url}
           onChange={setUrl}
           onSubmit={() => void send()}

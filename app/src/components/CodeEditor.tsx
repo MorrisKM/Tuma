@@ -1,4 +1,4 @@
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, indentWithTab, isolateHistory } from "@codemirror/commands";
 import { html } from "@codemirror/lang-html";
 import { javascript } from "@codemirror/lang-javascript";
 import { json, jsonLanguage } from "@codemirror/lang-json";
@@ -64,20 +64,29 @@ interface Props {
   placeholder?: string;
   /** More extensions, such as a language with a schema. Reconfigured when it changes. */
   extension?: Extension;
+  /**
+   * Which document is shown, such as the open tab. When it changes, the text is replaced and the undo history starts
+   * afresh, so Ctrl+Z never brings back another document's text.
+   */
+  doc?: unknown;
 }
 
 /** A CodeMirror editor. With `readOnly` it is a viewer with search (Ctrl+F) and folding. */
-export function CodeEditor({ value, onChange, language = "text", readOnly = false, placeholder, extension }: Props) {
+export function CodeEditor({ value, onChange, language = "text", readOnly = false, placeholder, extension, doc }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView>(null);
   const languageSlot = useRef(new Compartment());
   const extensionSlot = useRef(new Compartment());
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const latest = useRef({ language, extension, placeholder });
+  latest.current = { language, extension, placeholder };
+  const shown = useRef(doc);
 
-  useEffect(() => {
-    const state = EditorState.create({
-      doc: value,
+  /** A new editor state: the text with no undo history. */
+  const fresh = (text: string) =>
+    EditorState.create({
+      doc: text,
       extensions: [
         lineNumbers(),
         foldGutter(),
@@ -90,9 +99,9 @@ export function CodeEditor({ value, onChange, language = "text", readOnly = fals
         EditorView.lineWrapping,
         // Read-only, but still focusable: otherwise Ctrl+F (search) and selection with the keyboard don't work.
         EditorState.readOnly.of(readOnly),
-        placeholder ? placeholderExt(placeholder) : [],
-        languageSlot.current.of(languages[language]()),
-        extensionSlot.current.of(extension ?? []),
+        latest.current.placeholder ? placeholderExt(latest.current.placeholder) : [],
+        languageSlot.current.of(languages[latest.current.language]()),
+        extensionSlot.current.of(latest.current.extension ?? []),
         theme,
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !update.transactions.some((t) => t.annotation(external))) {
@@ -101,17 +110,27 @@ export function CodeEditor({ value, onChange, language = "text", readOnly = fals
         }),
       ],
     });
-    view.current = new EditorView({ state, parent: host.current! });
+
+  useEffect(() => {
+    view.current = new EditorView({ state: fresh(value), parent: host.current! });
     return () => view.current?.destroy();
     // The editor is created once; value and language changes are applied below.
   }, [readOnly]);
 
   useEffect(() => {
     const v = view.current;
-    if (v && v.state.doc.toString() !== value) {
-      v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: value }, annotations: external.of(true) });
+    if (!v) return;
+    if (doc !== shown.current) {
+      shown.current = doc;
+      v.setState(fresh(value));
+    } else if (v.state.doc.toString() !== value) {
+      // The same document changed from outside, such as by Format: one step of its own for Ctrl+Z.
+      v.dispatch({
+        changes: { from: 0, to: v.state.doc.length, insert: value },
+        annotations: [external.of(true), isolateHistory.of("full")],
+      });
     }
-  }, [value]);
+  }, [value, doc]);
 
   useEffect(() => {
     view.current?.dispatch({ effects: languageSlot.current.reconfigure(languages[language]()) });

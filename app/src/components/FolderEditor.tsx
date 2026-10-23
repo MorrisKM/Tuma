@@ -149,6 +149,7 @@ export function FolderEditor({ path }: { path: string }) {
             onChange={(scripts) => setFolder({ ...folder, scripts })}
             scope={isCollection ? "collection" : "folder"}
             path={path}
+            doc={path}
           />
         )}
         {tab === "description" && (

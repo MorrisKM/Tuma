@@ -19,6 +19,9 @@ pub struct WorkspaceFile {
     /// Global variables, the lowest-priority scope.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub variables: Vec<Variable>,
+    /// The collections' display order, by folder name, once they have been arranged; otherwise alphabetical.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub order: Vec<String>,
 }
 
 /// `_folder.yaml` in a collection or folder directory. Everything is optional.

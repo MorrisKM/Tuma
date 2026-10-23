@@ -226,6 +226,59 @@ fn folder_headers_and_variables_apply_nearest_first() {
 }
 
 #[test]
+fn relative_body_files_are_read_from_the_workspace() {
+    use tuma_core::workspace::files::{Body, Part};
+    let dir = TempDir::new("files");
+    let secrets = MemoryStore::default();
+    let workspace = Workspace::create(&dir.0, "Test").unwrap();
+    let collection = workspace.create_folder(None, "API").unwrap();
+    let absolute = dir.0.join("elsewhere.png").to_string_lossy().into_owned();
+    let file = RequestFile {
+        method: "POST".into(),
+        url: "example.com".into(),
+        body: Body::Multipart {
+            parts: vec![
+                Part {
+                    name: "avatar".into(),
+                    value: "fixtures/a.png".into(),
+                    file: true,
+                    ..Default::default()
+                },
+                Part {
+                    name: "other".into(),
+                    value: absolute.clone(),
+                    file: true,
+                    ..Default::default()
+                },
+                Part {
+                    name: "note".into(),
+                    value: "fixtures/a.png".into(),
+                    ..Default::default()
+                },
+            ],
+        },
+        ..Default::default()
+    };
+    let path = workspace
+        .create_request(&collection, "Upload", &file)
+        .unwrap();
+
+    let prepared = workspace
+        .prepare(&file, Some(&path), None, &[], &secrets)
+        .unwrap();
+    let tuma_core::http::Body::Multipart { parts } = prepared.request.body else {
+        panic!("not multipart");
+    };
+    let values: Vec<&str> = parts.iter().map(|p| p.value.as_str()).collect();
+    let anchored = workspace.root().join("fixtures/a.png");
+    // Files are found from the workspace, absolute paths stay, and text fields are left alone.
+    assert_eq!(
+        values,
+        [anchored.to_str().unwrap(), &absolute, "fixtures/a.png"]
+    );
+}
+
+#[test]
 fn create_rename_delete_keep_the_order() {
     let dir = TempDir::new("crud");
     let workspace = Workspace::create(&dir.0, "Test").unwrap();
@@ -261,6 +314,90 @@ fn create_rename_delete_keep_the_order() {
     assert_eq!(names(&workspace), ["z- first-", "b (2)"]);
     workspace.delete(&collection).unwrap();
     assert!(workspace.tree().unwrap().is_empty());
+}
+
+#[test]
+fn collections_and_requests_can_be_arranged_and_moved() {
+    let dir = TempDir::new("move");
+    let mut workspace = Workspace::create(&dir.0, "Test").unwrap();
+    let request = RequestFile::default();
+    for name in ["Billing", "Users", "Admin"] {
+        workspace.create_folder(None, name).unwrap();
+    }
+    let top = |w: &Workspace| {
+        w.tree()
+            .unwrap()
+            .into_iter()
+            .map(|n| n.name)
+            .collect::<Vec<_>>()
+    };
+    let inside = |w: &Workspace, i: usize| {
+        w.tree().unwrap()[i]
+            .children
+            .iter()
+            .map(|n| n.name.clone())
+            .collect::<Vec<_>>()
+    };
+    // Alphabetical until arranged.
+    assert_eq!(top(&workspace), ["Admin", "Billing", "Users"]);
+
+    assert_eq!(
+        workspace.move_item("Users", None, Some("Admin")).unwrap(),
+        "Users"
+    );
+    assert_eq!(top(&workspace), ["Users", "Admin", "Billing"]);
+    workspace.move_item("Users", None, None).unwrap();
+    assert_eq!(top(&workspace), ["Admin", "Billing", "Users"]);
+    // Kept through renames, new collections and saving the globals.
+    workspace.rename("Billing", "Payments").unwrap();
+    workspace.create_folder(None, "Orders").unwrap();
+    workspace
+        .write_globals(&[], &MemoryStore::default())
+        .unwrap();
+    assert_eq!(top(&workspace), ["Admin", "Payments", "Users", "Orders"]);
+
+    for name in ["list", "create", "delete"] {
+        workspace.create_request("Users", name, &request).unwrap();
+    }
+    workspace
+        .create_request("Orders", "list", &request)
+        .unwrap();
+    // Reordered inside its folder.
+    workspace
+        .move_item("Users/delete.yaml", Some("Users"), Some("list"))
+        .unwrap();
+    assert_eq!(inside(&workspace, 2), ["delete", "list", "create"]);
+    // Moved to another collection, where the name is taken.
+    let moved = workspace
+        .move_item("Users/list.yaml", Some("Orders"), Some("list"))
+        .unwrap();
+    assert_eq!(moved, "Orders/list (2).yaml");
+    assert_eq!(inside(&workspace, 3), ["list (2)", "list"]);
+    assert_eq!(inside(&workspace, 2), ["delete", "create"]);
+
+    // A collection becomes a folder, and back.
+    let folder = workspace
+        .move_item("Payments", Some("Users"), None)
+        .unwrap();
+    assert_eq!(folder, "Users/Payments");
+    assert_eq!(top(&workspace), ["Admin", "Users", "Orders"]);
+    assert_eq!(inside(&workspace, 1), ["delete", "create", "Payments"]);
+    workspace.move_item(&folder, None, Some("Admin")).unwrap();
+    assert_eq!(top(&workspace), ["Payments", "Admin", "Users", "Orders"]);
+
+    // Not into itself, and requests not to the top level.
+    assert!(workspace.move_item("Users", Some("Users"), None).is_err());
+    workspace.create_folder(Some("Users"), "Inner").unwrap();
+    assert!(
+        workspace
+            .move_item("Users", Some("Users/Inner"), None)
+            .is_err()
+    );
+    assert!(
+        workspace
+            .move_item("Users/create.yaml", None, None)
+            .is_err()
+    );
 }
 
 #[test]

@@ -35,6 +35,7 @@ import { applyTheme, type Theme, useTheme } from "../theme";
 import type { HistoryEntry, TreeNode } from "../types";
 import { Splitter } from "./Splitter";
 import { Logo, Menu, MethodTag } from "./ui";
+import { startDrag } from "../treeDrag";
 
 const SECTIONS: { id: Section; label: string; icon: typeof Library }[] = [
   { id: "collections", label: "Collections", icon: Library },
@@ -407,6 +408,9 @@ function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
       <div
         className={`tree-row${active ? " active" : ""}${menu ? " menu-open" : ""}`}
         style={{ paddingLeft: 8 + depth * 14 }}
+        data-path={node.path}
+        // Drag to arrange: before or after another row, or into a folder or collection.
+        onPointerDown={(e) => !renaming && startDrag(e, node)}
         onClick={select}
         // Double-clicking the name renames, as in a file manager.
         onDoubleClick={() => useStore.setState({ renaming: node.path })}

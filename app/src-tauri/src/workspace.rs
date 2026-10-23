@@ -323,6 +323,19 @@ pub fn item_rename(open: tauri::State<'_, Open>, path: String, name: String) -> 
     with(&open, |w| w.rename(&path, &name))
 }
 
+/// Moves a request, folder or collection into `parent` (none: the top level), before the item named `before`.
+#[tauri::command]
+pub fn item_move(
+    open: tauri::State<'_, Open>,
+    path: String,
+    parent: Option<String>,
+    before: Option<String>,
+) -> Result<String> {
+    with(&open, |w| {
+        w.move_item(&path, parent.as_deref(), before.as_deref())
+    })
+}
+
 #[tauri::command]
 pub fn item_duplicate(open: tauri::State<'_, Open>, path: String) -> Result<String> {
     with(&open, |w| w.duplicate(&path))

@@ -7,6 +7,7 @@ import { CodeEditor } from "./CodeEditor";
 /** Picks the method, edits the message, and for client-streaming calls sends more messages. */
 export function GrpcMessage() {
   const draft = useStore((s) => s.draft);
+  const generation = useStore((s) => s.generation);
   const services = useStore((s) => s.grpcMethods[grpcKey(s.draft)]);
   const call = useStore((s) => s.calls[s.activeTab]);
   const { update, loadGrpcMethods, grpcSend, grpcEnd } = useStore.getState();
@@ -71,7 +72,7 @@ export function GrpcMessage() {
         )}
       </div>
       <div className="editor-frame grpc-editor">
-        <CodeEditor value={draft.raw} onChange={(raw) => update({ raw })} language="json" placeholder="{ } (JSON)" />
+        <CodeEditor doc={generation} value={draft.raw} onChange={(raw) => update({ raw })} language="json" placeholder="{ } (JSON)" />
       </div>
       {method?.clientStreaming && (
         <div className="toolbar">

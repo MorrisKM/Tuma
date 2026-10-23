@@ -74,6 +74,7 @@ export function ScriptsEditor({
   onChange,
   scope,
   path,
+  doc,
 }: {
   scripts: Scripts;
   onChange: (scripts: Scripts) => void;
@@ -81,6 +82,8 @@ export function ScriptsEditor({
   scope: "request" | "folder" | "collection";
   /** The saved request's or folder's path, for asking an agent; null for an unsaved request. */
   path: string | null;
+  /** Which request or folder the scripts belong to; when it changes, the undo history starts afresh. */
+  doc?: unknown;
 }) {
   const [which, setWhich] = useState<Which>("test");
   const value = scripts[which] ?? "";
@@ -109,6 +112,7 @@ export function ScriptsEditor({
         <div className="editor-frame">
           <CodeEditor
             key={which}
+            doc={doc}
             value={value}
             onChange={set}
             language="javascript"

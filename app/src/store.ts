@@ -88,6 +88,9 @@ interface State {
   error: RequestError | null;
   sending: string | null;
   preview: boolean;
+  /** Changes whenever the draft is replaced by another document (another tab, or a reload from disk), so editors
+   * start a fresh undo history instead of undoing into the previous document. */
+  generation: number;
 
   /** Variables the active request can use, for the URL bar's hints. */
   scope: VariableHint[];
@@ -164,6 +167,8 @@ interface State {
   addRequest: (parent: string) => Promise<void>;
   addFolder: (parent: string | null) => Promise<void>;
   rename: (path: string, name: string) => Promise<void>;
+  /** Moves a request, folder or collection by drag and drop: into `parent` (null for the top level), before `before`. */
+  move: (path: string, parent: string | null, before: string | null) => Promise<void>;
   remove: (node: TreeNode) => Promise<void>;
   /** Takes in changes made to the open request's file outside the app, such as by a coding agent, when it has no
    * unsaved changes. */
@@ -257,6 +262,7 @@ export const useStore = create<State>((set, get) => {
       sending: tab.sending,
       preview: tab.preview,
       view: { kind: "request" },
+      generation: get().generation + 1,
     });
     void get().loadScope();
   };
@@ -300,6 +306,18 @@ export const useStore = create<State>((set, get) => {
     set({ tabs, draft: active.draft, saved: active.saved });
   };
 
+  /** Follows an item that moved or was renamed: open tabs and the folder view inside it go with it. */
+  const relocate = (path: string, newPath: string) => {
+    if (newPath === path) return;
+    const moved = (p: string | null) =>
+      p === path ? newPath : p?.startsWith(`${path}/`) ? newPath + p.slice(path.length) : p;
+    repath(moved);
+    const { view, expanded } = get();
+    if (view.kind === "folder") set({ view: { kind: "folder", path: moved(view.path)! } });
+    // Folders that were open stay open.
+    set({ expanded: Object.fromEntries(Object.entries(expanded).map(([p, open]) => [moved(p)!, open])) });
+  };
+
   const anyDirty = () => get().allTabs().some(tabDirty);
 
   const setWorkspace = async (workspace: WorkspaceInfo | null) => {
@@ -331,6 +349,7 @@ export const useStore = create<State>((set, get) => {
     error: null,
     sending: null,
     preview: false,
+    generation: 0,
     scope: [],
     savingAs: false,
     renaming: null,
@@ -668,15 +687,17 @@ export const useStore = create<State>((set, get) => {
     rename: (path, name) =>
       attempt(async () => {
         set({ renaming: null });
-        const newPath = await api.itemRename(path, name);
-        if (newPath === path) return;
-        // Requests and views inside a renamed folder move with it.
-        const moved = (p: string | null) =>
-          p === path ? newPath : p?.startsWith(`${path}/`) ? newPath + p.slice(path.length) : p;
-        repath(moved);
-        const { view } = get();
-        if (view.kind === "folder") set({ view: { kind: "folder", path: moved(view.path)! } });
+        relocate(path, await api.itemRename(path, name));
         await get().refresh();
+      }),
+
+    move: (path, parent, before) =>
+      attempt(async () => {
+        const newPath = await api.itemMove(path, parent, before);
+        relocate(path, newPath);
+        if (parent) get().toggle(parent, true);
+        await get().refresh();
+        if (newPath !== path) void get().loadScope();
       }),
 
     reloadFromDisk: async () => {
@@ -693,7 +714,7 @@ export const useStore = create<State>((set, get) => {
       const now = get();
       if (now.activeTab !== activeTab || now.draft.path !== draft.path || snapshot(now.draft) !== saved) return;
       if (snapshot(fresh) === saved) return;
-      set({ draft: fresh, saved: snapshot(fresh), notice: { tone: "info", text: `"${draft.name}" changed on disk (by your agent?) and was reloaded.` } });
+      set({ draft: fresh, saved: snapshot(fresh), generation: now.generation + 1, notice: { tone: "info", text: `"${draft.name}" changed on disk (by your agent?) and was reloaded.` } });
     },
 
     duplicate: (path) =>

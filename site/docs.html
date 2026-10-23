@@ -426,7 +426,7 @@ pnpm tauri build   <span class="c"># build installers for your system</span><but
   <span class="k">body</span>:
     - { path: $.id, exists: true }<button class="copy">Copy</button></div>
           <p>JSON Schemas for every file are in <a data-repo-path="/tree/main/schemas" href="https://github.com/MorrisKM/Tuma/tree/main/schemas"><code>schemas/</code></a>, so editors such as VS Code can autocomplete and validate them. <code>tuma check</code> finds typos and checks that can't work.</p>
-          <p>You can keep several workspaces and switch between them from the workspace menu. Duplicate any request, folder or collection, and click a name to rename it.</p>
+          <p>You can keep several workspaces and switch between them from the workspace menu. Duplicate any request, folder or collection, and click a name to rename it. Drag requests, folders and collections in the sidebar to arrange them: drop on the top or bottom edge of a row to put it before or after, or on a folder or collection to move it inside. The order is saved in <code>_folder.yaml</code>, and for collections in <code>workspace.yaml</code>.</p>
         </section>
 
         <section id="variables" data-group="Requests">
@@ -449,7 +449,7 @@ pnpm tauri build   <span class="c"># build installers for your system</span><but
 
         <section id="bodies" data-group="Requests">
           <h2><a href="#bodies">Bodies and protocols</a></h2>
-          <p>Bodies can be JSON (comments allowed while you edit), XML, HTML, text, form fields, multipart with files, or a binary file. Beyond HTTP, Tuma speaks:</p>
+          <p>Bodies can be JSON (comments allowed while you edit), XML, HTML, text, form fields, multipart with files, or a binary file. A file path that isn't absolute is read from the workspace folder, so a request committed with <code>../fixtures/avatar.png</code> sends the same file on every computer; files you pick inside the project are saved that way. Beyond HTTP, Tuma speaks:</p>
           <ul>
             <li><b>GraphQL</b>: queries and variables, with introspection and a schema explorer.</li>
             <li><b>WebSocket</b>: connect, send saved messages, and watch the conversation.</li>
