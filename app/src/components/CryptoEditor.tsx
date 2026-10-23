@@ -1,6 +1,7 @@
 import { Lock } from "lucide-react";
 import { useState } from "react";
 import { useStore } from "../store";
+import { VariableInput } from "./VariableInput";
 import type { CryptoAlgorithm, CryptoEncoding, CryptoSettings, HybridFormat } from "../types";
 
 const ALGORITHMS: { id: CryptoAlgorithm; label: string }[] = [
@@ -57,12 +58,12 @@ export function CryptoEditor() {
         <label>
           <span>{rsa ? "Public key (PEM)" : "Key"}</span>
           <span className="crypto-pair">
-            <input
+            <VariableInput
               className="mono"
               value={c.key ?? ""}
               placeholder={rsa ? "{{rsaPublicKey}}" : "{{encryptionKey}}"}
               spellCheck={false}
-              onChange={(e) => set({ key: e.target.value })}
+              onChange={(key) => set({ key })}
             />
             {!rsa && (
               <select
@@ -88,12 +89,12 @@ export function CryptoEditor() {
         {!rsa && (
           <label>
             <span>Fixed IV</span>
-            <input
+            <VariableInput
               className="mono"
               value={c.iv ?? ""}
               placeholder="Empty: a random IV for every value"
               spellCheck={false}
-              onChange={(e) => set({ iv: e.target.value })}
+              onChange={(iv) => set({ iv })}
             />
           </label>
         )}
@@ -167,12 +168,12 @@ export function CryptoEditor() {
         {needsPrivate && (
           <label>
             <span>Private key (PEM)</span>
-            <input
+            <VariableInput
               className="mono"
               value={c.privateKey ?? ""}
               placeholder="{{rsaPrivateKey}}"
               spellCheck={false}
-              onChange={(e) => set({ privateKey: e.target.value })}
+              onChange={(privateKey) => set({ privateKey })}
             />
             {literal(c.privateKey) ? (
               <small className="danger">
