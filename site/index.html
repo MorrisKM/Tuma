@@ -1,0 +1,1701 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tuma — the open-source API client</title>
+    <meta
+      name="description"
+      content="Tuma is a fast, local-first, open-source API client built with Rust and Tauri. No account, no cloud: your requests are plain files in git."
+    />
+    <meta property="og:title" content="Tuma — the open-source API client" />
+    <meta property="og:description" content="Fast, local-first, open source. Requests as plain files, built for you and your coding agents." />
+    <meta property="og:image" content="icon.png" />
+    <link rel="icon" href="icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      /* Hero */
+
+      .hero {
+        position: relative;
+        padding: 72px 0 40px;
+        overflow: hidden;
+      }
+
+      .hero::before {
+        content: "";
+        position: absolute;
+        inset: -20% -10% auto;
+        height: 720px;
+        background:
+          radial-gradient(40% 50% at 70% 30%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%),
+          radial-gradient(30% 40% at 15% 20%, color-mix(in srgb, var(--put) 12%, transparent), transparent 70%);
+        pointer-events: none;
+        z-index: -1;
+      }
+
+      .grid-bg {
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        background-image:
+          linear-gradient(var(--border) 1px, transparent 1px),
+          linear-gradient(90deg, var(--border) 1px, transparent 1px);
+        background-size: 44px 44px;
+        mask-image: radial-gradient(70% 60% at 50% 30%, #000 30%, transparent 75%);
+        -webkit-mask-image: radial-gradient(70% 60% at 50% 30%, #000 30%, transparent 75%);
+        opacity: 0.55;
+      }
+
+      .hero-grid > *,
+      .split > *,
+      .oss > *,
+      .bento > * {
+        min-width: 0;
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: 1.05fr 1fr;
+        gap: 48px;
+        align-items: center;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 12px 5px 6px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--card);
+        font-size: 13.5px;
+        color: var(--text-2);
+        text-decoration: none;
+      }
+
+      .pill b {
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      h1 {
+        margin: 22px 0 18px;
+        font-size: clamp(42px, 6.4vw, 76px);
+        line-height: 1.02;
+        letter-spacing: -0.045em;
+        font-weight: 800;
+      }
+
+      h1 .send {
+        position: relative;
+        color: var(--accent);
+        white-space: nowrap;
+      }
+
+      h1 .send svg {
+        position: absolute;
+        right: -0.62em;
+        top: -0.28em;
+        width: 0.6em;
+        height: 0.6em;
+        animation: takeoff 4s ease-in-out infinite;
+      }
+
+      @keyframes takeoff {
+        0%,
+        100% {
+          transform: translate(0, 0) rotate(0);
+        }
+        50% {
+          transform: translate(6px, -8px) rotate(-6deg);
+        }
+      }
+
+      .lede {
+        max-width: 560px;
+        font-size: 19px;
+        color: var(--text-2);
+        margin: 0 0 30px;
+      }
+
+      .lede em {
+        font-style: normal;
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      .ctas {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .facts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 22px;
+        margin-top: 28px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .facts span::before {
+        content: "✓";
+        color: var(--accent);
+        font-weight: 700;
+        margin-right: 7px;
+      }
+
+      /* The app mock in the hero */
+
+      .window {
+        position: relative;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--card);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        transform: perspective(1400px) rotateY(-7deg) rotateX(3deg);
+        transition: transform 0.5s;
+      }
+
+      .window:hover {
+        transform: perspective(1400px) rotateY(0) rotateX(0);
+      }
+
+      .titlebar {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        height: 38px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-2);
+      }
+
+      .titlebar i {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: var(--border);
+      }
+
+      .titlebar span {
+        margin-left: 10px;
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+
+      .urlbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 14px;
+        padding: 0 6px 0 12px;
+        height: 44px;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        font: 13.5px var(--mono);
+      }
+
+      .urlbar .url {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+
+      .urlbar .var {
+        color: var(--accent);
+      }
+
+      .caret {
+        display: inline-block;
+        width: 2px;
+        height: 1.1em;
+        margin-left: 1px;
+        vertical-align: -0.18em;
+        background: var(--accent);
+        animation: blink 1s steps(1) infinite;
+      }
+
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+
+      .send-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        padding: 0 14px;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #04281c;
+        font: 700 13px var(--sans);
+        border: 0;
+        cursor: pointer;
+      }
+
+      .send-btn.flying svg {
+        animation: fly 0.7s ease-in forwards;
+      }
+
+      @keyframes fly {
+        to {
+          transform: translate(40px, -30px) rotate(-20deg);
+          opacity: 0;
+        }
+      }
+
+      .panes {
+        display: grid;
+        grid-template-columns: 1fr 1.15fr;
+        border-top: 1px solid var(--border);
+        min-height: 270px;
+      }
+
+      .pane {
+        padding: 12px 14px;
+        font: 12.5px/1.75 var(--mono);
+        overflow: hidden;
+      }
+
+      .pane .json {
+        display: block;
+        white-space: pre;
+      }
+
+      .pane + .pane {
+        border-left: 1px solid var(--border);
+      }
+
+      .pane-head {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 8px;
+        font: 600 12px var(--sans);
+        color: var(--muted);
+      }
+
+      .pane-head .on {
+        color: var(--text);
+        box-shadow: inset 0 -2px var(--accent);
+        padding-bottom: 4px;
+      }
+
+      .status {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 8px;
+        font: 600 12px var(--sans);
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+
+      .status b {
+        color: var(--get);
+        background: color-mix(in srgb, var(--get) 14%, transparent);
+        padding: 1px 8px;
+        border-radius: 6px;
+      }
+
+      .status span {
+        color: var(--muted);
+        font-weight: 500;
+      }
+
+      .show {
+        opacity: 1;
+      }
+
+      .json .k {
+        color: var(--put);
+      }
+
+      .json .s {
+        color: var(--get);
+      }
+
+      .json .n {
+        color: var(--post);
+      }
+
+      .checks {
+        margin-top: 8px;
+        font-family: var(--sans);
+        font-size: 12.5px;
+      }
+
+      .checks div {
+        opacity: 0;
+        transform: translateY(4px);
+        transition: 0.3s;
+      }
+
+      .checks div.show {
+        opacity: 1;
+        transform: none;
+      }
+
+      .checks div::before {
+        content: "✓ ";
+        color: var(--get);
+        font-weight: 700;
+      }
+
+      .plane-trail {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: -1;
+      }
+
+      .plane-trail path {
+        fill: none;
+        stroke: var(--accent);
+        stroke-width: 1.5;
+        stroke-dasharray: 5 9;
+        opacity: 0.45;
+      }
+
+      /* Sections */
+
+      section {
+        padding: 88px 0;
+      }
+
+      .eyebrow {
+        display: inline-block;
+        font: 700 12.5px var(--mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 12px;
+      }
+
+      h2 {
+        margin: 0 0 14px;
+        font-size: clamp(30px, 4vw, 46px);
+        line-height: 1.08;
+        letter-spacing: -0.035em;
+        font-weight: 800;
+      }
+
+      .section-lede {
+        max-width: 640px;
+        color: var(--text-2);
+        font-size: 17.5px;
+        margin: 0 0 44px;
+      }
+
+      /* Marquee of importers */
+
+      .marquee {
+        border-block: 1px solid var(--border);
+        padding: 18px 0;
+        overflow: hidden;
+        mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+        -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+      }
+
+      .marquee-track {
+        display: flex;
+        gap: 48px;
+        width: max-content;
+        animation: scroll 38s linear infinite;
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 15px;
+      }
+
+      .marquee-track span {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        white-space: nowrap;
+      }
+
+      .marquee-track span::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        opacity: 0.6;
+      }
+
+      @keyframes scroll {
+        to {
+          transform: translateX(-50%);
+        }
+      }
+
+      /* Features bento */
+
+      .bento {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 16px;
+      }
+
+      .card {
+        position: relative;
+        grid-column: span 2;
+        padding: 26px;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: var(--card);
+        overflow: hidden;
+        transition:
+          transform 0.2s,
+          border-color 0.2s;
+      }
+
+      .card:hover {
+        transform: translateY(-3px);
+        border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+      }
+
+      .card::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(400px circle at var(--mx, 50%) var(--my, 0%), var(--accent-soft), transparent 45%);
+        opacity: 0;
+        transition: opacity 0.3s;
+        pointer-events: none;
+      }
+
+      .card:hover::after {
+        opacity: 1;
+      }
+
+      .card.wide {
+        grid-column: span 3;
+      }
+
+      .card.full {
+        grid-column: span 4;
+      }
+
+      .card .ico {
+        display: grid;
+        place-items: center;
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        margin-bottom: 18px;
+      }
+
+      .card h3 {
+        margin: 0 0 8px;
+        font-size: 18.5px;
+        letter-spacing: -0.02em;
+      }
+
+      .card p {
+        margin: 0;
+        color: var(--text-2);
+        font-size: 15px;
+      }
+
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 16px;
+      }
+
+      .tags span {
+        padding: 3px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        font: 600 12px var(--mono);
+        color: var(--text-2);
+        background: var(--bg-2);
+      }
+
+      .mini {
+        margin-top: 18px;
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--code-bg);
+        font: 12.5px/1.7 var(--mono);
+        white-space: pre;
+        overflow-x: auto;
+      }
+
+      .bars {
+        display: flex;
+        align-items: flex-end;
+        gap: 5px;
+        height: 64px;
+        margin-top: 18px;
+      }
+
+      .bars i {
+        flex: 1;
+        border-radius: 4px 4px 0 0;
+        background: linear-gradient(var(--accent), color-mix(in srgb, var(--accent) 30%, transparent));
+        transform-origin: bottom;
+        animation: grow 2.4s ease-in-out infinite alternate;
+      }
+
+      @keyframes grow {
+        from {
+          transform: scaleY(0.35);
+        }
+      }
+
+      /* Files section */
+
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 56px;
+        align-items: center;
+      }
+
+      .tree {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--card);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .tree-files {
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+        font: 13px/1.9 var(--mono);
+        color: var(--text-2);
+        white-space: pre;
+      }
+
+      .tree-files .dir {
+        color: var(--text);
+        font-weight: 700;
+      }
+
+      .tree-files .on {
+        color: var(--accent);
+      }
+
+      .tree .code {
+        border: 0;
+        border-radius: 0;
+      }
+
+      .list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 18px;
+      }
+
+      .list li {
+        display: grid;
+        grid-template-columns: 34px 1fr;
+        gap: 14px;
+      }
+
+      .list li b {
+        display: block;
+        margin-bottom: 2px;
+      }
+
+      .list li span {
+        color: var(--text-2);
+        font-size: 15.5px;
+      }
+
+      .list .n {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        font: 700 13px var(--mono);
+        color: var(--accent);
+      }
+
+      /* Agents terminal */
+
+      .terminal {
+        border-radius: 16px;
+        background: #0e1013;
+        color: #d7dce2;
+        border: 1px solid #23272e;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .terminal .titlebar {
+        background: #15181d;
+        border-color: #23272e;
+      }
+
+      .terminal .titlebar i {
+        background: #2b3038;
+      }
+
+      .terminal pre {
+        margin: 0;
+        padding: 18px 20px;
+        min-height: 300px;
+        font: 13px/1.75 var(--mono);
+        white-space: pre-wrap;
+      }
+
+      .t-dim {
+        color: #7d8590;
+      }
+
+      .t-green {
+        color: #3dd6a3;
+      }
+
+      .t-yellow {
+        color: #ebb54d;
+      }
+
+      .t-blue {
+        color: #8fb4ff;
+      }
+
+      /* Comparison */
+
+      .compare {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        overflow: hidden;
+        background: var(--card);
+        font-size: 15px;
+      }
+
+      .compare th,
+      .compare td {
+        padding: 14px 18px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .compare tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .compare th {
+        background: var(--bg-2);
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+      }
+
+      .compare td:nth-child(2) {
+        background: var(--accent-soft);
+        font-weight: 600;
+      }
+
+      .yes {
+        color: var(--get);
+      }
+
+      .no {
+        color: var(--muted);
+      }
+
+      /* Download */
+
+      .download {
+        position: relative;
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        background: var(--card);
+        padding: 44px;
+        overflow: hidden;
+      }
+
+      .download::before {
+        content: "";
+        position: absolute;
+        inset: auto -20% -60% 40%;
+        height: 420px;
+        background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 18%, transparent), transparent);
+        pointer-events: none;
+      }
+
+      .dl-top {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px 40px;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 32px;
+      }
+
+      .dl-top h2 {
+        margin: 0 0 6px;
+      }
+
+      .dl-top p {
+        margin: 0;
+        color: var(--text-2);
+      }
+
+      .os-grid {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+      }
+
+      .os {
+        padding: 22px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--bg);
+      }
+
+      .os.mine {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
+      }
+
+      .os-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 14px;
+        font-weight: 700;
+        font-size: 17px;
+      }
+
+      .os-head small {
+        margin-left: auto;
+        font: 600 11.5px var(--sans);
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        visibility: hidden;
+      }
+
+      .os.mine .os-head small {
+        visibility: visible;
+      }
+
+      .os a.file {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        margin-top: 8px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--card);
+        text-decoration: none;
+        font-size: 14.5px;
+        font-weight: 600;
+        transition:
+          border-color 0.15s,
+          transform 0.15s;
+      }
+
+      .os a.file:hover {
+        border-color: var(--accent);
+        transform: translateX(3px);
+      }
+
+      .os a.file small {
+        margin-left: auto;
+        font: 500 12px var(--mono);
+        color: var(--muted);
+      }
+
+      .os a.file svg {
+        color: var(--accent);
+        flex: none;
+      }
+
+      .pm {
+        position: relative;
+        margin-top: 24px;
+      }
+
+      /* Open source + donate */
+
+      .oss {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        gap: 24px;
+      }
+
+      .oss-card {
+        position: relative;
+        padding: 36px;
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        background: var(--card);
+        overflow: hidden;
+      }
+
+      .oss-card h2 {
+        font-size: clamp(28px, 3.4vw, 38px);
+      }
+
+      .oss-card p {
+        color: var(--text-2);
+      }
+
+      .stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 22px 0 26px;
+      }
+
+      .stat {
+        padding: 12px 16px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--bg);
+        min-width: 120px;
+      }
+
+      .stat b {
+        display: block;
+        font-size: 22px;
+        letter-spacing: -0.02em;
+      }
+
+      .stat span {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .donate-card {
+        background:
+          radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, #e5487a 16%, transparent), transparent 60%),
+          var(--card);
+      }
+
+      .hearts {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+
+      .hearts span {
+        position: absolute;
+        bottom: -30px;
+        color: #e5487a;
+        opacity: 0;
+        animation: rise 7s ease-in infinite;
+      }
+
+      @keyframes rise {
+        10% {
+          opacity: 0.55;
+        }
+        100% {
+          transform: translateY(-460px) rotate(25deg);
+          opacity: 0;
+        }
+      }
+
+      .amounts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 20px 0 22px;
+      }
+
+      .amounts span {
+        padding: 8px 14px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--bg);
+        font-size: 14px;
+        color: var(--text-2);
+      }
+
+      .amounts b {
+        color: var(--text);
+      }
+
+      .btn.donate.big {
+        height: 50px;
+        padding: 0 26px;
+        font-size: 16px;
+        background: #e5487a;
+        border-color: #e5487a;
+        color: #fff;
+      }
+
+      .btn.donate.big svg {
+        color: #fff;
+      }
+
+      /* Final CTA */
+
+      .final {
+        text-align: center;
+        padding: 110px 0 120px;
+      }
+
+      .final h2 {
+        font-size: clamp(36px, 5.5vw, 64px);
+      }
+
+      .final .ctas {
+        justify-content: center;
+        margin-top: 28px;
+      }
+
+      .final .word {
+        font: 600 15px var(--mono);
+        color: var(--muted);
+      }
+
+      .final .word b {
+        color: var(--accent);
+      }
+
+      /* Paper planes the visitor throws by clicking */
+
+      .thrown {
+        position: fixed;
+        z-index: 50;
+        pointer-events: none;
+        color: var(--accent);
+        animation: thrown 1.3s cubic-bezier(0.3, 0.1, 0.6, 1) forwards;
+      }
+
+      @keyframes thrown {
+        to {
+          transform: translate(var(--dx), var(--dy)) rotate(-25deg) scale(0.6);
+          opacity: 0;
+        }
+      }
+
+      .reveal {
+        opacity: 0;
+        transform: translateY(18px);
+        transition:
+          opacity 0.7s,
+          transform 0.7s;
+      }
+
+      .reveal.in {
+        opacity: 1;
+        transform: none;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation: none !important;
+          transition: none !important;
+        }
+
+        .reveal {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      @media (max-width: 980px) {
+        .hero-grid,
+        .split,
+        .oss {
+          grid-template-columns: 1fr;
+        }
+
+        .window {
+          transform: none;
+        }
+
+        .bento {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .card,
+        .card.wide,
+        .card.full {
+          grid-column: span 1;
+        }
+
+        .os-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 640px) {
+        section {
+          padding: 64px 0;
+        }
+
+        .hero {
+          padding-top: 40px;
+        }
+
+        .bento {
+          grid-template-columns: 1fr;
+        }
+
+        .panes {
+          grid-template-columns: 1fr;
+        }
+
+        .pane + .pane {
+          border-left: 0;
+          border-top: 1px solid var(--border);
+        }
+
+        .download,
+        .oss-card {
+          padding: 24px;
+        }
+
+        .compare th,
+        .compare td {
+          padding: 10px 12px;
+          font-size: 13.5px;
+        }
+
+        h1 .send svg {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="plane" viewBox="0 0 24 24">
+        <path d="M2.5 11.2 21 3.5l-5.2 17-4.3-6.1z" fill="currentColor" />
+        <path d="M11.5 14.4 21 3.5l-8 12.2z" fill="currentColor" opacity=".55" />
+      </symbol>
+      <symbol id="github" viewBox="0 0 24 24">
+        <path
+          fill="currentColor"
+          d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.4-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"
+        />
+      </symbol>
+      <symbol id="heart" viewBox="0 0 24 24">
+        <path
+          fill="currentColor"
+          d="M12 21s-7.5-4.6-9.6-9.3C.9 8.2 3 4.5 6.6 4.5c2 0 3.5 1.1 5.4 3.2 1.9-2.1 3.4-3.2 5.4-3.2 3.6 0 5.7 3.7 4.2 7.2C19.5 16.4 12 21 12 21Z"
+        />
+      </symbol>
+      <symbol id="dl" viewBox="0 0 24 24">
+        <path
+          d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </symbol>
+      <symbol id="logo" viewBox="0 0 1024 1024">
+        <rect x="64" y="64" width="896" height="896" rx="200" fill="#161a21" />
+        <g transform="rotate(-12 512 520)">
+          <path d="M250 520 780 300 640 760 520 600Z" fill="#3dd6a3" />
+          <path d="M520 600 780 300 560 640Z" fill="#127a5b" />
+          <path d="M520 600 560 640 500 720Z" fill="#0d5c45" />
+        </g>
+        <g stroke="#34c79a" stroke-width="34" stroke-linecap="round" opacity=".55">
+          <path d="M190 660h140M230 740h170" />
+        </g>
+      </symbol>
+    </svg>
+
+    <header class="nav" id="nav">
+      <div class="wrap">
+        <a class="brand" href="#top"><svg><use href="#logo" /></svg>Tuma</a>
+        <nav class="nav-links">
+          <a href="#features">Features</a>
+          <a href="#agents">For agents</a>
+          <a href="#download">Download</a>
+          <a href="docs.html">Docs</a>
+        </nav>
+        <div class="nav-end">
+          <button class="icon-btn" id="theme" title="Switch light or dark" aria-label="Switch light or dark">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+            </svg>
+          </button>
+          <a class="icon-btn" data-repo href="https://github.com/MorrisKM/Tuma" title="Tuma on GitHub" aria-label="GitHub"
+            ><svg width="18" height="18"><use href="#github" /></svg
+          ></a>
+          <a class="btn small donate" data-donate href="#donate"
+            ><svg width="16" height="16"><use href="#heart" /></svg><span>Donate</span></a
+          >
+        </div>
+      </div>
+    </header>
+
+    <main id="top">
+      <div class="hero">
+        <div class="grid-bg"></div>
+        <svg class="plane-trail" viewBox="0 0 1400 700" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M-40 560 C 260 640, 420 260, 700 330 S 1180 120, 1460 60" />
+        </svg>
+        <div class="wrap hero-grid">
+          <div>
+            <a class="pill" data-repo href="https://github.com/MorrisKM/Tuma"
+              ><b>Open source</b> Apache-2.0 · Star it on GitHub →</a
+            >
+            <h1>
+              Build it.<br />Test it.<br /><span class="send"
+                >Tuma it.<svg aria-hidden="true"><use href="#plane" /></svg
+              ></span>
+            </h1>
+            <p class="lede">
+              <em>Tuma</em> is Swahili for <em>“send”</em>. It's a fast, local-first API client: Rust inside, no account,
+              no cloud, and your requests are plain files you commit to git, next to the code they test.
+            </p>
+            <div class="ctas">
+              <a class="btn primary" href="#download" id="hero-dl"
+                ><svg width="18" height="18"><use href="#dl" /></svg><span>Download for free</span></a
+              >
+              <a class="btn" data-repo href="https://github.com/MorrisKM/Tuma"
+                ><svg width="18" height="18"><use href="#github" /></svg>View the source</a
+              >
+              <a class="btn" href="docs.html">Read the docs</a>
+            </div>
+            <div class="facts">
+              <span>No sign-in, ever</span>
+              <span>No telemetry</span>
+              <span>Linux · macOS · Windows</span>
+            </div>
+          </div>
+
+          <div class="window" aria-label="Tuma sending a request">
+            <div class="titlebar">
+              <i></i><i></i><i></i><span>Users API › create user</span>
+            </div>
+            <div class="urlbar">
+              <span class="m post">POST</span>
+              <span class="url" id="typed"></span>
+              <button class="send-btn" id="send-demo">
+                <svg width="14" height="14"><use href="#plane" /></svg>Send
+              </button>
+            </div>
+            <div class="panes">
+              <div class="pane">
+                <div class="pane-head"><span class="on">Body</span><span>Auth</span><span>Tests</span></div>
+<span class="json">{
+  <span class="k">"name"</span>: <span class="s">"Wanjiru"</span>,
+  <span class="k">"email"</span>: <span class="s">"wanjiru@example.com"</span>,
+  <span class="k">"role"</span>: <span class="s">"admin"</span>
+}</span>
+              </div>
+              <div class="pane">
+                <div class="status" id="status"><b>201 Created</b><span>38 ms</span><span>412 B</span></div>
+<span class="json" id="resp"></span>
+                <div class="checks" id="checks">
+                  <div>status = 201</div>
+                  <div>$.id exists</div>
+                  <div>time &lt; 500 ms</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="marquee" aria-label="Imports and protocols">
+        <div class="marquee-track">
+          <span>Postman collections</span><span>Insomnia</span><span>Bruno</span><span>OpenAPI 3.1</span
+          ><span>Swagger 2</span><span>HAR</span><span>cURL</span><span>GraphQL</span><span>WebSocket</span
+          ><span>Server-sent events</span><span>gRPC</span><span>OAuth 2.0</span><span>JWT</span
+          ><span>AWS Signature</span><span>MCP</span>
+          <span>Postman collections</span><span>Insomnia</span><span>Bruno</span><span>OpenAPI 3.1</span
+          ><span>Swagger 2</span><span>HAR</span><span>cURL</span><span>GraphQL</span><span>WebSocket</span
+          ><span>Server-sent events</span><span>gRPC</span><span>OAuth 2.0</span><span>JWT</span
+          ><span>AWS Signature</span><span>MCP</span>
+        </div>
+      </div>
+
+      <section id="features">
+        <div class="wrap">
+          <span class="eyebrow">Features</span>
+          <h2 class="reveal">Everything Postman does.<br />None of the cloud.</h2>
+          <p class="section-lede reveal">
+            One small, native app for designing, testing, documenting, mocking and load-testing your APIs. It works on a
+            plane.
+          </p>
+
+          <div class="bento">
+            <div class="card full reveal">
+              <div class="ico">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h6l2 2h8v14H4z" /></svg>
+              </div>
+              <h3>Your workspace is a folder</h3>
+              <p>
+                Collections, requests and environments are readable YAML files. Review API changes in pull requests,
+                branch them with your code, and never lose work to a sync conflict again.
+              </p>
+<div class="mini"><span style="color: var(--muted)"># Users API/create user.yaml</span>
+method: <span class="m post">POST</span>
+url: "{{baseUrl}}/users"
+expect:
+  status: 201
+  body:
+    - { path: $.id, exists: true }</div>
+            </div>
+            <div class="card reveal">
+              <div class="ico">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h7l-1 8 9-12h-7z" /></svg>
+              </div>
+              <h3>Fast, because it's native</h3>
+              <p>Rust networking and the system webview instead of a bundled browser. Opens instantly, sips memory.</p>
+            </div>
+
+            <div class="card reveal">
+              <div class="ico">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18-6-6 6-6M15 6l6 6-6 6" /></svg>
+              </div>
+              <h3>Runs your Postman scripts</h3>
+              <p><code>pm.test</code>, <code>pm.expect</code>, <code>pm.sendRequest</code> and friends, in a sandbox, in the app and in CI.</p>
+            </div>
+            <div class="card reveal">
+              <div class="ico">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3 8 4-16 3 8h4" /></svg>
+              </div>
+              <h3>Load &amp; security tests</h3>
+              <p>Virtual users, p50/p95/p99 latency, passive security checks and a shareable HTML report.</p>
+              <div class="bars" aria-hidden="true">
+                <i style="height: 40%; animation-delay: -0.2s"></i><i style="height: 65%; animation-delay: -1s"></i
+                ><i style="height: 50%; animation-delay: -0.6s"></i><i style="height: 85%; animation-delay: -1.6s"></i
+                ><i style="height: 70%; animation-delay: -0.4s"></i><i style="height: 95%; animation-delay: -2s"></i
+                ><i style="height: 60%; animation-delay: -1.2s"></i><i style="height: 78%; animation-delay: -0.8s"></i>
+              </div>
+            </div>
+            <div class="card reveal">
+              <div class="ico">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+              </div>
+              <h3>Encrypted fields</h3>
+              <p>AES-GCM/CBC, RSA-OAEP and hybrid RSA + AES: fields are encrypted as they're sent and decrypted as they arrive.</p>
+            </div>
+
+            <div class="card wide reveal">
+              <div class="ico">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10" /></svg>
+              </div>
+              <h3>Docs and mocks from your requests</h3>
+              <p>
+                Turn a collection into OpenAPI, Markdown or a standalone HTML page. Start a mock server that answers
+                with the examples you saved, so the frontend team never waits on the backend.
+              </p>
+              <div class="tags"><span>OpenAPI 3.1</span><span>Markdown</span><span>HTML</span><span>tuma mock</span></div>
+            </div>
+            <div class="card wide reveal">
+              <div class="ico">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></svg>
+              </div>
+              <h3>More than REST</h3>
+              <p>
+                GraphQL with introspection and a schema explorer, WebSocket, server-sent events and gRPC by reflection
+                or <code>.proto</code>. Every auth you need, proxies, client certificates and a cookie jar.
+              </p>
+              <div class="tags"><span>OAuth 2.0</span><span>JWT</span><span>Digest</span><span>AWS SigV4</span><span>OAuth 1.0</span></div>
+            </div>
+
+            <div class="card reveal">
+              <div class="ico">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 4 7v5c0 5 3.5 8 8 9 4.5-1 8-4 8-9V7z" /></svg>
+              </div>
+              <h3>Secrets stay secret</h3>
+              <p>Secret variables live in the OS keychain, never in your files, your git history or an agent's context.</p>
+            </div>
+            <div class="card reveal">
+              <div class="ico">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17V7l8 5 8-5v10" /><path d="M4 7h16v10H4z" /></svg>
+              </div>
+              <h3>Moves in with your data</h3>
+              <p>Imports Postman, Insomnia, Bruno, OpenAPI, HAR and cURL. Exports back to Postman, any time.</p>
+            </div>
+            <div class="card reveal">
+              <div class="ico">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10" /></svg>
+              </div>
+              <h3>Keyboard-first</h3>
+              <p><kbd>Ctrl K</kbd> finds anything, <kbd>Ctrl ↵</kbd> sends, <kbd>Ctrl S</kbd> saves, <kbd>Ctrl T</kbd> opens a tab.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section style="background: var(--bg-2)">
+        <div class="wrap split">
+          <div class="tree reveal">
+            <div class="tree-files"><span class="dir">my-api/</span>
+├─ src/ …
+└─ <span class="dir">.tuma/</span>              <span style="color: var(--muted)"># tuma init</span>
+   ├─ workspace.yaml
+   ├─ <span class="dir">environments/</span>
+   │  ├─ local.yaml
+   │  └─ staging.yaml
+   └─ <span class="dir">Users API/</span>
+      ├─ _folder.yaml
+      ├─ <span class="on">create user.yaml</span>
+      └─ get user.yaml</div>
+            <div class="code"><span class="c"># Users API/create user.yaml</span>
+<span class="k">method</span>: POST
+<span class="k">url</span>: <span class="s">"{{baseUrl}}/users"</span>
+<span class="k">body</span>:
+  <span class="k">type</span>: json
+  <span class="k">content</span>: <span class="s">'{ "name": "Wanjiru", "role": "admin" }'</span>
+<span class="k">expect</span>:
+  <span class="k">status</span>: 201
+  <span class="k">body</span>:
+    - { path: $.id, exists: true }</div>
+          </div>
+          <div>
+            <span class="eyebrow">Local-first</span>
+            <h2 class="reveal">Your API lives in your repo, not on our servers.</h2>
+            <p class="section-lede reveal">There are no servers. There's no "us" between you and your requests.</p>
+            <ul class="list">
+              <li class="reveal">
+                <span class="n">01</span>
+                <div><b>Review requests like code</b><span>Every change is a readable diff in a pull request.</span></div>
+              </li>
+              <li class="reveal">
+                <span class="n">02</span>
+                <div><b>The same tests, in CI</b><span><code>tuma test</code> reruns every saved check and exits non-zero when one fails.</span></div>
+              </li>
+              <li class="reveal">
+                <span class="n">03</span>
+                <div><b>Nothing leaves your machine</b><span>No account, no telemetry. Tokens set by scripts stay in Tuma's data folder, out of git.</span></div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="agents">
+        <div class="wrap split">
+          <div>
+            <span class="eyebrow">Built for AI agents</span>
+            <h2 class="reveal">Your coding agent can test the API it just wrote.</h2>
+            <p class="section-lede reveal">
+              Tuma ships an MCP server and a CLI. Claude Code, Cursor and other agents send requests, check responses
+              against your OpenAPI spec, run load tests and save what passes as tests, all inside the hosts you allow.
+              Secret values are never shown to them.
+            </p>
+            <div class="code">claude mcp add tuma -- tuma mcp<button class="copy" data-copy="claude mcp add tuma -- tuma mcp">Copy</button></div>
+          </div>
+          <div class="terminal reveal">
+            <div class="titlebar"><i></i><i></i><i></i><span style="color: #7d8590">agent · tuma mcp</span></div>
+            <pre id="term"></pre>
+          </div>
+        </div>
+      </section>
+
+      <section style="padding-top: 0">
+        <div class="wrap">
+          <span class="eyebrow">Why switch</span>
+          <h2 class="reveal">Tuma or the usual suspects?</h2>
+          <p class="section-lede reveal">A quick, honest comparison with cloud-first API clients.</p>
+          <div style="overflow-x: auto">
+            <table class="compare reveal">
+              <thead>
+                <tr><th></th><th>Tuma</th><th>Cloud-first clients</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Account required</td><td class="yes">Never</td><td class="no">Usually</td></tr>
+                <tr><td>Where your requests live</td><td class="yes">Plain files in your repo</td><td class="no">Their cloud</td></tr>
+                <tr><td>Source code</td><td class="yes">Open, Apache-2.0</td><td class="no">Closed</td></tr>
+                <tr><td>Postman scripts &amp; collections</td><td class="yes">Run and import</td><td>Yes</td></tr>
+                <tr><td>Load tests &amp; mocks</td><td class="yes">Included, free</td><td class="no">Often a paid tier</td></tr>
+                <tr><td>MCP server for agents</td><td class="yes">Built in</td><td class="no">Rare</td></tr>
+                <tr><td>Price</td><td class="yes">Free, forever</td><td class="no">Per seat</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="download" style="padding-top: 0">
+        <div class="wrap">
+          <div class="download reveal">
+            <div class="dl-top">
+              <div>
+                <span class="eyebrow">Download · v<span data-version>1.0.0</span></span>
+                <h2>Get Tuma for your computer</h2>
+                <p>Free and open source. Every package also includes the <code>tuma</code> command.</p>
+              </div>
+              <a class="btn" data-releases href="https://github.com/MorrisKM/Tuma/releases"
+                ><svg width="18" height="18"><use href="#github" /></svg>All releases &amp; checksums</a
+              >
+            </div>
+            <div class="os-grid">
+              <div class="os" data-os="windows">
+                <div class="os-head">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5 10.5 4.4v7.1H3zM11.5 4.3 21 3v8.5h-9.5zM3 12.5h7.5v7.1L3 18.5zM11.5 12.5H21V21l-9.5-1.3z" /></svg>
+                  Windows <small>Your system</small>
+                </div>
+                <a class="file" data-file="Tuma_{v}_x64-setup.exe"><svg width="18" height="18"><use href="#dl" /></svg>Installer<small>.exe · x64</small></a>
+                <a class="file" data-file="Tuma_{v}_x64_en-US.msi"><svg width="18" height="18"><use href="#dl" /></svg>MSI package<small>.msi · x64</small></a>
+              </div>
+              <div class="os" data-os="mac">
+                <div class="os-head">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.8-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8 1.6 0 2 .8 3.4.8 1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9 0 0-2.6-1-2.6-4.1ZM13.9 5c.7-.9 1.2-2 1-3.2-1 0-2.3.7-3 1.6-.7.8-1.3 2-1.1 3.1 1.2.1 2.3-.6 3.1-1.5Z" /></svg>
+                  macOS <small>Your system</small>
+                </div>
+                <a class="file" data-file="Tuma_{v}_aarch64.dmg"><svg width="18" height="18"><use href="#dl" /></svg>Apple Silicon<small>.dmg · M1–M4</small></a>
+                <a class="file" data-file="Tuma_{v}_x64.dmg"><svg width="18" height="18"><use href="#dl" /></svg>Intel<small>.dmg · x64</small></a>
+              </div>
+              <div class="os" data-os="linux">
+                <div class="os-head">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-2.2 0-3.6 1.9-3.6 4.6 0 1.4.2 2.3-.6 3.6-1 1.5-3 3.9-3 6.6 0 .9.3 1.6.8 2.1-.3.4-.5.9-.3 1.4.4.9 2.2.7 3.5 1.3 1.2.5 2.4.6 3.2-.2.8.8 2 .7 3.2.2 1.3-.6 3.1-.4 3.5-1.3.2-.5 0-1-.3-1.4.5-.5.8-1.2.8-2.1 0-2.7-2-5.1-3-6.6-.8-1.3-.6-2.2-.6-3.6C15.6 3.9 14.2 2 12 2Zm-1.5 4a.8 1 0 1 1 0 2 .8 1 0 0 1 0-2Zm3 0a.8 1 0 1 1 0 2 .8 1 0 0 1 0-2ZM12 8.6c.9 0 1.8.5 1.8.9S12.9 10.6 12 10.6s-1.8-.7-1.8-1.1.9-.9 1.8-.9Z" /></svg>
+                  Linux <small>Your system</small>
+                </div>
+                <a class="file" data-file="Tuma_{v}_amd64.deb"><svg width="18" height="18"><use href="#dl" /></svg>Debian, Ubuntu<small>.deb · x64</small></a>
+                <a class="file" data-file="Tuma-{v}-1.x86_64.rpm"><svg width="18" height="18"><use href="#dl" /></svg>Fedora, openSUSE<small>.rpm · x64</small></a>
+                <a class="file" data-file="Tuma_{v}_amd64.AppImage"><svg width="18" height="18"><use href="#dl" /></svg>Any distro<small>.AppImage</small></a>
+              </div>
+            </div>
+            <div class="pm">
+              <div class="code"><span class="c"># Or with a package manager</span>
+brew install --cask morriskm/tuma/tuma-app   <span class="c"># macOS: the app and the tuma command</span>
+winget install MorrisKM.Tuma                 <span class="c"># Windows</span>
+sudo apt install ./Tuma_<span data-version>1.0.0</span>_amd64.deb        <span class="c"># Debian/Ubuntu, from the downloaded file</span><button class="copy">Copy</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="donate" style="padding-top: 0">
+        <div class="wrap oss">
+          <div class="oss-card reveal">
+            <span class="eyebrow">Open source</span>
+            <h2>Built in the open. Owned by everyone.</h2>
+            <p>
+              Tuma's code is on GitHub under the Apache-2.0 license. Read it, fork it, audit it, ship it inside your
+              company. Bug reports, ideas and pull requests are all welcome.
+            </p>
+            <div class="stats">
+              <div class="stat"><b id="stars">★</b><span>GitHub stars</span></div>
+              <div class="stat"><b>Apache-2.0</b><span>License</span></div>
+              <div class="stat"><b>Rust + Tauri</b><span>Stack</span></div>
+            </div>
+            <div class="ctas">
+              <a class="btn primary" data-repo href="https://github.com/MorrisKM/Tuma"
+                ><svg width="18" height="18"><use href="#github" /></svg>Star on GitHub</a
+              >
+              <a class="btn" data-repo-path="/issues" href="https://github.com/MorrisKM/Tuma/issues">Report an issue</a>
+              <a class="btn" data-repo-path="/fork" href="https://github.com/MorrisKM/Tuma/fork">Fork it</a>
+            </div>
+          </div>
+          <div class="oss-card donate-card reveal">
+            <div class="hearts" id="hearts" aria-hidden="true"></div>
+            <span class="eyebrow" style="color: #e5487a">Support Tuma</span>
+            <h2>Keep it free. Buy the team a chai.</h2>
+            <p>
+              Tuma has no investors and no paid tier. Donations pay for code signing, build machines and the time it
+              takes to keep making it better.
+            </p>
+            <div class="amounts">
+              <span><b>$3</b> a chai</span><span><b>$10</b> a lunch</span><span><b>$50</b> a release</span>
+            </div>
+            <a class="btn donate big" data-donate href="https://github.com/sponsors/MorrisKM"
+              ><svg width="18" height="18"><use href="#heart" /></svg>Donate</a
+            >
+          </div>
+        </div>
+      </section>
+
+      <section class="final">
+        <div class="wrap">
+          <p class="word"><b>tuma</b> /ˈtu.ma/ · Swahili, verb · <i>to send</i></p>
+          <h2 class="reveal">Stop waiting on your API client.<br />Just tuma it.</h2>
+          <div class="ctas">
+            <a class="btn primary" href="#download"><svg width="18" height="18"><use href="#dl" /></svg>Download Tuma</a>
+            <a class="btn" href="docs.html">Read the docs</a>
+          </div>
+          <p style="color: var(--muted); font-size: 13.5px; margin-top: 26px">Psst: click anywhere empty to throw a paper plane.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap">
+        <a class="brand" href="#top"><svg><use href="#logo" /></svg>Tuma</a>
+        <nav>
+          <a href="docs.html">Documentation</a>
+          <a href="#download">Download</a>
+          <a data-repo href="https://github.com/MorrisKM/Tuma">GitHub</a>
+          <a data-repo-path="/blob/main/CHANGELOG.md" href="https://github.com/MorrisKM/Tuma/blob/main/CHANGELOG.md">Changelog</a>
+          <a data-donate href="https://github.com/sponsors/MorrisKM">Donate</a>
+        </nav>
+        <span>Apache-2.0 · Made with care in Kenya 🇰🇪</span>
+      </div>
+    </footer>
+
+    <script src="site.js"></script>
+    <script>
+      // The hero demo: type the URL, "send" it, stream in the response and the checks, then start again.
+      const url = "{{baseUrl}}/users";
+      const typed = document.getElementById("typed");
+      const status = document.getElementById("status");
+      const resp = document.getElementById("resp");
+      const checks = [...document.querySelectorAll("#checks div")];
+      const sendBtn = document.getElementById("send-demo");
+      const body = `{
+  <span class="k">"id"</span>: <span class="n">7</span>,
+  <span class="k">"name"</span>: <span class="s">"Wanjiru"</span>,
+  <span class="k">"role"</span>: <span class="s">"admin"</span>,
+  <span class="k">"created"</span>: <span class="s">"2026-10-23"</span>
+}`;
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const paint = (n) =>
+        (typed.innerHTML =
+          url
+            .slice(0, n)
+            .replace("{{baseUrl}}", '<span class="var">{{baseUrl}}</span>')
+            .replace(/^(\{\{[^}]*)$/, '<span class="var">$1</span>') + '<span class="caret"></span>');
+
+      async function demo() {
+        for (;;) {
+          status.classList.remove("show");
+          checks.forEach((c) => c.classList.remove("show"));
+          resp.innerHTML = "";
+          for (let i = 0; i <= url.length; i++) {
+            paint(i);
+            await wait(55 + Math.random() * 50);
+          }
+          await wait(500);
+          sendBtn.classList.add("flying");
+          await wait(450);
+          sendBtn.classList.remove("flying");
+          status.classList.add("show");
+          resp.innerHTML = body;
+          for (const c of checks) {
+            await wait(260);
+            c.classList.add("show");
+          }
+          await wait(4200);
+        }
+      }
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        paint(url.length);
+        status.classList.add("show");
+        resp.innerHTML = body;
+        checks.forEach((c) => c.classList.add("show"));
+      } else demo();
+
+      // The agent terminal: an MCP session played back line by line when it scrolls into view.
+      const script = [
+        ["t-dim", "› Add a POST /users endpoint and test it"],
+        ["", ""],
+        ["t-blue", "● tuma · send_request"],
+        ["t-dim", "  POST http://localhost:3000/users"],
+        ["t-green", "  ✓ 201 Created · 41 ms"],
+        ["t-green", "  ✓ $.id exists   ✓ matches the OpenAPI schema"],
+        ["", ""],
+        ["t-blue", "● tuma · save_request"],
+        ["t-dim", '  Saved as "Users API/create user" with 3 checks'],
+        ["", ""],
+        ["t-blue", "● tuma · run_performance_test"],
+        ["t-dim", "  20 users · 30 s · 4,812 requests"],
+        ["t-yellow", "  p50 18 ms · p95 52 ms · p99 97 ms · 0 errors"],
+        ["", ""],
+        ["", "The endpoint works, is saved as a test, and holds up under load."],
+      ];
+      const term = document.getElementById("term");
+      let played = false;
+      async function play() {
+        if (played) return;
+        played = true;
+        for (const [cls, text] of script) {
+          const line = document.createElement("div");
+          line.className = cls;
+          line.textContent = text || " ";
+          term.append(line);
+          await wait(text ? 320 : 120);
+        }
+      }
+      new IntersectionObserver(([e]) => e.isIntersecting && play(), { threshold: 0.4 }).observe(term);
+
+      // Hearts drift up behind the donate card.
+      const hearts = document.getElementById("hearts");
+      for (let i = 0; i < 9; i++) {
+        const h = document.createElement("span");
+        h.innerHTML = '<svg width="18" height="18"><use href="#heart" /></svg>';
+        h.style.left = `${8 + i * 10.5}%`;
+        h.style.animationDelay = `${i * 0.8}s`;
+        h.style.transform = `scale(${0.6 + (i % 3) * 0.3})`;
+        hearts.append(h);
+      }
+
+      // The cursor's glow on the feature cards.
+      document.querySelectorAll(".card").forEach((card) =>
+        card.addEventListener("pointermove", (e) => {
+          const r = card.getBoundingClientRect();
+          card.style.setProperty("--mx", `${e.clientX - r.left}px`);
+          card.style.setProperty("--my", `${e.clientY - r.top}px`);
+        }),
+      );
+
+      // Click on empty space to throw a paper plane.
+      document.addEventListener("click", (e) => {
+        if (e.target.closest("a, button, input, .code, pre, table")) return;
+        const p = document.createElement("div");
+        p.className = "thrown";
+        p.innerHTML = '<svg width="26" height="26"><use href="#plane" /></svg>';
+        p.style.left = `${e.clientX - 13}px`;
+        p.style.top = `${e.clientY - 13}px`;
+        p.style.setProperty("--dx", `${180 + Math.random() * 220}px`);
+        p.style.setProperty("--dy", `${-160 - Math.random() * 200}px`);
+        document.body.append(p);
+        p.addEventListener("animationend", () => p.remove());
+      });
+
+      // Point at the visitor's system and make the hero button download for it.
+      const ua = navigator.userAgent;
+      const os = /Windows/.test(ua) ? "windows" : /Mac/.test(ua) ? "mac" : /Linux|X11/.test(ua) ? "linux" : null;
+      const mine = os && document.querySelector(`.os[data-os="${os}"]`);
+      if (mine) {
+        mine.classList.add("mine");
+        const names = { windows: "Windows", mac: "macOS", linux: "Linux" };
+        document.querySelector("#hero-dl span").textContent = `Download for ${names[os]}`;
+      }
+
+      // Live star count; the card keeps its star when GitHub can't be reached.
+      fetch(`https://api.github.com/repos/${TUMA.repo}`)
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .then((r) => (document.getElementById("stars").textContent = `★ ${r.stargazers_count.toLocaleString()}`))
+        .catch(() => {});
+    </script>
+  </body>
+</html>

@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tuma Documentation</title>
+    <meta name="description" content="How to use Tuma: workspaces, requests, variables, auth, scripts, tests, the runner, performance tests, mocks, docs, encryption, the CLI and the MCP server." />
+    <link rel="icon" href="icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .docs {
+        display: grid;
+        grid-template-columns: 250px minmax(0, 1fr);
+        gap: 56px;
+        padding: 32px 0 80px;
+      }
+
+      .side {
+        position: sticky;
+        top: 80px;
+        align-self: start;
+        max-height: calc(100vh - 100px);
+        overflow-y: auto;
+        padding-right: 8px;
+      }
+
+      .search {
+        width: 100%;
+        height: 40px;
+        padding: 0 12px;
+        margin-bottom: 18px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--card);
+        color: var(--text);
+        font: 14px var(--sans);
+      }
+
+      .search:focus {
+        outline: 2px solid var(--accent-soft);
+        border-color: var(--accent);
+      }
+
+      .side h4 {
+        margin: 18px 0 6px;
+        font: 700 11.5px var(--sans);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .side a {
+        display: block;
+        padding: 5px 10px;
+        border-radius: 8px;
+        color: var(--text-2);
+        text-decoration: none;
+        font-size: 14.5px;
+      }
+
+      .side a:hover {
+        background: var(--bg-2);
+        color: var(--text);
+      }
+
+      .side a.on {
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 600;
+      }
+
+      article {
+        max-width: 780px;
+      }
+
+      article h1 {
+        margin: 6px 0 12px;
+        font-size: 44px;
+        letter-spacing: -0.04em;
+        line-height: 1.1;
+      }
+
+      article > p.lede {
+        font-size: 18px;
+        color: var(--text-2);
+        margin-top: 0;
+      }
+
+      article section {
+        padding-top: 30px;
+        margin-top: 30px;
+        border-top: 1px solid var(--border);
+      }
+
+      article section[hidden] {
+        display: none;
+      }
+
+      article h2 {
+        margin: 0 0 12px;
+        font-size: 27px;
+        letter-spacing: -0.025em;
+      }
+
+      article h2 a {
+        text-decoration: none;
+      }
+
+      article h2 a:hover::after {
+        content: " #";
+        color: var(--muted);
+      }
+
+      article h3 {
+        margin: 26px 0 8px;
+        font-size: 18px;
+      }
+
+      article p,
+      article li {
+        color: var(--text-2);
+      }
+
+      article li {
+        margin: 4px 0;
+      }
+
+      article :not(pre, .code) > code {
+        padding: 1px 6px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--code-bg);
+        font-size: 0.88em;
+        color: var(--text);
+      }
+
+      .code {
+        margin: 14px 0;
+      }
+
+      kbd {
+        display: inline-block;
+        min-width: 24px;
+        padding: 1px 7px;
+        border: 1px solid var(--border);
+        border-bottom-width: 2px;
+        border-radius: 6px;
+        background: var(--card);
+        font-size: 12.5px;
+        text-align: center;
+        color: var(--text);
+      }
+
+      .note {
+        margin: 16px 0;
+        padding: 12px 16px;
+        border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+        border-left: 3px solid var(--accent);
+        border-radius: 10px;
+        background: var(--accent-soft);
+        color: var(--text-2);
+        font-size: 15px;
+      }
+
+      .note.warn {
+        border-color: color-mix(in srgb, var(--post) 40%, var(--border));
+        border-left-color: var(--post);
+        background: color-mix(in srgb, var(--post) 10%, transparent);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 14px 0;
+        font-size: 14.5px;
+      }
+
+      th,
+      td {
+        text-align: left;
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 12.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      td:first-child {
+        white-space: nowrap;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 12px;
+        margin: 22px 0;
+      }
+
+      .cards a {
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--card);
+        text-decoration: none;
+        transition: border-color 0.15s;
+      }
+
+      .cards a:hover {
+        border-color: var(--accent);
+      }
+
+      .cards b {
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .cards span {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .empty {
+        display: none;
+        padding: 40px 0;
+        color: var(--muted);
+      }
+
+      .help {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 48px;
+        padding: 22px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--card);
+      }
+
+      .help p {
+        margin: 0;
+      }
+
+      .help div {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .menu-btn {
+        display: none;
+      }
+
+      @media (max-width: 900px) {
+        .docs {
+          grid-template-columns: 1fr;
+          gap: 16px;
+        }
+
+        .side {
+          position: static;
+          max-height: none;
+          display: none;
+        }
+
+        .side.open {
+          display: block;
+        }
+
+        .menu-btn {
+          display: inline-flex;
+        }
+
+        article h1 {
+          font-size: 34px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="github" viewBox="0 0 24 24">
+        <path
+          fill="currentColor"
+          d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.4-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"
+        />
+      </symbol>
+      <symbol id="heart" viewBox="0 0 24 24">
+        <path
+          fill="currentColor"
+          d="M12 21s-7.5-4.6-9.6-9.3C.9 8.2 3 4.5 6.6 4.5c2 0 3.5 1.1 5.4 3.2 1.9-2.1 3.4-3.2 5.4-3.2 3.6 0 5.7 3.7 4.2 7.2C19.5 16.4 12 21 12 21Z"
+        />
+      </symbol>
+      <symbol id="logo" viewBox="0 0 1024 1024">
+        <rect x="64" y="64" width="896" height="896" rx="200" fill="#161a21" />
+        <g transform="rotate(-12 512 520)">
+          <path d="M250 520 780 300 640 760 520 600Z" fill="#3dd6a3" />
+          <path d="M520 600 780 300 560 640Z" fill="#127a5b" />
+          <path d="M520 600 560 640 500 720Z" fill="#0d5c45" />
+        </g>
+        <g stroke="#34c79a" stroke-width="34" stroke-linecap="round" opacity=".55">
+          <path d="M190 660h140M230 740h170" />
+        </g>
+      </symbol>
+    </svg>
+
+    <header class="nav" id="nav">
+      <div class="wrap">
+        <a class="brand" href="index.html"><svg><use href="#logo" /></svg>Tuma <span style="color: var(--muted); font-weight: 500">docs</span></a>
+        <nav class="nav-links">
+          <a href="index.html#features">Features</a>
+          <a href="index.html#download">Download</a>
+          <a href="docs.html">Docs</a>
+        </nav>
+        <div class="nav-end">
+          <button class="btn small menu-btn" id="menu">Contents</button>
+          <button class="icon-btn" id="theme" title="Switch light or dark" aria-label="Switch light or dark">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+            </svg>
+          </button>
+          <a class="icon-btn" data-repo href="https://github.com/MorrisKM/Tuma" title="Tuma on GitHub" aria-label="GitHub"
+            ><svg width="18" height="18"><use href="#github" /></svg
+          ></a>
+          <a class="btn small donate" data-donate href="https://github.com/sponsors/MorrisKM"
+            ><svg width="16" height="16"><use href="#heart" /></svg><span>Donate</span></a
+          >
+        </div>
+      </div>
+    </header>
+
+    <div class="wrap docs">
+      <aside class="side" id="side">
+        <input class="search" id="search" type="search" placeholder="Search the docs  ( / )" aria-label="Search the docs" />
+        <nav id="toc"></nav>
+      </aside>
+
+      <article id="article">
+        <span class="eyebrow">Documentation</span>
+        <h1>Using Tuma</h1>
+        <p class="lede">
+          Everything from your first request to load tests in CI and coding agents. New here? Start with
+          <a href="#install">Install</a> and <a href="#first-request">Your first request</a>.
+        </p>
+
+        <div class="cards">
+          <a href="#first-request"><b>Quick start</b><span>Send and save a request in a minute.</span></a>
+          <a href="#cli"><b>The tuma command</b><span>Tests, runs and load tests in CI.</span></a>
+          <a href="#mcp"><b>Coding agents</b><span>Connect Claude Code or Cursor over MCP.</span></a>
+        </div>
+
+        <p class="empty" id="empty">Nothing in the docs matches that. Try another word, or <a data-repo-path="/issues" href="https://github.com/MorrisKM/Tuma/issues">ask on GitHub</a>.</p>
+
+        <section id="install" data-group="Getting started">
+          <h2><a href="#install">Install</a></h2>
+          <p>Download the installer for your system from the <a href="index.html#download">download section</a> or the <a data-repo-path="/releases" href="https://github.com/MorrisKM/Tuma/releases">GitHub releases</a>.</p>
+          <table>
+            <tr><th>System</th><th>File</th><th>How</th></tr>
+            <tr><td>Windows</td><td><code>-setup.exe</code> or <code>.msi</code></td><td>Run it. Your workspaces are kept when you install a newer version.</td></tr>
+            <tr><td>macOS</td><td><code>.dmg</code></td><td>Open it and drag Tuma to Applications. Apple Silicon (<code>aarch64</code>) or Intel (<code>x64</code>).</td></tr>
+            <tr><td>Debian, Ubuntu</td><td><code>.deb</code></td><td><code>sudo apt install ./Tuma_1.0.0_amd64.deb</code></td></tr>
+            <tr><td>Fedora, openSUSE</td><td><code>.rpm</code></td><td><code>sudo dnf install ./Tuma-1.0.0-1.x86_64.rpm</code></td></tr>
+            <tr><td>Any Linux</td><td><code>.AppImage</code></td><td><code>chmod +x Tuma_*.AppImage</code>, then run it.</td></tr>
+          </table>
+          <div class="note warn">With <code>apt</code>, write <code>./</code> in front of the file name. Without it, apt looks for a package of that name in its repositories and fails with "Unsupported file given on commandline".</div>
+          <p>Or with a package manager:</p>
+          <div class="code">brew install --cask morriskm/tuma/tuma-app   <span class="c"># macOS: the app and the tuma command</span>
+brew install morriskm/tuma/tuma              <span class="c"># macOS and Linux: the tuma command only</span>
+winget install MorrisKM.Tuma                 <span class="c"># Windows</span><button class="copy">Copy</button></div>
+          <p>Every package includes the <code>tuma</code> command. The app updates itself: see Settings → Updates.</p>
+          <h3>Build from source</h3>
+          <p>You need Rust (stable), Node.js 20+, pnpm and the <a href="https://tauri.app/start/prerequisites/">Tauri system dependencies</a>.</p>
+          <div class="code">git clone https://github.com/MorrisKM/Tuma.git
+cd Tuma/app
+pnpm install
+pnpm tauri dev     <span class="c"># run with hot reload</span>
+pnpm tauri build   <span class="c"># build installers for your system</span><button class="copy">Copy</button></div>
+        </section>
+
+        <section id="first-request" data-group="Getting started">
+          <h2><a href="#first-request">Your first request</a></h2>
+          <ol>
+            <li>Open Tuma and create a workspace, or open a folder that already has one.</li>
+            <li>Press <kbd>Ctrl</kbd> <kbd>T</kbd> for a new tab, pick a method and type a URL, such as <code>https://httpbin.org/get</code>.</li>
+            <li>Press <kbd>Ctrl</kbd> <kbd>Enter</kbd> to send it. The response shows its status, time, size, headers, cookies and body.</li>
+            <li>Press <kbd>Ctrl</kbd> <kbd>S</kbd> to save it into a collection. It's now a file in your workspace.</li>
+          </ol>
+          <div class="note">On macOS, use <kbd>⌘</kbd> wherever these docs say <kbd>Ctrl</kbd>.</div>
+        </section>
+
+        <section id="workspaces" data-group="Getting started">
+          <h2><a href="#workspaces">Workspaces and files</a></h2>
+          <p>A workspace is a folder of plain YAML files. Put it next to your code (<code>tuma init</code> creates <code>.tuma/</code> at the root of a project) and commit it to git, so requests are reviewed and versioned like the code they test.</p>
+          <div class="code">.tuma/
+├─ workspace.yaml            <span class="c"># name and id</span>
+├─ environments/
+│  ├─ local.yaml
+│  └─ staging.yaml
+└─ Users API/                <span class="c"># a collection</span>
+   ├─ _folder.yaml           <span class="c"># auth, variables and scripts shared by everything inside</span>
+   ├─ create user.yaml
+   └─ Admin/                 <span class="c"># folders nest</span>
+      └─ delete user.yaml</div>
+          <p>A request file:</p>
+          <div class="code"><span class="k">method</span>: POST
+<span class="k">url</span>: <span class="s">"{{baseUrl}}/users"</span>
+<span class="k">description</span>: Creates a user.
+<span class="k">headers</span>:
+  - { name: X-Request-Id, value: <span class="s">"{{$guid}}"</span> }
+<span class="k">body</span>:
+  <span class="k">type</span>: json
+  <span class="k">content</span>: |
+    { "name": "Wanjiru", "role": "admin" }
+<span class="k">expect</span>:
+  <span class="k">status</span>: 201
+  <span class="k">maxTimeMs</span>: 500
+  <span class="k">body</span>:
+    - { path: $.id, exists: true }<button class="copy">Copy</button></div>
+          <p>JSON Schemas for every file are in <a data-repo-path="/tree/main/schemas" href="https://github.com/MorrisKM/Tuma/tree/main/schemas"><code>schemas/</code></a>, so editors such as VS Code can autocomplete and validate them. <code>tuma check</code> finds typos and checks that can't work.</p>
+          <p>You can keep several workspaces and switch between them from the workspace menu. Duplicate any request, folder or collection, and click a name to rename it.</p>
+        </section>
+
+        <section id="variables" data-group="Requests">
+          <h2><a href="#variables">Environments and variables</a></h2>
+          <p>Write <code>{{name}}</code> anywhere: URL, headers, body, auth, scripts and crypto keys. Typing <code>{{</code> suggests the variables in scope.</p>
+          <div class="code"><span class="c"># environments/staging.yaml</span>
+<span class="k">variables</span>:
+  - { name: baseUrl, value: https://staging.example.com }
+  - { name: apiKey, secret: true }   <span class="c"># the value is in the OS keychain, not the file</span></div>
+          <p>Variables come from the environment, the collection and its folders; the closest one wins. Values set by scripts with <code>pm.environment.set</code> are kept on this computer, in Tuma's data folder, so a login token never ends up in git.</p>
+          <h3>Dynamic variables</h3>
+          <table>
+            <tr><th>Variable</th><th>Becomes</th></tr>
+            <tr><td><code>{{$guid}}</code>, <code>{{$randomUUID}}</code></td><td>A new UUID</td></tr>
+            <tr><td><code>{{$timestamp}}</code></td><td>The current Unix time in seconds</td></tr>
+            <tr><td><code>{{$isoTimestamp}}</code></td><td>The current time, ISO 8601</td></tr>
+            <tr><td><code>{{$randomInt}}</code></td><td>A random number from 0 to 1000</td></tr>
+          </table>
+        </section>
+
+        <section id="bodies" data-group="Requests">
+          <h2><a href="#bodies">Bodies and protocols</a></h2>
+          <p>Bodies can be JSON (comments allowed while you edit), XML, HTML, text, form fields, multipart with files, or a binary file. Beyond HTTP, Tuma speaks:</p>
+          <ul>
+            <li><b>GraphQL</b>: queries and variables, with introspection and a schema explorer.</li>
+            <li><b>WebSocket</b>: connect, send saved messages, and watch the conversation.</li>
+            <li><b>Server-sent events</b>: watch an event stream as it arrives.</li>
+            <li><b>gRPC</b>: methods from server reflection or your <code>.proto</code> files, including streaming.</li>
+          </ul>
+          <p>The response pane shows the body (pretty, raw or preview), headers, cookies, timings, and the request exactly as it was sent, after variables, scripts and encryption. Press <kbd>Ctrl</kbd> <kbd>F</kbd> to find, or replace, in a response.</p>
+        </section>
+
+        <section id="auth" data-group="Requests">
+          <h2><a href="#auth">Authentication</a></h2>
+          <p>Set auth on a request, or on a folder or collection for everything inside it. Requests inherit it unless they choose their own, or <i>None</i>.</p>
+          <table>
+            <tr><th>Type</th><th>Notes</th></tr>
+            <tr><td>Bearer, Basic, API key</td><td>In a header or the query string.</td></tr>
+            <tr><td>OAuth 2.0</td><td>Authorization code (with PKCE), client credentials, password and implicit. Tokens are kept in the keychain and refreshed.</td></tr>
+            <tr><td>JWT</td><td>Signs a token from claims you write.</td></tr>
+            <tr><td>Digest, OAuth 1.0, AWS Signature v4</td><td>Signed for every send.</td></tr>
+          </table>
+          <p>Proxies, client certificates, extra CA certificates and the cookie jar are machine settings (Settings), shared with the CLI. The cookie manager lets you view, edit and delete cookies per domain.</p>
+        </section>
+
+        <section id="scripts" data-group="Testing">
+          <h2><a href="#scripts">Scripts</a></h2>
+          <p>Pre-request and test scripts are JavaScript with Postman's <code>pm</code> API, so scripts you import from Postman keep working. They run in a sandbox: no files, and no network except <code>pm.sendRequest</code>, which follows the same host rules as the request.</p>
+          <div class="code"><span class="c">// Pre-request: log in once and reuse the token</span>
+if (!pm.environment.get("token")) {
+  pm.sendRequest({ url: pm.variables.get("baseUrl") + "/login", method: "POST",
+    body: { mode: "raw", raw: JSON.stringify({ user: "ann", pass: pm.variables.get("password") }) } },
+    (err, res) => pm.environment.set("token", res.json().token));
+}
+
+<span class="c">// Test</span>
+pm.test("creates the user", () => {
+  pm.response.to.have.status(201);
+  pm.expect(pm.response.json().name).to.eql("Wanjiru");
+});<button class="copy">Copy</button></div>
+          <p>Collections and folders can have scripts too; they run before and after every request inside. The script editor's help lists the whole API, and its output appears in the console (<kbd>Ctrl</kbd> <kbd>`</kbd>).</p>
+        </section>
+
+        <section id="checks" data-group="Testing">
+          <h2><a href="#checks">Checks</a></h2>
+          <p>Checks are tests without code, saved in the request's <code>expect</code> block. They are applied by the app, <code>tuma test</code> and <code>tuma run</code>.</p>
+          <table>
+            <tr><th>Check</th><th>Example (CLI form)</th></tr>
+            <tr><td>Status</td><td><code>status=201</code>, <code>status=2xx</code></td></tr>
+            <tr><td>Time</td><td><code>time&lt;500</code></td></tr>
+            <tr><td>Headers</td><td><code>header content-type~json</code>, <code>header !x-debug</code></td></tr>
+            <tr><td>Body</td><td><code>$.id exists</code>, <code>$.name == "Ann"</code>, <code>$.email ~ @</code>, <code>$.items length 3</code>, <code>$.id type integer</code></td></tr>
+            <tr><td>Contract</td><td><code>schema</code>: the response must match the OpenAPI spec the collection came from</td></tr>
+          </table>
+        </section>
+
+        <section id="runner" data-group="Testing">
+          <h2><a href="#runner">Collection runner</a></h2>
+          <p>Run every request in a collection or folder, in order, with their checks and scripts. Feed it a CSV or JSON data file to run once per row, with each column as a variable. Results show what passed, what failed and why, and can be exported as JUnit XML for CI.</p>
+          <div class="code">tuma run "Users API" --data users.csv --junit results.xml<button class="copy">Copy</button></div>
+        </section>
+
+        <section id="performance" data-group="Testing">
+          <h2><a href="#performance">Performance and security tests</a></h2>
+          <p>Virtual users send a request, folder or collection over and over. Tuma reports throughput, error rate and p50 / p95 / p99 latency per request, and runs passive security checks on the responses: security headers, cookie flags, CORS, HTTPS and leaked details such as stack traces. Export the result as an HTML or JSON report.</p>
+          <div class="code">tuma perf "Users API" -u 20 -d 60 --max-p95 300 --report perf.html<button class="copy">Copy</button></div>
+          <table>
+            <tr><th>Flag</th><th>Meaning</th></tr>
+            <tr><td><code>-u</code></td><td>Virtual users at the same time (at most 200)</td></tr>
+            <tr><td><code>-d</code></td><td>Duration in seconds (0 runs a fixed number of iterations)</td></tr>
+            <tr><td><code>--max-p95</code>, <code>--max-errors</code></td><td>Exit with 1 when latency or the error percentage is too high, to fail CI</td></tr>
+            <tr><td><code>--report</code></td><td>Write the report, <code>.html</code> or <code>.json</code></td></tr>
+          </table>
+          <div class="note warn">Only load-test servers you own or have permission to test.</div>
+        </section>
+
+        <section id="crypto" data-group="Testing">
+          <h2><a href="#crypto">Encrypted fields</a></h2>
+          <p>For APIs that exchange encrypted values, the request's <b>Crypto</b> tab encrypts chosen body fields just before sending and decrypts chosen response fields when they arrive, so checks and scripts see plain values.</p>
+          <table>
+            <tr><th>Algorithm</th><th>Use</th></tr>
+            <tr><td>AES-256/128-GCM, AES-256/128-CBC</td><td>A shared key (base64, hex or text) and a random or fixed IV.</td></tr>
+            <tr><td>RSA-OAEP SHA-1 or SHA-256</td><td>Encrypt with the server's public key (PEM; one line, as in a <code>.env</code> file, works too).</td></tr>
+            <tr><td>Hybrid RSA + AES</td><td>Responses holding an RSA-encrypted AES key and IV with the AES-encrypted data, decrypted with your private key.</td></tr>
+          </table>
+          <p>Fields are JSON paths, one per line, such as <code>$.pin</code> or <code>$.items[*].ssn</code>; <code>$</code> is the whole body. Keep keys in secret variables such as <code>{{rsaPrivateKey}}</code>.</p>
+        </section>
+
+        <section id="mocks" data-group="Share">
+          <h2><a href="#mocks">Examples and mock servers</a></h2>
+          <p>Save any response as an example of its request. A mock server then answers with those examples, so a frontend can be built before the backend exists.</p>
+          <div class="code">tuma mock "Users API" --port 4010<button class="copy">Copy</button></div>
+          <p>Requests are matched by method and path (<code>{{name}}</code> and <code>:name</code> segments match anything). Pick an example with an <code>x-mock-response-code</code> or <code>x-mock-response-name</code> header; otherwise the first successful one is sent. Edits to examples apply at once.</p>
+        </section>
+
+        <section id="docs-gen" data-group="Share">
+          <h2><a href="#docs-gen">API documentation</a></h2>
+          <p>Generate docs for a request, folder, collection or the whole workspace as OpenAPI 3.1 (YAML or JSON), Markdown or a standalone HTML page. Descriptions and saved examples make them complete; secret values are never included.</p>
+          <div class="code">tuma docs "Users API" -o openapi.yaml   <span class="c"># the format comes from the extension</span>
+tuma docs "Users API" -o api.html<button class="copy">Copy</button></div>
+        </section>
+
+        <section id="import" data-group="Share">
+          <h2><a href="#import">Import and export</a></h2>
+          <table>
+            <tr><th>Import</th><th>Where</th></tr>
+            <tr><td>Postman collections and environments</td><td>Import button, or <code>tuma import</code></td></tr>
+            <tr><td>Insomnia, Bruno, plain JSON environments</td><td>Import button; environments also from the Environments section</td></tr>
+            <tr><td>OpenAPI 3 / Swagger 2</td><td>File or URL; <code>tuma openapi discover --server http://localhost:8000 --import</code> finds a running API's spec</td></tr>
+            <tr><td>HAR recordings, cURL commands</td><td>Import button; paste cURL straight into the URL bar</td></tr>
+          </table>
+          <p>Export a collection as Postman Collection v2.1 (which Postman, Insomnia and Bruno import), or a whole workspace as a <code>.zip</code>. Collections imported from a spec can be synced when the spec changes.</p>
+        </section>
+
+        <section id="cli" data-group="Automation">
+          <h2><a href="#cli">The tuma command</a></h2>
+          <p>The CLI uses the same workspace files as the app. Run it from anywhere inside a project with a <code>.tuma/</code> folder.</p>
+          <table>
+            <tr><th>Command</th><th>Does</th></tr>
+            <tr><td><code>tuma init</code></td><td>Create a workspace in the current project</td></tr>
+            <tr><td><code>tuma send</code></td><td>Send a request and check the response; <code>--save</code> keeps it as a test when the checks pass</td></tr>
+            <tr><td><code>tuma test</code></td><td>Rerun every saved request that has checks; exit code 1 if one fails</td></tr>
+            <tr><td><code>tuma run</code></td><td>Run a collection or folder, optionally once per data row; JUnit output</td></tr>
+            <tr><td><code>tuma perf</code></td><td>Load-test with latency limits and an HTML report</td></tr>
+            <tr><td><code>tuma mock</code></td><td>Serve the saved examples</td></tr>
+            <tr><td><code>tuma docs</code></td><td>Generate OpenAPI, Markdown or HTML docs</td></tr>
+            <tr><td><code>tuma import</code> / <code>tuma export</code></td><td>Bring collections in, or export as Postman v2.1</td></tr>
+            <tr><td><code>tuma openapi</code></td><td>Import, discover or sync an OpenAPI spec</td></tr>
+            <tr><td><code>tuma grpc</code>, <code>tuma ws</code></td><td>Call gRPC methods; talk to a WebSocket</td></tr>
+            <tr><td><code>tuma auth</code></td><td>Log in for OAuth 2.0, list or forget tokens</td></tr>
+            <tr><td><code>tuma check</code></td><td>Validate the workspace files</td></tr>
+            <tr><td><code>tuma mcp</code></td><td>The MCP server for coding agents</td></tr>
+          </table>
+          <div class="code">tuma send POST /users -d '{"name":"Ann"}' --var baseUrl=http://localhost:3000 \
+  -x status=201 -x '$.id exists' --save "Users/create user"
+tuma test --env staging<button class="copy">Copy</button></div>
+          <h3>In CI</h3>
+          <p>Secrets come from <code>TUMA_SECRET_&lt;NAME&gt;</code> environment variables when there is no keychain:</p>
+          <div class="code"><span class="c"># .github/workflows/api.yml</span>
+- run: tuma test --env staging
+  env:
+    TUMA_SECRET_APIKEY: ${{ secrets.API_KEY }}<button class="copy">Copy</button></div>
+        </section>
+
+        <section id="mcp" data-group="Automation">
+          <h2><a href="#mcp">Coding agents (MCP)</a></h2>
+          <p>Tuma's MCP server lets coding agents test the API they are building, and save what works as tests in your workspace.</p>
+          <div class="code">claude mcp add tuma -- tuma mcp<button class="copy">Copy</button></div>
+          <p>For other agents, add a stdio server that runs <code>tuma mcp</code>. The tools agents get:</p>
+          <table>
+            <tr><th>Tool</th><th>Does</th></tr>
+            <tr><td><code>send_request</code></td><td>Send a request, with checks</td></tr>
+            <tr><td><code>list_requests</code>, <code>read_request</code>, <code>describe_request</code></td><td>Explore the workspace</td></tr>
+            <tr><td><code>save_request</code>, <code>save_example</code>, <code>set_scripts</code>, <code>set_variables</code></td><td>Save tests, examples, scripts and variables</td></tr>
+            <tr><td><code>run_saved</code></td><td>Run saved tests</td></tr>
+            <tr><td><code>run_performance_test</code></td><td>A small load test (capped at 50 users and 60 seconds by default)</td></tr>
+            <tr><td><code>import_openapi</code>, <code>sync_openapi</code>, <code>generate_docs</code>, <code>check_workspace</code></td><td>Specs, docs and validation</td></tr>
+          </table>
+          <h3>What agents can't do</h3>
+          <ul>
+            <li>Reach hosts other than localhost and the selected environment's, unless you add <code>--allow-host api.example.com</code>.</li>
+            <li>See secret values: they are sent, never shown.</li>
+            <li>Change files, with <code>--read-only</code>.</li>
+          </ul>
+        </section>
+
+        <section id="shortcuts" data-group="Reference">
+          <h2><a href="#shortcuts">Keyboard shortcuts</a></h2>
+          <table>
+            <tr><th>Keys</th><th>Action</th></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>K</kbd></td><td>Find any request or command</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>Enter</kbd></td><td>Send</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>S</kbd></td><td>Save</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>T</kbd> / <kbd>Ctrl</kbd> <kbd>N</kbd></td><td>New tab</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>W</kbd></td><td>Close the tab</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>Tab</kbd></td><td>Next tab (with <kbd>Shift</kbd>, previous)</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>B</kbd></td><td>Show or hide the sidebar</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>F</kbd></td><td>Find in the response</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>`</kbd></td><td>Show or hide the console</td></tr>
+            <tr><td><kbd>F2</kbd></td><td>Rename the request</td></tr>
+          </table>
+        </section>
+
+        <section id="faq" data-group="Reference">
+          <h2><a href="#faq">FAQ</a></h2>
+          <h3>Is Tuma really free?</h3>
+          <p>Yes. It's open source under Apache-2.0, with no paid tier and no account. If it saves you time, consider <a data-donate href="https://github.com/sponsors/MorrisKM">donating</a>.</p>
+          <h3>Does Tuma send my data anywhere?</h3>
+          <p>No. There's no telemetry and no cloud. It only connects to the APIs you send requests to, and to GitHub to check for updates.</p>
+          <h3>Will updating delete my work?</h3>
+          <p>No. Workspaces are folders on your disk, and settings are in your user profile; installers never touch them.</p>
+          <h3>How do I move from Postman?</h3>
+          <p>Export your collections and environments from Postman as JSON, then use <a href="#import">Import</a>. Scripts keep working.</p>
+          <h3>Can I contribute?</h3>
+          <p>Please do. Open an <a data-repo-path="/issues" href="https://github.com/MorrisKM/Tuma/issues">issue</a> or a pull request on <a data-repo href="https://github.com/MorrisKM/Tuma">GitHub</a>.</p>
+        </section>
+
+        <div class="help">
+          <p><b>Something missing or wrong?</b> These docs live in the repo, too.</p>
+          <div>
+            <a class="btn small" data-repo-path="/edit/main/site/docs.html" href="https://github.com/MorrisKM/Tuma/edit/main/site/docs.html"><svg width="16" height="16"><use href="#github" /></svg>Edit this page</a>
+            <a class="btn small donate" data-donate href="https://github.com/sponsors/MorrisKM"><svg width="16" height="16"><use href="#heart" /></svg>Donate</a>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <footer class="footer">
+      <div class="wrap">
+        <a class="brand" href="index.html"><svg><use href="#logo" /></svg>Tuma</a>
+        <nav>
+          <a href="index.html">Home</a>
+          <a href="index.html#download">Download</a>
+          <a data-repo href="https://github.com/MorrisKM/Tuma">GitHub</a>
+          <a data-donate href="https://github.com/sponsors/MorrisKM">Donate</a>
+        </nav>
+        <span>Apache-2.0 · Made with care in Kenya 🇰🇪</span>
+      </div>
+    </footer>
+
+    <script src="site.js"></script>
+    <script>
+      // The contents, built from the sections and their groups.
+      const sections = [...document.querySelectorAll("article section")];
+      const toc = document.getElementById("toc");
+      let group = null;
+      for (const s of sections) {
+        if (s.dataset.group !== group) {
+          group = s.dataset.group;
+          const h = document.createElement("h4");
+          h.textContent = group;
+          toc.append(h);
+        }
+        const a = document.createElement("a");
+        a.href = `#${s.id}`;
+        a.textContent = s.querySelector("h2").textContent;
+        toc.append(a);
+      }
+      const links = [...toc.querySelectorAll("a")];
+
+      // Highlight the section being read.
+      const spy = new IntersectionObserver(
+        (entries) =>
+          entries.forEach((e) => {
+            if (!e.isIntersecting) return;
+            links.forEach((l) => l.classList.toggle("on", l.hash === `#${e.target.id}`));
+          }),
+        { rootMargin: "-80px 0px -70% 0px" },
+      );
+      sections.forEach((s) => spy.observe(s));
+
+      // Search hides the sections that don't mention every word typed.
+      const search = document.getElementById("search");
+      search.addEventListener("input", () => {
+        const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);
+        let shown = 0;
+        sections.forEach((s, i) => {
+          const hit = words.every((w) => s.textContent.toLowerCase().includes(w));
+          s.hidden = !hit;
+          links[i].style.display = hit ? "" : "none";
+          shown += hit;
+        });
+        toc.querySelectorAll("h4").forEach((h) => {
+          let n = h.nextElementSibling, any = false;
+          while (n && n.tagName === "A") {
+            any ||= n.style.display !== "none";
+            n = n.nextElementSibling;
+          }
+          h.style.display = any ? "" : "none";
+        });
+        document.getElementById("empty").style.display = shown ? "none" : "block";
+      });
+      addEventListener("keydown", (e) => {
+        if (e.key === "/" && document.activeElement !== search) {
+          e.preventDefault();
+          document.getElementById("side").classList.add("open");
+          search.focus();
+        }
+      });
+
+      const side = document.getElementById("side");
+      document.getElementById("menu").addEventListener("click", () => side.classList.toggle("open"));
+      toc.addEventListener("click", (e) => e.target.tagName === "A" && matchMedia("(max-width: 900px)").matches && side.classList.remove("open"));
+    </script>
+  </body>
+</html>
