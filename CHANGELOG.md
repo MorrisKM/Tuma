@@ -3,6 +3,22 @@
 All notable changes to Tuma. Versions follow [Semantic Versioning](https://semver.org/): the workspace file format
 and the `tuma` command's options and `--json` output are the public interface.
 
+## 1.1.0 (2026-10-26)
+
+### Added
+
+- Choose HTTP, WebSocket or gRPC at the start of the request bar; the URL's scheme follows, keeping TLS.
+- URLs in a response body and in header values are links: click one to open a new request to it.
+- Copy as code has an "Auth and scripts" toggle. On, the code has the request's auth and what its pre-request
+  scripts change, with the scripts above it as comments; the scripts run, but nothing is sent or saved. Off, it is
+  the request as written, with no auth and no Authorization headers. OAuth 2.0 and JWT tokens are written out too.
+- Settings → Appearance: the theme, a palette that tints the app (Harbor, Grove) and an accent color for outlines,
+  focus rings and buttons. Settings are grouped in cards, with a list of sections to jump to.
+
+### Fixed
+
+- The method list shows every method, not only the one already chosen; Custom… takes any other method.
+
 ## 1.0.1 (2026-10-23)
 
 ### Added
