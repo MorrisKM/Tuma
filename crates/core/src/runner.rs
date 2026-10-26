@@ -239,6 +239,8 @@ pub struct Execution {
     pub secrets: Vec<String>,
     /// The response's decrypted fields, and its body as it came; or why decrypting failed.
     pub decryption: Option<Result<crate::crypto::Decryption, String>>,
+    /// The pre-request scripts that ran: the collection's and folders' first, then the request's.
+    pub pre_request: Vec<Script>,
 }
 
 impl Execution {
@@ -309,6 +311,17 @@ fn store_changes(
 /// Sends a request: pre-request scripts, variables, the request, checks, test scripts. Variables scripts set are
 /// stored as current values.
 pub async fn execute(job: Job<'_>) -> Execution {
+    run(job, true).await
+}
+
+/// Everything [`execute`] does before sending, without sending: the request as it would go is in `sent`. Pre-request
+/// scripts run, so `pm.sendRequest` still calls the network, but the variables they set are for this request only:
+/// nothing is stored.
+pub async fn rehearse(job: Job<'_>) -> Execution {
+    run(job, false).await
+}
+
+async fn run(job: Job<'_>, send: bool) -> Execution {
     let sent_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
@@ -350,6 +363,7 @@ pub async fn execute(job: Job<'_>) -> Execution {
         locals: job.scripting.locals.cloned().unwrap_or_default(),
         secrets,
         decryption: None,
+        pre_request: vec![],
     };
     let request_name = job
         .path
@@ -417,7 +431,8 @@ pub async fn execute(job: Job<'_>) -> Execution {
                 job.scripting.timeout,
             )
         });
-        if let Some(ws) = job.workspace
+        if send
+            && let Some(ws) = job.workspace
             && let Err(e) = store_changes(
                 ws,
                 &input.vars,
@@ -433,6 +448,20 @@ pub async fn execute(job: Job<'_>) -> Execution {
             });
         }
         execution.locals = output.vars.local.clone();
+        if !send {
+            // Not stored, but this request still sees what the scripts set. pm.variables.set wins, as it does.
+            for (before, after) in [
+                (&input.vars.environment.values, &output.vars.environment),
+                (&input.vars.collection, &output.vars.collection),
+                (&input.vars.globals, &output.vars.globals),
+            ] {
+                for (k, v) in changes(before, after) {
+                    if let Some(v) = v {
+                        execution.locals.entry(k).or_insert(v);
+                    }
+                }
+            }
+        }
         execution.tests.extend(output.tests.iter().cloned());
         execution
             .script_errors
@@ -453,6 +482,7 @@ pub async fn execute(job: Job<'_>) -> Execution {
     } else {
         vec![]
     };
+    execution.pre_request = pre.clone();
     if !pre.is_empty() {
         let mut input = match script_input(&execution) {
             Ok(input) => input,
@@ -591,6 +621,11 @@ pub async fn execute(job: Job<'_>) -> Execution {
                 return execution;
             }
         }
+    }
+
+    if !send {
+        execution.sent = Some(prepared.request);
+        return execution;
     }
 
     // The request

@@ -31,11 +31,12 @@ import { layout, useLayout } from "./layout";
 import { consoleLog, grpcTarget, useStore } from "./store";
 import type { GrpcEvent, RunStep, SseEvent, WsEvent } from "./types";
 import { listen } from "@tauri-apps/api/event";
-import { applyTheme, loadTheme } from "./theme";
+import { applyColors, applyTheme, loadColors, loadTheme } from "./theme";
 import { checkAtStart } from "./updates";
 import "./App.css";
 
 applyTheme(loadTheme());
+applyColors(loadColors());
 
 /** Keyboard shortcuts. Ctrl is Cmd on macOS. */
 function onKey(e: KeyboardEvent) {

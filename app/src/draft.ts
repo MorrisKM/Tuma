@@ -29,6 +29,24 @@ export const isWebSocket = (url: string) => /^\s*wss?:\/\//i.test(url);
 /** A gRPC request: its URL starts with grpc:// or grpcs://. */
 export const isGrpc = (url: string) => /^\s*grpcs?:\/\//i.test(url);
 
+export type Protocol = "http" | "ws" | "grpc";
+
+export const protocolOf = (url: string): Protocol => (isWebSocket(url) ? "ws" : isGrpc(url) ? "grpc" : "http");
+
+/**
+ * The URL with the protocol's scheme, keeping TLS: https:// becomes wss:// and grpcs://. A URL with no scheme, such
+ * as localhost:3000, gets one; a path or a {{variable}} gets one in front, to be filled in.
+ */
+export function withProtocol(url: string, protocol: Protocol): string {
+  const match = /^\s*(https?|wss?|grpcs?):\/\//i.exec(url);
+  const secure = match ? match[1].toLowerCase().endsWith("s") : false;
+  const scheme = `${protocol}${secure ? "s" : ""}://`;
+  if (match) return scheme + url.slice(match[0].length);
+  // A relative URL is an HTTP one already: it gets the collection's baseUrl.
+  if (protocol === "http") return url;
+  return scheme + url.trim().replace(/^\/+/, "");
+}
+
 export type BodyMode =
   | "none"
   | "json"

@@ -151,6 +151,8 @@ interface State {
   /** The tabs with the active one up to date, for display. */
   allTabs: () => Tab[];
   newTab: () => void;
+  /** Opens a new tab with a request to this URL, such as a link in a response. */
+  openUrl: (url: string) => void;
   switchTab: (id: string) => void;
   closeTab: (id: string) => Promise<void>;
   /** Moves to the next (1) or previous (-1) tab. */
@@ -577,6 +579,11 @@ export const useStore = create<State>((set, get) => {
       const tabs = get().allTabs();
       const at = tabs.findIndex((t) => t.id === get().activeTab);
       activate(tab, [...tabs.slice(0, at + 1), tab, ...tabs.slice(at + 1)]);
+    },
+
+    openUrl: (url) => {
+      get().newTab();
+      get().setUrl(url);
     },
 
     switchTab: (id) => {

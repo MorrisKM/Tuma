@@ -12,6 +12,7 @@ const LANGUAGES: { id: Language; label: string; editor: EditorLanguage }[] = [
 ];
 
 const KEY = "tuma.snippetLanguage";
+const FULL_KEY = "tuma.snippetFull";
 
 /** The active request as code, with variables and inherited auth filled in. */
 export function SnippetDialog() {
@@ -24,6 +25,14 @@ export function SnippetDialog() {
       return "curl";
     }
   });
+  // With auth and pre-request scripts, or the request as written.
+  const [full, setFull] = useState(() => {
+    try {
+      return localStorage.getItem(FULL_KEY) !== "false";
+    } catch {
+      return true;
+    }
+  });
   const [result, setResult] = useState<Snippet | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -32,17 +41,28 @@ export function SnippetDialog() {
   useEffect(() => {
     try {
       localStorage.setItem(KEY, language);
+      localStorage.setItem(FULL_KEY, String(full));
     } catch {
       // Not remembered.
     }
-    snippet(toRequestFile(draft), draft.path, environment, language).then(
+    let current = true;
+    snippet(toRequestFile(draft), draft.path, environment, language, full).then(
       (s) => {
+        if (!current) return;
         setResult(s);
         setError(null);
       },
-      (e) => setError(String(e)),
+      (e) => {
+        if (!current) return;
+        setResult(null);
+        setError(String(e));
+      },
     );
-  }, [draft, environment, language]);
+    // Scripts can take a while: an answer for a choice since changed is dropped.
+    return () => {
+      current = false;
+    };
+  }, [draft, environment, language, full]);
 
   return (
     <div className="modal-backdrop" onMouseDown={close}>
@@ -61,6 +81,13 @@ export function SnippetDialog() {
               </button>
             ))}
           </div>
+          <label
+            className="check snippet-full"
+            title="On: the request's auth, inherited too, and what its pre-request scripts change, with the scripts as comments above. The scripts run, but what they set is not saved. Off: the request as written, with no auth and no Authorization headers."
+          >
+            <input type="checkbox" checked={full} onChange={(e) => setFull(e.target.checked)} />
+            Auth and scripts
+          </label>
           <button
             className="button primary"
             disabled={!result}

@@ -571,43 +571,104 @@ pub struct Snippet {
     unresolved: Vec<String>,
 }
 
-/// The request as code, with variables and inherited auth resolved.
+/// The request as code, with variables resolved. `full` adds its auth (inherited too) and what its pre-request
+/// scripts change, by running them as a send would but keeping what they set to this snippet; otherwise the code is
+/// the request as written, with no auth.
 #[tauri::command]
-pub fn snippet(
+pub async fn snippet(
     open: tauri::State<'_, Open>,
     request: RequestFile,
     path: Option<String>,
     environment: Option<String>,
     language: tuma_core::codegen::Language,
+    full: bool,
 ) -> Result<Snippet> {
     let file = RequestFile {
         url: tuma_core::runner::absolute_url(&request.url),
         ..request
     };
-    let guard = open.0.lock().unwrap();
-    let (prepared, secret_values) = match guard.as_ref() {
-        Some(ws) => (
-            ws.prepare(
-                &file,
-                path.clone()
-                    .or_else(|| tuma_core::runner::implicit_location(ws, &file.url))
-                    .as_deref(),
-                environment.as_deref(),
-                &[],
-                secrets(),
-            )
-            .map_err(|e| e.to_string())?,
-            ws.secret_values(environment.as_deref(), secrets())
-                .unwrap_or_default(),
-        ),
-        None => (tuma_core::workspace::prepare_standalone(&file, &[]), vec![]),
+    // A copy, so the workspace is not locked while scripts run.
+    let ws = open.0.lock().unwrap().clone();
+    let secret_values = ws
+        .as_ref()
+        .and_then(|ws| ws.secret_values(environment.as_deref(), secrets()).ok())
+        .unwrap_or_default();
+    let mut scripts = vec![];
+    let (request, unresolved) = if full {
+        let network = tuma_core::settings::network_for(ws.as_ref(), secrets())
+            .map_err(|e| format!("network settings: {e}"))?;
+        let execution = tuma_core::runner::rehearse(tuma_core::runner::Job {
+            workspace: ws.as_ref(),
+            request: &file,
+            path: path.as_deref(),
+            context: None,
+            environment: environment.as_deref(),
+            overrides: &[],
+            extra_checks: None,
+            secrets: secrets(),
+            history: None,
+            source: "",
+            allow_host: None,
+            scripting: Default::default(),
+            network: Some(network),
+            observer: None,
+        })
+        .await;
+        scripts = execution.pre_request;
+        match (execution.sent, execution.response) {
+            (Some(sent), _) => (sent, execution.unresolved),
+            (None, Err(failure)) => return Err(failure.message),
+            (None, Ok(_)) => unreachable!("a rehearsal sends nothing"),
+        }
+    } else {
+        let mut prepared = match ws.as_ref() {
+            Some(ws) => ws
+                .prepare(
+                    &file,
+                    path.clone()
+                        .or_else(|| tuma_core::runner::implicit_location(ws, &file.url))
+                        .as_deref(),
+                    environment.as_deref(),
+                    &[],
+                    secrets(),
+                )
+                .map_err(|e| e.to_string())?,
+            None => tuma_core::workspace::prepare_standalone(&file, &[]),
+        };
+        tuma_core::codegen::strip_auth(&mut prepared.request);
+        (prepared.request, prepared.unresolved)
     };
-    let code = tuma_core::codegen::generate(&prepared.request, language);
+    let mut code = tuma_core::codegen::generate(&request, language);
+    // cURL cannot run scripts: they ran once to make this code, and are shown above it to rerun for fresh values.
+    if !scripts.is_empty() {
+        let mut text = String::from(
+            "Made after running these pre-request scripts once; what they set is in the code below.\n",
+        );
+        for script in &scripts {
+            text.push_str(&format!(
+                "\n{} pre-request script:\n",
+                capitalized(&script.label)
+            ));
+            for line in script.source.trim_end().lines() {
+                text.push_str(&format!("  {line}\n"));
+            }
+        }
+        code = format!("{}\n{code}", tuma_core::codegen::comment(&text, language));
+    }
     Ok(Snippet {
         contains_secrets: secret_values.iter().any(|s| code.contains(s.as_str())),
         code,
-        unresolved: prepared.unresolved.into_iter().collect(),
+        unresolved: unresolved.into_iter().collect(),
     })
+}
+
+/// "collection Users" as "Collection Users".
+fn capitalized(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
 }
 
 /// Reads a cURL command into a request. Options Tuma ignores are returned so the UI can mention them.

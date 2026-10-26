@@ -167,8 +167,14 @@ export const agentSetup = () => invoke<AgentSetup>("agent_setup");
 export const variablesInScope = (path: string | null, environment: string | null) =>
   invoke<VariableHint[]>("variables_in_scope", { path, environment });
 
-export const snippet = (request: RequestFile, path: string | null, environment: string | null, language: Language) =>
-  invoke<Snippet>("snippet", { request, path, environment, language });
+/** `full` adds the request's auth and what its pre-request scripts change; the scripts run, storing nothing. */
+export const snippet = (
+  request: RequestFile,
+  path: string | null,
+  environment: string | null,
+  language: Language,
+  full: boolean,
+) => invoke<Snippet>("snippet", { request, path, environment, language, full });
 
 /** The request and the options Tuma ignored. */
 export const parseCurl = (command: string) => invoke<[RequestFile, string[]]>("parse_curl", { command });

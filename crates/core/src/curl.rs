@@ -338,7 +338,34 @@ pub(crate) fn auth_headers(request: &Request) -> (Vec<Pair>, Option<Pair>) {
             value,
             location: ApiKeyLocation::Query,
         } if !key.is_empty() => (vec![], Some((key.clone(), value.clone()))),
+        // A token there is once it has been fetched, as it is for a snippet with auth.
+        HttpAuth::OAuth2(oauth) => match &oauth.access_token {
+            Some(token) => (
+                vec![("Authorization".into(), prefixed(&oauth.prefix, token))],
+                None,
+            ),
+            None => (vec![], None),
+        },
+        HttpAuth::Jwt(jwt) => match crate::http::auth::jwt_token(jwt) {
+            Ok(token) => match &jwt.query_param {
+                Some(param) => (vec![], Some((param.clone(), token))),
+                None => (
+                    vec![("Authorization".into(), prefixed(&jwt.prefix, &token))],
+                    None,
+                ),
+            },
+            Err(_) => (vec![], None),
+        },
         _ => (vec![], None),
+    }
+}
+
+/// A token after its prefix, such as "Bearer", if it has one.
+fn prefixed(prefix: &str, token: &str) -> String {
+    if prefix.is_empty() {
+        token.to_string()
+    } else {
+        format!("{prefix} {token}")
     }
 }
 

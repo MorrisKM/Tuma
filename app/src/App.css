@@ -131,6 +131,148 @@
   color-scheme: light;
 }
 
+/* Palettes (Settings → Appearance): surfaces tinted by day and by night. Each needs the light rule, the dark one
+   under the media query (when the theme follows the system) and the dark one for a chosen dark theme. */
+
+:root[data-palette="harbor"] {
+  --bg: #fffcf6;
+  --bg-sidebar: #fdf3df;
+  --bg-rail: #f8e9cb;
+  --bg-input: #fffdf9;
+  --bg-subtle: #fdf5e6;
+  --bg-elevated: #fffdf9;
+  --bg-hover: #f6e9cf;
+  --bg-active: #f0dfbf;
+  --border: #ecdfc4;
+  --border-strong: #dcc9a5;
+  --text: #0b1f2c;
+  --text-2: #24394a;
+  --muted: #5d6e7a;
+  --faint: #9aa6ae;
+}
+
+:root[data-palette="grove"] {
+  --bg: #fffef6;
+  --bg-sidebar: #fcf9e3;
+  --bg-rail: #f4efcd;
+  --bg-input: #fffffa;
+  --bg-subtle: #fcfae8;
+  --bg-elevated: #fffffa;
+  --bg-hover: #f2edd1;
+  --bg-active: #eae3c3;
+  --border: #e7e1c1;
+  --border-strong: #d6cea8;
+  --text: #1b240f;
+  --text-2: #34401f;
+  --muted: #6b7158;
+  --faint: #a5a88f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-palette="harbor"]:not([data-theme="light"]) {
+    --bg: #001b29;
+    --bg-sidebar: #002233;
+    --bg-rail: #00131e;
+    --bg-input: #00263a;
+    --bg-subtle: #002233;
+    --bg-elevated: #032a40;
+    --bg-hover: #08344d;
+    --bg-active: #0f3f5c;
+    --border: #0c3650;
+    --border-strong: #184a69;
+    --text: #fdf0d5;
+    --text-2: #e3d7bf;
+    --muted: #8fa9bb;
+    --faint: #557489;
+  }
+
+  :root[data-palette="grove"]:not([data-theme="light"]) {
+    --bg: #161d0d;
+    --bg-sidebar: #1b2411;
+    --bg-rail: #10160a;
+    --bg-input: #1f2914;
+    --bg-subtle: #1b2411;
+    --bg-elevated: #222d16;
+    --bg-hover: #2a361c;
+    --bg-active: #334124;
+    --border: #2c3820;
+    --border-strong: #3d4b2e;
+    --text: #fefae0;
+    --text-2: #e4e0c6;
+    --muted: #a3a587;
+    --faint: #6a6f53;
+  }
+}
+
+:root[data-palette="harbor"][data-theme="dark"] {
+  --bg: #001b29;
+  --bg-sidebar: #002233;
+  --bg-rail: #00131e;
+  --bg-input: #00263a;
+  --bg-subtle: #002233;
+  --bg-elevated: #032a40;
+  --bg-hover: #08344d;
+  --bg-active: #0f3f5c;
+  --border: #0c3650;
+  --border-strong: #184a69;
+  --text: #fdf0d5;
+  --text-2: #e3d7bf;
+  --muted: #8fa9bb;
+  --faint: #557489;
+}
+
+:root[data-palette="grove"][data-theme="dark"] {
+  --bg: #161d0d;
+  --bg-sidebar: #1b2411;
+  --bg-rail: #10160a;
+  --bg-input: #1f2914;
+  --bg-subtle: #1b2411;
+  --bg-elevated: #222d16;
+  --bg-hover: #2a361c;
+  --bg-active: #334124;
+  --border: #2c3820;
+  --border-strong: #3d4b2e;
+  --text: #fefae0;
+  --text-2: #e4e0c6;
+  --muted: #a3a587;
+  --faint: #6a6f53;
+}
+
+/* Accents: outlines, focus rings, buttons and selection. --a is the color in the light theme, --a-dark a lighter
+   one that reads on dark surfaces; -text is the text on a filled button. */
+
+:root[data-accent="molten-lava"] { --a: #780000; --a-text: #ffffff; --a-dark: #e0524f; --a-dark-text: #1f0000; }
+:root[data-accent="flag-red"] { --a: #c1121f; --a-text: #ffffff; --a-dark: #f2555e; --a-dark-text: #2a0306; }
+:root[data-accent="deep-space-blue"] { --a: #003049; --a-text: #ffffff; --a-dark: #5aa6d6; --a-dark-text: #001a29; }
+:root[data-accent="steel-blue"] { --a: #669bbc; --a-text: #04202f; --a-dark: #85b4d2; --a-dark-text: #04202f; }
+:root[data-accent="olive-leaf"] { --a: #606c38; --a-text: #ffffff; --a-dark: #a9b96f; --a-dark-text: #1b220a; }
+:root[data-accent="black-forest"] { --a: #283618; --a-text: #fefae0; --a-dark: #86a35f; --a-dark-text: #111a07; }
+:root[data-accent="light-caramel"] { --a: #dda15e; --a-text: #3a2408; --a-dark: #dda15e; --a-dark-text: #3a2408; }
+:root[data-accent="copper"] { --a: #bc6c25; --a-text: #ffffff; --a-dark: #e39150; --a-dark-text: #2e1604; }
+
+:root[data-accent] {
+  --accent: var(--a);
+  --accent-hover: color-mix(in srgb, var(--a) 86%, black);
+  --accent-deep: color-mix(in srgb, var(--a) 72%, black);
+  --accent-text: var(--a-text);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-accent]:not([data-theme="light"]) {
+    --accent: var(--a-dark);
+    --accent-hover: color-mix(in srgb, var(--a-dark) 82%, white);
+    --accent-deep: color-mix(in srgb, var(--a-dark) 70%, black);
+    --accent-text: var(--a-dark-text);
+  }
+}
+
+:root[data-accent][data-theme="dark"] {
+  --accent: var(--a-dark);
+  --accent-hover: color-mix(in srgb, var(--a-dark) 82%, white);
+  --accent-deep: color-mix(in srgb, var(--a-dark) 70%, black);
+  --accent-text: var(--a-dark-text);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -804,6 +946,46 @@ body.resizing-y * {
   padding: 0 12px;
 }
 
+.url-box .protocol {
+  width: auto;
+  height: auto;
+  flex-shrink: 0;
+  border: none;
+  border-right: 1px solid var(--border);
+  border-radius: var(--radius) 0 0 var(--radius);
+  background-color: var(--bg-subtle);
+  font-weight: 600;
+  font-size: 12px;
+  padding: 0 24px 0 12px;
+  cursor: pointer;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 52%,
+    calc(100% - 10px) 52%;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+}
+
+.url-box .protocol:focus {
+  box-shadow: none;
+  background-color: var(--bg-hover);
+}
+
+.url-box .protocol-ws {
+  color: var(--syntax-keyword);
+}
+
+.url-box .protocol-grpc {
+  color: var(--syntax-number);
+}
+
+/* After the protocol, the method is no longer the first box. */
+.url-box .protocol + .method {
+  border-radius: 0;
+}
+
 .url-box .method:not(:disabled) {
   padding-right: 22px;
   background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
@@ -813,6 +995,17 @@ body.resizing-y * {
     calc(100% - 9px) 52%;
   background-size: 4px 4px;
   background-repeat: no-repeat;
+}
+
+select.method {
+  appearance: none;
+  cursor: pointer;
+}
+
+/* The list shows every method in plain text; only the chosen one is colored. */
+.url-box select option {
+  color: var(--text);
+  background: var(--bg-elevated);
 }
 
 .url-box .method:focus {
@@ -2615,6 +2808,15 @@ label.check {
   color: var(--muted);
 }
 
+/* A URL inside text, such as a header value. */
+.link-button.inline-link {
+  font: inherit;
+  text-align: left;
+  word-break: break-all;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .snippets .link-button {
   text-align: left;
 }
@@ -2813,39 +3015,387 @@ iframe.visualizer {
   word-break: break-all;
 }
 
-/* Settings */
+/* Settings: a list of sections beside cards, one per group. */
+
+.panel-body.settings-layout {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 28px;
+  padding: 20px 24px 48px;
+}
+
+.settings-nav {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 168px;
+  flex-shrink: 0;
+}
+
+.settings-nav button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-nav button:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.settings-nav button.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
 
 .settings {
+  flex: 1;
+  min-width: 0;
   max-width: 820px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  /* Below the sticky top when jumped to. */
+  scroll-margin-top: 4px;
+  transition: border-color 0.15s;
+}
+
+.settings-card:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.settings-card > header {
+  display: flex;
+  gap: 12px;
   align-items: flex-start;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border);
 }
 
-.settings > .form-grid,
-.settings > .cert-row,
-.settings > .cookie-manager,
-.settings > .current-table {
-  align-self: stretch;
+.settings-card > header:last-child {
+  border-bottom: none;
 }
 
-.settings h3 {
-  align-self: stretch;
+.settings-card h3 {
   font-size: 13.5px;
   font-weight: 650;
-  margin: 24px 0 6px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border);
+  margin: 3px 0 2px;
 }
 
-.settings h3:first-child {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: none;
+.settings-card header .hint {
+  margin: 0;
 }
 
-.settings > .hint,
-.settings > p {
+.settings-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.settings-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 14px 16px 16px;
+}
+
+.settings-card-body:empty {
+  display: none;
+}
+
+.settings-card-body > .form-grid,
+.settings-card-body > .cert-row,
+.settings-card-body > .cookie-manager,
+.settings-card-body > .current-table {
+  align-self: stretch;
+}
+
+.settings-card-body > .hint,
+.settings-card-body > p {
   margin-top: 0;
   margin-bottom: 10px;
+}
+
+.settings-card-body > .segmented + .hint,
+.settings-card-body > .segmented + .form-grid {
+  margin-top: 10px;
+}
+
+.settings-card-body h4 {
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 18px 0 8px;
+}
+
+.settings-card-body h4:first-child {
+  margin-top: 0;
+}
+
+/* Appearance */
+
+.theme-tiles,
+.palette-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-self: stretch;
+}
+
+.theme-tile,
+.palette-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    box-shadow 0.12s,
+    transform 0.12s;
+}
+
+.theme-tile:hover,
+.palette-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.theme-tile.active,
+.palette-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.theme-tile-label,
+.palette-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 0 2px;
+}
+
+.palette-name svg {
+  color: var(--accent);
+}
+
+.palette-card .small {
+  padding: 0 2px 2px;
+}
+
+/* A tiny window: rail, sidebar and a pane with lines, in fixed light or dark colors. */
+.theme-preview {
+  --p-bg: #ffffff;
+  --p-side: #f2f2f0;
+  --p-rail: #e6e6e3;
+  --p-line: #d6d6d2;
+  display: flex;
+  height: 64px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--p-bg);
+}
+
+.theme-preview-dark {
+  --p-bg: #161616;
+  --p-side: #1e1e1e;
+  --p-rail: #0d0d0d;
+  --p-line: #343434;
+}
+
+.theme-preview-system {
+  background: linear-gradient(115deg, #ffffff 50%, #161616 50%);
+}
+
+.theme-preview-system .tp-rail {
+  background: #e6e6e3;
+}
+
+.theme-preview-system .tp-side {
+  background: linear-gradient(115deg, #f2f2f0 60%, #1e1e1e 60%);
+}
+
+.theme-preview-system .tp-line,
+.theme-preview-system .tp-bar {
+  background: #8a8a8a;
+  opacity: 0.45;
+}
+
+.tp-rail {
+  width: 10px;
+  background: var(--p-rail);
+}
+
+.tp-side {
+  width: 30%;
+  background: var(--p-side);
+}
+
+.tp-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+}
+
+.tp-bar {
+  height: 9px;
+  border-radius: 3px;
+  border: 1.5px solid var(--accent);
+}
+
+.tp-line {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--p-line);
+}
+
+.tp-line.short {
+  width: 60%;
+}
+
+.palette-strip {
+  display: flex;
+  height: 40px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.palette-strip span {
+  flex: 1;
+}
+
+.accent-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+  align-self: stretch;
+}
+
+.accent-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.accent-option:hover {
+  border-color: var(--border-strong);
+}
+
+.accent-option.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.accent-dot {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  /* A ring, so dark colors still show on dark surfaces. */
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+
+/* The palette's own: a ring around its accent. */
+.accent-dot.auto {
+  outline: 2px dashed var(--border-strong);
+  outline-offset: 2px;
+  width: 12px;
+  height: 12px;
+  margin: 0 2px;
+}
+
+.accent-preview {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px;
+  align-self: stretch;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+}
+
+.accent-preview .button {
+  pointer-events: none;
+}
+
+.accent-preview-input {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-h);
+  padding: 0 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: var(--bg-input);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .panel-body.settings-layout {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .settings-nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: auto;
+  }
+
+  .theme-tiles,
+  .palette-cards {
+    grid-template-columns: 1fr;
+  }
 }
 
 .form-grid {
@@ -4221,4 +4771,8 @@ td.mock-method {
 body.tree-dragging,
 body.tree-dragging * {
   cursor: grabbing !important;
+}
+
+.snippet-full {
+  margin-left: auto;
 }

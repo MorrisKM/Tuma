@@ -24,6 +24,33 @@ pub fn generate(request: &Request, language: Language) -> String {
     }
 }
 
+/// Takes the auth out of a request: the Auth tab's, and Authorization headers typed in, in it or in a folder.
+pub fn strip_auth(request: &mut Request) {
+    request.auth = crate::http::Auth::None;
+    request.headers.retain(|h| {
+        let name = h.name.trim();
+        !name.eq_ignore_ascii_case("authorization")
+            && !name.eq_ignore_ascii_case("proxy-authorization")
+    });
+}
+
+/// Text as comment lines above code in the language.
+pub fn comment(text: &str, language: Language) -> String {
+    let marker = match language {
+        Language::Curl | Language::Python => "#",
+        Language::JavaScript => "//",
+    };
+    text.lines()
+        .map(|line| {
+            if line.is_empty() {
+                format!("{marker}\n")
+            } else {
+                format!("{marker} {line}\n")
+            }
+        })
+        .collect()
+}
+
 /// The headers to write out: the request's own, its content type when the body implies one and none is set, and auth.
 fn headers(request: &Request, implied_content_type: Option<&str>) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = request

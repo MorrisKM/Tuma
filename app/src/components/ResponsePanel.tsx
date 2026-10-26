@@ -12,6 +12,10 @@ import { MessageLog } from "./WebSocketViews";
 import { ConsoleView, TestsView, testsLabel, VisualizerView } from "./ScriptResults";
 import { Logo } from "./ui";
 import { Tabs } from "./Tabs";
+import { findUrls, urlLinks } from "../links";
+
+/** Links in a response open a new request; made once, so the editor is not reconfigured on every render. */
+const links = urlLinks((url) => useStore.getState().openUrl(url));
 
 type Tab = "body" | "events" | "tests" | "console" | "visualize" | "headers" | "cookies" | "timing" | "request";
 type View = "pretty" | "raw" | "preview";
@@ -437,6 +441,7 @@ function BodyView({ response }: { response: Response }) {
             value={edited ?? (shown === "pretty" ? pretty : bodyText)}
             onChange={setEdited}
             language={shown === "pretty" ? language : "text"}
+            extension={links}
           />
         </div>
       )}
@@ -460,12 +465,33 @@ function HeaderTable({ headers }: { headers: Header[] }) {
         {headers.map((h, i) => (
           <tr key={i}>
             <th>{h.name}</th>
-            <td className="mono">{h.value}</td>
+            <td className="mono">
+              <Linked text={h.value} />
+            </td>
           </tr>
         ))}
       </tbody>
     </table>
   );
+}
+
+/** Text with its URLs as links that open a new request, such as a Location header. */
+function Linked({ text }: { text: string }) {
+  const found = findUrls(text);
+  if (!found.length) return <>{text}</>;
+  const parts: React.ReactNode[] = [];
+  let at = 0;
+  for (const { url, index } of found) {
+    parts.push(text.slice(at, index));
+    parts.push(
+      <button key={index} className="link-button inline-link" title="Open in a new request" onClick={() => useStore.getState().openUrl(url)}>
+        {url}
+      </button>,
+    );
+    at = index + url.length;
+  }
+  parts.push(text.slice(at));
+  return <>{parts}</>;
 }
 
 const PHASES: { key: keyof Timing; label: string }[] = [
