@@ -1,7 +1,7 @@
 // Shared by the landing page and the docs. Change the repo, the release or the donation link here.
 const TUMA = {
   repo: "MorrisKM/Tuma",
-  version: "1.0.1",
+  version: "1.1.0",
   donate: "https://github.com/sponsors/MorrisKM",
 };
 

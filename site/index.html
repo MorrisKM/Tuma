@@ -804,8 +804,7 @@
         visibility: hidden;
       }
 
-      .os.mine .os-head small,
-      .os[data-os="mac"] .os-head small {
+      .os.mine .os-head small {
         visibility: visible;
       }
 
@@ -1451,7 +1450,7 @@ expect:
           <div class="download reveal">
             <div class="dl-top">
               <div>
-                <span class="eyebrow">Download · v<span data-version>1.0.1</span></span>
+                <span class="eyebrow">Download · v<span data-version>1.1.0</span></span>
                 <h2>Get Tuma for your computer</h2>
                 <p>Free and open source. Every package also includes the <code>tuma</code> command.</p>
               </div>
@@ -1471,10 +1470,10 @@ expect:
               <div class="os" data-os="mac">
                 <div class="os-head">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.8-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8 1.6 0 2 .8 3.4.8 1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9 0 0-2.6-1-2.6-4.1ZM13.9 5c.7-.9 1.2-2 1-3.2-1 0-2.3.7-3 1.6-.7.8-1.3 2-1.1 3.1 1.2.1 2.3-.6 3.1-1.5Z" /></svg>
-                  macOS <small>Coming soon</small>
+                  macOS <small>Your system</small>
                 </div>
-                <p style="margin: 8px 0 0; color: var(--text-2); font-size: 14.5px">The signed Mac app is on its way. Until then, build it from source in a few minutes, or watch the repo to hear when it lands.</p>
-                <a class="file" href="docs.html#install"><svg width="18" height="18"><use href="#dl" /></svg>Build from source<small>docs</small></a>
+                <a class="file" data-file="Tuma_{v}_aarch64.dmg"><svg width="18" height="18"><use href="#dl" /></svg>Apple Silicon<small>.dmg · M1 and later</small></a>
+                <p style="margin: 8px 0 0; color: var(--text-2); font-size: 14.5px">Not signed by Apple yet: the first time, macOS blocks it. Open System Settings → Privacy &amp; Security and click Open Anyway. Intel Macs: <a href="docs.html#install">build from source</a>.</p>
               </div>
               <div class="os" data-os="linux">
                 <div class="os-head">
@@ -1488,9 +1487,9 @@ expect:
             </div>
             <div class="pm">
               <div class="code"><span class="c"># Linux, from the folder you downloaded to</span>
-sudo apt install ./Tuma_<span data-version>1.0.1</span>_amd64.deb           <span class="c"># Debian, Ubuntu (keep the ./)</span>
-sudo dnf install ./Tuma-<span data-version>1.0.1</span>-1.x86_64.rpm         <span class="c"># Fedora</span>
-chmod +x Tuma_<span data-version>1.0.1</span>_amd64.AppImage &amp;&amp; ./Tuma_<span data-version>1.0.1</span>_amd64.AppImage   <span class="c"># any distro</span><button class="copy">Copy</button></div>
+sudo apt install ./Tuma_<span data-version>1.1.0</span>_amd64.deb           <span class="c"># Debian, Ubuntu (keep the ./)</span>
+sudo dnf install ./Tuma-<span data-version>1.1.0</span>-1.x86_64.rpm         <span class="c"># Fedora</span>
+chmod +x Tuma_<span data-version>1.1.0</span>_amd64.AppImage &amp;&amp; ./Tuma_<span data-version>1.1.0</span>_amd64.AppImage   <span class="c"># any distro</span><button class="copy">Copy</button></div>
             </div>
           </div>
         </div>
