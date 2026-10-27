@@ -6136,7 +6136,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tuma-app"
-version = "1.2.0"
+version = "1.3.0"
 dependencies = [
  "base64 0.23.1",
  "dirs 6.0.0",
@@ -6155,7 +6155,7 @@ dependencies = [
 
 [[package]]
 name = "tuma-cli"
-version = "1.2.0"
+version = "1.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -6170,7 +6170,7 @@ dependencies = [
 
 [[package]]
 name = "tuma-core"
-version = "1.2.0"
+version = "1.3.0"
 dependencies = [
  "aes",
  "aes-gcm",
