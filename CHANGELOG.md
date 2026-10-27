@@ -11,6 +11,8 @@ and the `tuma` command's options and `--json` output are the public interface.
   inline), with what changed marked as in a diff tool, plus their status, time, size, environment and request. JSON
   is compared pretty-printed with its keys sorted, and keys or headers that change on every call can be ignored.
 - Compare environments: send the request once in each chosen environment and compare what came back.
+- Header suggestions: a request's or folder's Headers table offers common header names as you type or click, and
+  values for the header in the row, such as content types for Content-Type or `Bearer {{token}}` for Authorization.
 - Compare text, below Mock servers in the sidebar: paste or drop two texts (JSON, XML, HTML, plain text or anything
   else) and see what differs, side by side as in a diff tool. Both sides can be edited; Format JSON pretty-prints both
   with their keys sorted and can leave out keys that always differ.
@@ -25,8 +27,6 @@ and the `tuma` command's options and `--json` output are the public interface.
 
 - A parameter, header or other field with a value too long for it wraps when clicked and grows to show the whole
   value, up to about eight lines, then scrolls. It goes back to one line when you leave it.
-- Header suggestions: a request's or folder's Headers table offers common header names as you type or click, and
-  values for the header in the row, such as content types for Content-Type or `Bearer {{token}}` for Authorization.
 
 ## 1.1.1 (2026-10-27)
 
