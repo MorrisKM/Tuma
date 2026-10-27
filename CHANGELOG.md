@@ -3,6 +3,26 @@
 All notable changes to Tuma. Versions follow [Semantic Versioning](https://semver.org/): the workspace file format
 and the `tuma` command's options and `--json` output are the public interface.
 
+## Unreleased
+
+### Added
+
+- Scripts, in the sidebar below Mock servers: JavaScript that runs on its own rather than as part of a request, for
+  flows such as creating test data across several APIs. It can loop and send many requests (`tuma.get`, `tuma.post`,
+  `tuma.request`, with `query`, `headers` and `json`), uses the selected environment and its secrets through
+  `pm.environment`, has a form of inputs (`tuma.inputs`), offers files to save (`tuma.saveFile`, such as a CSV), and
+  shows its console output live, with what it returns at the end. It has no time limit and can be stopped.
+- Shell, below Scripts: run commands on this computer, such as `env/bin/python flow.py`, with a form for their
+  arguments (an input can be passed as `--count 5`, as a flag when ticked, or as `TUMA_INPUT_<NAME>`), the folder they
+  run in, environment variables filled from `{{variables}}` so tokens can stay in a secret variable, live output and
+  a Stop button.
+- `tuma script list` and `tuma script run <name> --env UAT --input count=5` run the same scripts from a terminal.
+  Scripts are kept in the workspace's `scripts/` folder, so they are shared with it in git.
+- Copy params, headers and form fields to another request: each row has a Copy button and each table a "Copy all", and
+  pasting into a Name field adds the rows. They are copied as `name: value` lines (`//` before disabled ones), as in
+  Postman's bulk edit, so they paste between Tuma and Postman too; pasting a query string or URL (`?page=2&limit=10`)
+  or rows from a spreadsheet works as well.
+
 ## 1.2.0 (2026-10-27)
 
 ### Added

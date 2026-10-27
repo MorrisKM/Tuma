@@ -279,7 +279,7 @@ fn changes(before: &BTreeMap<String, String>, after: &BTreeMap<String, String>) 
 
 /// Stores what scripts did to variables. Environment changes without a selected environment are dropped, as in
 /// Postman.
-fn store_changes(
+pub(crate) fn store_changes(
     ws: &Workspace,
     input: &script::Vars,
     output: &script::VarsOut,
@@ -414,6 +414,7 @@ async fn run(job: Job<'_>, send: bool) -> Execution {
             response: None,
             vars,
             vault,
+            inputs: None,
         })
     };
     let run_scripts = |event: Event,

@@ -44,9 +44,10 @@ rustls-platform-verifier = "0.7"
 schemars = "1"
 serde.workspace = true
 serde-saphyr = "2"
+shlex = "2"
 serde_json.workspace = true
 thiserror = "2"
-tokio = { workspace = true, features = ["net", "time", "fs", "io-util", "sync"] }
+tokio = { workspace = true, features = ["net", "time", "fs", "io-util", "sync", "process"] }
 tokio-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
 tonic = { version = "0.14", default-features = false, features = ["channel", "codegen"] }
 tonic-prost = "0.14"

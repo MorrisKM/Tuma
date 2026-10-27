@@ -95,6 +95,7 @@ confirmed). Hawk, NTLM, Akamai EdgeGrid and ASAP come from the long-standing doc
 | Feature                                                                               | Tuma                         |
 | ------------------------------------------------------------------------------------- | ---------------------------- |
 | Run a collection or folder: order, iterations, delay, data file (CSV or JSON)         | Yes, M5                      |
+| Standalone scripts and shell commands (Postman Flows-like automation, in code)        | Tuma extra: Scripts and Shell pages, `tuma script run` |
 | Persisted results, export of results                                                  | Yes, M5: the last 50 runs per workspace; JSON and JUnit export |
 | Postman CLI / Newman: run collections in CI, JUnit and HTML reporters                 | Yes, `tuma` CLI M3; JUnit M5; HTML not yet |
 | Performance testing: virtual users, ramp-up, latency and error charts                 | Local: in the runner, after v1.0 |

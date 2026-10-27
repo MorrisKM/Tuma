@@ -3,7 +3,7 @@
 
 import { create } from "zustand";
 
-export type Section = "collections" | "environments" | "history" | "mocks";
+export type Section = "collections" | "environments" | "history" | "mocks" | "scripts" | "shell";
 export type Orientation = "stacked" | "side";
 
 interface Layout {

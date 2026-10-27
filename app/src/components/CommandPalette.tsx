@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { requests, useStore } from "../store";
 import { layout } from "../layout";
 import { mocks } from "../mocks";
+import { scripts } from "../scripts";
 import { applyTheme, type Theme } from "../theme";
 import { focusUrl } from "./UrlEditor";
 
@@ -67,6 +68,10 @@ export function CommandPalette() {
       ...(workspace
         ? [
             { id: "mock-workspace", label: "Start a mock server for the workspace", hint: "Mock", run: () => void mocks.start(null) },
+            { id: "scripts", label: "Scripts: JavaScript that runs on its own", hint: "Scripts", run: () => layout.show("scripts") },
+            { id: "new-script", label: "New script", hint: "Scripts", run: () => void scripts.create("javascript") },
+            { id: "shell", label: "Shell: run commands such as python or bash scripts", hint: "Shell", run: () => layout.show("shell") },
+            { id: "new-shell", label: "New shell script", hint: "Shell", run: () => void scripts.create("command") },
             { id: "docs-workspace", label: "Generate API docs for the workspace…", hint: "Docs", run: () => useStore.setState({ docs: { scope: null } }) },
             ...(s.draft.path
               ? [{ id: "perf-request", label: "Performance test of this request…", hint: "Performance", run: () => useStore.setState({ view: { kind: "perf", path: s.draft.path! } }) }]

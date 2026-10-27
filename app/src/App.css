@@ -1334,6 +1334,32 @@ select.method {
   visibility: hidden;
 }
 
+/* Copy shows on the row under the pointer or being edited; the empty row keeps its place. */
+.kv-row > .kv-copy {
+  flex: none;
+  width: 24px;
+  margin: 0 0 0 3px;
+  opacity: 0;
+}
+
+.kv-row:hover > .kv-copy,
+.kv-row:focus-within > .kv-copy,
+.kv-row > .kv-copy:focus-visible {
+  opacity: 1;
+}
+
+.kv-row:has(+ .kv-footer) {
+  border-bottom: none;
+}
+
+.kv-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+
 .kv-row.disabled .kv-name,
 .kv-row.disabled .kv-value {
   opacity: 0.45;
@@ -5111,4 +5137,199 @@ body.tree-dragging * {
 
 .json-status .link-button + .link-button {
   margin-left: 4px;
+}
+
+/* Scripts and Shell pages */
+
+.crumb-input {
+  height: 26px;
+  min-width: 120px;
+  max-width: 360px;
+  padding: 0 6px;
+  margin: 0 -6px 0 0;
+  border-color: transparent;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.crumb-input:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-input);
+}
+
+.script-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 1fr);
+  gap: 16px;
+  overflow: hidden;
+}
+
+.script-edit,
+.script-run {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  min-width: 0;
+}
+
+.script-edit {
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.script-edit > .hint {
+  margin: 0;
+}
+
+.script-description {
+  width: 100%;
+}
+
+.script-editor {
+  flex: 1 0 auto;
+  min-height: 260px;
+  max-height: 60vh;
+}
+
+.script-editor .cm-editor {
+  height: 100%;
+}
+
+.script-form {
+  grid-template-columns: 90px 1fr;
+  margin: 0;
+}
+
+.script-cwd {
+  display: flex;
+  gap: 6px;
+}
+
+.script-cwd input {
+  flex: 1;
+  min-width: 0;
+}
+
+.script-heading {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.script-inputs input:not([type="checkbox"]),
+.script-inputs select {
+  width: 100%;
+  min-width: 70px;
+}
+
+.script-inputs td {
+  vertical-align: middle;
+  padding: 4px 6px;
+}
+
+.script-inputs th {
+  width: auto;
+}
+
+.script-values {
+  grid-template-columns: minmax(90px, auto) 1fr;
+  margin: 0;
+}
+
+.script-values > label {
+  overflow-wrap: anywhere;
+}
+
+.script-check {
+  justify-self: start;
+}
+
+.script-output-head {
+  min-height: 24px;
+}
+
+.script-output {
+  flex: 1;
+  min-height: 160px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.script-output-empty {
+  margin: 0;
+  font-family: var(--sans);
+}
+
+.script-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.script-line.command {
+  color: var(--muted);
+}
+
+.script-line.stderr,
+.script-line.error {
+  color: var(--fail);
+}
+
+.script-line.warn {
+  color: var(--redirect);
+}
+
+.script-line.debug {
+  color: var(--muted);
+}
+
+.script-result {
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px dashed var(--border-strong);
+  font: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.script-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.script-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12.5px;
+}
+
+@media (max-width: 900px) {
+  .script-body {
+    grid-template-columns: 1fr;
+    grid-auto-rows: max-content;
+    overflow-y: auto;
+  }
+
+  .script-edit {
+    overflow: visible;
+  }
+
+  .script-output {
+    flex: none;
+    height: 320px;
+  }
 }

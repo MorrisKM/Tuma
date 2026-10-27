@@ -5,6 +5,7 @@ mod mocks;
 mod oauth;
 mod perf;
 mod runs;
+mod scripts;
 mod settings;
 mod sockets;
 mod updates;
@@ -347,6 +348,7 @@ pub fn run() {
         .manage(grpc::Calls::default())
         .manage(mocks::Mocks::default())
         .manage(perf::Running::default())
+        .manage(scripts::Running::default())
         .manage(updates::Pending::default())
         .register_uri_scheme_protocol(visualizer::SCHEME, visualizer::serve)
         .setup(|app| {
@@ -430,6 +432,15 @@ pub fn run() {
             runs::runs_list,
             runs::run_read,
             runs::run_export,
+            scripts::scripts_list,
+            scripts::script_read,
+            scripts::script_write,
+            scripts::script_create,
+            scripts::script_rename,
+            scripts::script_delete,
+            scripts::script_run,
+            scripts::script_stop,
+            scripts::script_save_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

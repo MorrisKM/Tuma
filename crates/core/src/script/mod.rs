@@ -70,6 +70,9 @@ pub struct Input {
     pub vars: Vars,
     /// Secret variables, for `pm.vault.get`.
     pub vault: BTreeMap<String, String>,
+    /// For a standalone script: the values of its inputs, as `tuma.inputs`. None for a request's scripts.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inputs: Option<Value>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -127,7 +130,34 @@ pub struct Output {
     /// `pm.visualizer.set`: `{template, data, options}`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub visualizer: Option<Value>,
+    /// A standalone script's `tuma.saveFile` calls, in order.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<SavedFile>,
+    /// What a standalone script returned, when it returned something.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<Value>,
 }
+
+/// A file a standalone script made with `tuma.saveFile`, for the person to save where they like.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SavedFile {
+    pub name: String,
+    pub content: String,
+}
+
+/// How a standalone script is watched while it runs: it can be stopped, and its console lines are passed on as they
+/// are logged rather than only at the end.
+#[derive(Clone)]
+pub struct Live {
+    pub stop: Arc<AtomicBool>,
+    pub on_log: Arc<dyn Fn(&LogLine) + Send + Sync>,
+}
+
+/// How long `pm.sendRequest` waits for a response when the request does not say, within the scripts' own limit.
+const SEND_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// Standalone scripts have no time limit of their own: they run until they finish or are stopped.
+const NO_LIMIT: Duration = Duration::from_secs(60 * 60 * 24 * 365);
 
 /// Variables after the scripts ran. The caller compares them with what it passed in to see what changed.
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -227,12 +257,39 @@ pub fn run(
         Event::Test => "test",
     }
     .into();
+    on_thread(&scripts, &input, allow, network, timeout, None)
+}
+
+/// Runs a script that is not part of a request, such as one from the Scripts page: `input.inputs` holds its inputs.
+/// It has no time limit, can be stopped with `live.stop`, and its console lines go to `live.on_log` as they come.
+pub fn run_standalone(
+    script: &Script,
+    input: &Input,
+    network: Option<Arc<http::Network>>,
+    live: Live,
+) -> Output {
+    let mut input = input.clone();
+    input.info.event_name = "script".into();
+    if input.inputs.is_none() {
+        input.inputs = Some(json!({}));
+    }
+    on_thread(&[script], &input, None, network, NO_LIMIT, Some(live))
+}
+
+fn on_thread(
+    scripts: &[&Script],
+    input: &Input,
+    allow: Option<AllowHost>,
+    network: Option<Arc<http::Network>>,
+    timeout: Duration,
+    live: Option<Live>,
+) -> Output {
     let result = std::thread::scope(|scope| {
         std::thread::Builder::new()
             .name("tuma-script".into())
             .stack_size(THREAD_STACK)
             .spawn_scoped(scope, || {
-                run_scripts(&scripts, &input, allow, network, timeout)
+                run_scripts(scripts, input, allow, network, timeout, live)
             })
             .map_err(|e| e.to_string())
             .and_then(|t| {
@@ -265,6 +322,7 @@ fn run_scripts(
     allow: Option<AllowHost>,
     network: Option<Arc<http::Network>>,
     timeout: Duration,
+    live: Option<Live>,
 ) -> Result<Output, String> {
     let runtime = Runtime::new().map_err(|e| e.to_string())?;
     runtime.set_memory_limit(MEMORY_LIMIT);
@@ -273,8 +331,16 @@ fn run_scripts(
     // Off while Tuma's own code collects the results, so a script that used up its time still reports what it did.
     let enforce = Arc::new(AtomicBool::new(true));
     let handler_enforce = enforce.clone();
+    let stop = live.as_ref().map(|l| l.stop.clone());
+    let handler_stop = stop.clone();
+    let stopped = move || {
+        handler_stop
+            .as_ref()
+            .is_some_and(|s| s.load(Ordering::Relaxed))
+    };
+    let handler_stopped = stopped.clone();
     runtime.set_interrupt_handler(Some(Box::new(move || {
-        handler_enforce.load(Ordering::Relaxed) && Instant::now() > deadline
+        handler_enforce.load(Ordering::Relaxed) && (Instant::now() > deadline || handler_stopped())
     })));
     let context = Context::full(&runtime).map_err(|e| e.to_string())?;
     let console: Rc<RefCell<Vec<LogLine>>> = Rc::default();
@@ -284,11 +350,16 @@ fn run_scripts(
         let js = |r: rquickjs::Result<()>, ctx: &Ctx| r.map_err(|e| exception(ctx, e));
         let native = Object::new(ctx.clone()).map_err(|e| e.to_string())?;
         let log = console.clone();
+        let on_log = live.as_ref().map(|l| l.on_log.clone());
         js(
             native.set(
                 "log",
                 Function::new(ctx.clone(), move |level: String, text: String| {
-                    log.borrow_mut().push(LogLine { level, text });
+                    let line = LogLine { level, text };
+                    if let Some(on_log) = &on_log {
+                        on_log(&line);
+                    }
+                    log.borrow_mut().push(line);
                 }),
             ),
             &ctx,
@@ -339,12 +410,14 @@ fn run_scripts(
                 "__run",
                 (Some(script.label.clone()), Some(script.source.clone())),
             )
-            .and_then(|_| drain(&ctx, &globals, deadline))
+            .and_then(|_| drain(&ctx, &globals, deadline, &stopped))
             .and_then(|_| call("__collectTests", (None, None)));
             if let Err(e) = step {
                 failure = Some(ScriptError {
                     script: script.label.clone(),
-                    message: if e == "timeout" || Instant::now() > deadline {
+                    message: if stopped() {
+                        "stopped".into()
+                    } else if e == "timeout" || Instant::now() > deadline {
                         format!(
                             "the scripts took longer than {}s and were stopped",
                             timeout.as_secs()
@@ -375,7 +448,12 @@ fn run_scripts(
 }
 
 /// Runs promise jobs and timers until there is nothing left to do.
-fn drain<'js>(ctx: &Ctx<'js>, globals: &Object<'js>, deadline: Instant) -> Result<(), String> {
+fn drain<'js>(
+    ctx: &Ctx<'js>,
+    globals: &Object<'js>,
+    deadline: Instant,
+    stopped: &dyn Fn() -> bool,
+) -> Result<(), String> {
     loop {
         while ctx.execute_pending_job() {}
         if ctx.has_exception() {
@@ -392,7 +470,14 @@ fn drain<'js>(ctx: &Ctx<'js>, globals: &Object<'js>, deadline: Instant) -> Resul
         if Instant::now() + wait > deadline {
             return Err("timeout".into());
         }
-        std::thread::sleep(wait);
+        // In steps, so a stopped script does not sleep on.
+        let until = Instant::now() + wait;
+        while Instant::now() < until {
+            if stopped() {
+                return Err("stopped".into());
+            }
+            std::thread::sleep((until - Instant::now()).min(Duration::from_millis(100)));
+        }
         globals
             .get::<_, Function>("__fireTimer")
             .and_then(|f| f.call::<_, ()>(()))
@@ -561,7 +646,7 @@ fn send_blocking(
         .settings
         .timeout_ms
         .map(Duration::from_millis)
-        .unwrap_or(remaining)
+        .unwrap_or(SEND_TIMEOUT)
         .min(remaining);
     request.settings.timeout_ms = Some(limit.as_millis().max(1) as u64);
     let result = std::thread::spawn(move || {

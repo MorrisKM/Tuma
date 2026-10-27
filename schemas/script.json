@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tuma script settings (scripts/<name>.yaml)",
+  "description": "`scripts/<name>.yaml`.",
+  "type": "object",
+  "properties": {
+    "description": {
+      "type": "string"
+    },
+    "inputs": {
+      "description": "Values asked for before each run: `tuma.inputs` in JavaScript, arguments and `TUMA_INPUT_<NAME>` variables\nfor a command.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ScriptInput"
+      }
+    },
+    "command": {
+      "description": "For a command: what to run, as on a command line, such as `env/bin/python flow.py --verbose`. `{{variables}}`\nfrom the environment and inputs are filled in. Empty for a JavaScript script.",
+      "type": "string"
+    },
+    "cwd": {
+      "description": "The folder a command runs in: absolute, from `~`, or relative to the workspace folder (for a `.tuma` workspace,\nthe project it is in). Empty: that folder.",
+      "type": "string"
+    },
+    "env": {
+      "description": "Environment variables for a command, with `{{variables}}`, such as `API_TOKEN: {{token}}`.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/KeyValue"
+      }
+    }
+  },
+  "$defs": {
+    "ScriptInput": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "default": ""
+        },
+        "type": {
+          "$ref": "#/$defs/InputKind"
+        },
+        "label": {
+          "description": "Shown instead of the name.",
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "default": {
+          "description": "The value it starts with; `true` or `false` for a checkbox.",
+          "type": "string"
+        },
+        "options": {
+          "description": "The values to choose from, for `type: choice`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "arg": {
+          "description": "For a command: how the value is passed, such as `--count` (giving `--count 5`) or `--count=` (giving\n`--count=5`). A checkbox passes the flag alone when ticked. Empty values are left out.",
+          "type": "string"
+        }
+      }
+    },
+    "InputKind": {
+      "type": "string",
+      "enum": [
+        "text",
+        "number",
+        "boolean",
+        "choice"
+      ]
+    },
+    "KeyValue": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "default": ""
+        },
+        "value": {
+          "type": "string",
+          "default": ""
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

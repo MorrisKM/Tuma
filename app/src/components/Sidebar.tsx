@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Clock,
   Download,
+  FileCode,
   Folder,
   FolderOpen,
   FolderPlus,
@@ -24,6 +25,7 @@ import {
   Settings,
   Square,
   Sun,
+  Terminal,
   Trash2,
   Upload,
   X,
@@ -32,6 +34,7 @@ import { useEffect, useRef, useState } from "react";
 import * as api from "../api";
 import { layout, type Section, useLayout } from "../layout";
 import { mockName, mocks, useMocks } from "../mocks";
+import { scripts, useScripts } from "../scripts";
 import { folders, requests, useStore } from "../store";
 import { applyTheme, type Theme, useTheme } from "../theme";
 import type { HistoryEntry, TreeNode } from "../types";
@@ -44,6 +47,8 @@ const SECTIONS: { id: Section; label: string; icon: typeof Library }[] = [
   { id: "environments", label: "Environments", icon: Layers },
   { id: "history", label: "History", icon: Clock },
   { id: "mocks", label: "Mock servers", icon: Server },
+  { id: "scripts", label: "Scripts", icon: FileCode },
+  { id: "shell", label: "Shell", icon: Terminal },
 ];
 
 /** The icon rail and, beside it, the panel of the chosen section, which can be resized and hidden. */
@@ -62,6 +67,8 @@ export function Sidebar() {
             {section === "environments" && <Environments />}
             {section === "history" && <History />}
             {section === "mocks" && <Mocks />}
+            {section === "scripts" && <Scripts kind="javascript" />}
+            {section === "shell" && <Scripts kind="command" />}
           </aside>
           <Splitter
             axis="x"
@@ -798,6 +805,69 @@ function Mocks() {
             Start mock server
           </button>
         </form>
+      </div>
+    </>
+  );
+}
+
+function Scripts({ kind }: { kind: "javascript" | "command" }) {
+  const workspace = useStore((s) => s.workspace);
+  const view = useStore((s) => s.view);
+  const list = useScripts((s) => s.list);
+  const runs = useScripts((s) => s.runs);
+  const shell = kind === "command";
+
+  useEffect(() => {
+    void scripts.load();
+  }, [workspace?.root]);
+
+  if (!workspace) return <p className="muted small sidebar-note">Open a workspace to keep scripts in it.</p>;
+  const shown = list.filter((s) => s.kind === kind);
+  return (
+    <>
+      <SectionHead title={shell ? "Shell" : "Scripts"}>
+        <IconButton label={shell ? "New shell script" : "New script"} onClick={() => void scripts.create(kind)}>
+          <Plus size={15} />
+        </IconButton>
+      </SectionHead>
+      <div className="sidebar-body">
+        {shown.length > 0 && (
+          <ul className="tree mock-list">
+            {shown.map((s) => (
+              <li key={s.name}>
+                <div
+                  className={`tree-row flat${view.kind === "script" && view.name === s.name ? " active" : ""}`}
+                  onClick={() => useStore.setState({ view: { kind: "script", name: s.name } })}
+                  title={s.description || s.name}
+                >
+                  {runs[s.name]?.running ? <span className="live-dot" /> : shell ? <Terminal size={14} className="muted" /> : <FileCode size={14} className="muted" />}
+                  <span className="tree-name">
+                    {s.name}
+                    {s.description && <span className="muted small"> · {s.description}</span>}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        {shown.length === 0 && (
+          <div className="sidebar-empty">
+            {shell ? <Terminal size={28} strokeWidth={1.5} className="muted" /> : <FileCode size={28} strokeWidth={1.5} className="muted" />}
+            <p className="muted small">
+              {shell
+                ? "Commands to run on this computer, such as python flow.py --count 5, with a form for their arguments and their output here."
+                : "JavaScript that runs on its own: loops, many requests, test data, files to save. It uses the selected environment."}
+            </p>
+            <button className="button small" onClick={() => void scripts.create(kind)}>
+              <Plus size={13} />
+              {shell ? "New shell script" : "New script"}
+            </button>
+          </div>
+        )}
+        <p className="muted small sidebar-note">
+          Kept in the workspace's <code>scripts</code> folder, so they are shared with it. Run them in a terminal with{" "}
+          <code>tuma script run</code>.
+        </p>
       </div>
     </>
   );

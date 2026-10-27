@@ -25,6 +25,10 @@ pub fn schemas() -> Vec<(&'static str, Value)> {
             "environment",
             schema::<EnvironmentFile>("Tuma environment (environments/<name>.yaml)"),
         ),
+        (
+            "script",
+            schema::<crate::scripts::ScriptFile>("Tuma script settings (scripts/<name>.yaml)"),
+        ),
     ]
 }
 
@@ -129,6 +133,9 @@ pub fn check_workspace(root: &Path) -> Vec<Problem> {
     for file in yaml_files(&root.join("environments")) {
         problems.extend(check(&file, "environment"));
     }
+    for file in yaml_files(&root.join(crate::scripts::DIR)) {
+        problems.extend(check(&file, "script"));
+    }
     let Ok(entries) = std::fs::read_dir(root) else {
         return problems;
     };
@@ -138,7 +145,7 @@ pub fn check_workspace(root: &Path) -> Vec<Problem> {
         .filter(|p| p.is_dir())
         .filter(|p| {
             let name = p.file_name().unwrap_or_default().to_string_lossy();
-            !name.starts_with('.') && name != "environments"
+            !name.starts_with('.') && name != "environments" && name != crate::scripts::DIR
         })
         .collect();
     collections.sort();

@@ -167,6 +167,9 @@ enum Command {
     /// OAuth 2.0 tokens: log in for a request, folder or collection, list tokens, or forget them.
     #[command(subcommand)]
     Auth(AuthCommand),
+    /// List or run the workspace's scripts (the app's Scripts and Shell pages), from its scripts/ folder.
+    #[command(subcommand)]
+    Script(ScriptCommand),
     /// Create a workspace: .tuma/ at the root of the current project.
     Init {
         /// The workspace's name. Defaults to the project folder's name.
@@ -229,6 +232,30 @@ struct WsArgs {
     r#in: Option<String>,
     #[command(flatten)]
     common: Common,
+}
+
+#[derive(Subcommand)]
+enum ScriptCommand {
+    /// List the scripts.
+    List,
+    /// Run a script and print its output; exits with 1 when it fails.
+    ///
+    ///   tuma script run "Seed data" --env UAT --input count=5
+    ///   tuma script run Onboard -- --no-facility     (a shell script: arguments after -- are passed on)
+    Run {
+        name: String,
+        #[arg(short, long = "env", env = "TUMA_ENV")]
+        environment: Option<String>,
+        /// An input's value, as name=value. Repeat for more; inputs left out get their defaults.
+        #[arg(short, long = "input", value_name = "NAME=VALUE")]
+        inputs: Vec<String>,
+        /// Where files the script saves (tuma.saveFile) are written. By default, the current folder.
+        #[arg(long, value_name = "FOLDER")]
+        out: Option<PathBuf>,
+        /// For a shell script: more arguments for the command.
+        #[arg(last = true)]
+        args: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -404,6 +431,7 @@ async fn run(cli: Cli) -> anyhow::Result<bool> {
         Command::Run(args) => run_saved(&start, args, false).await,
         Command::Test(args) => run_saved(&start, args, true).await,
         Command::Openapi(command) => openapi(&start, command).await,
+        Command::Script(command) => script(&start, command).await,
         Command::Import { file } => {
             let mut workspace = runner::open_or_create(&start, None)?;
             let text = std::fs::read_to_string(&file)
@@ -1315,6 +1343,110 @@ async fn websocket(start: &Path, args: WsArgs) -> anyhow::Result<bool> {
     }
     settings::keep_cookies(&network, workspace.as_ref()).map_err(anyhow::Error::msg)?;
     Ok(true)
+}
+
+async fn script(start: &Path, command: ScriptCommand) -> anyhow::Result<bool> {
+    use std::sync::Arc;
+    use tuma_core::scripts::{self, Event, Kind};
+
+    let Some(workspace) = find_workspace(start)? else {
+        bail!("no workspace here or above {}", start.display());
+    };
+    match command {
+        ScriptCommand::List => {
+            let list = scripts::list(&workspace).map_err(anyhow::Error::msg)?;
+            if list.is_empty() {
+                println!(
+                    "No scripts yet: add them on the Scripts or Shell page, or in {}/",
+                    scripts::DIR
+                );
+            }
+            for s in list {
+                let kind = match s.kind {
+                    Kind::Javascript => "js   ",
+                    Kind::Command => "shell",
+                };
+                match s.description.as_str() {
+                    "" => println!("{kind}  {}", s.name),
+                    d => println!("{kind}  {}  - {d}", s.name),
+                }
+            }
+            Ok(true)
+        }
+        ScriptCommand::Run {
+            name,
+            environment,
+            inputs,
+            out,
+            args,
+        } => {
+            let inputs = inputs
+                .iter()
+                .map(|i| {
+                    i.split_once('=')
+                        .map(|(k, v)| (k.trim().to_string(), v.to_string()))
+                        .with_context(|| format!("--input {i}: write it as name=value"))
+                })
+                .collect::<anyhow::Result<_>>()?;
+            let extra =
+                shlex::try_join(args.iter().map(String::as_str)).map_err(anyhow::Error::msg)?;
+            let network = settings::network_for(Some(&workspace), &EnvThenKeychain)
+                .map_err(anyhow::Error::msg)?;
+            let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let stopper = stop.clone();
+            // Ctrl+C stops the script, which still reports how it ended.
+            tokio::spawn(async move {
+                if tokio::signal::ctrl_c().await.is_ok() {
+                    stopper.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+            });
+            let outcome = scripts::run(
+                scripts::RunOptions {
+                    workspace: &workspace,
+                    name: &name,
+                    environment: environment.as_deref(),
+                    inputs: &inputs,
+                    extra_args: &extra,
+                    secrets: &EnvThenKeychain,
+                    network: Some(network.clone()),
+                    stop,
+                },
+                Arc::new(|event| match event {
+                    Event::Command(c) => eprintln!("$ {c}"),
+                    Event::Stdout(line) => println!("{line}"),
+                    Event::Stderr(line) => eprintln!("{line}"),
+                    Event::Console(line) if line.level == "error" || line.level == "warn" => {
+                        eprintln!("{}", line.text)
+                    }
+                    Event::Console(line) => println!("{}", line.text),
+                }),
+            )
+            .await
+            .map_err(anyhow::Error::msg)?;
+            let _ = settings::keep_cookies(&network, Some(&workspace));
+            let dir = out.unwrap_or_else(|| PathBuf::from("."));
+            for file in &outcome.files {
+                // Only the file name: a script can't write elsewhere than the chosen folder.
+                let file_name = Path::new(&file.name)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| "file".into());
+                let path = dir.join(file_name);
+                std::fs::write(&path, &file.content)
+                    .with_context(|| format!("could not write {}", path.display()))?;
+                eprintln!("Saved {}", path.display());
+            }
+            if let Some(result) = &outcome.result {
+                println!("{}", serde_json::to_string_pretty(result)?);
+            }
+            if outcome.stopped {
+                eprintln!("Stopped after {} ms", outcome.duration_ms);
+            } else if let Some(error) = &outcome.error {
+                eprintln!("tuma: {name}: {error}");
+            }
+            Ok(outcome.ok)
+        }
+    }
 }
 
 async fn auth(start: &Path, command: AuthCommand) -> anyhow::Result<bool> {

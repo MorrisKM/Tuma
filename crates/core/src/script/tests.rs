@@ -32,6 +32,7 @@ fn input(response: Option<Value>) -> Input {
         response,
         vars,
         vault: BTreeMap::from([("apiKey".into(), "s3cret".into())]),
+        inputs: None,
     }
 }
 

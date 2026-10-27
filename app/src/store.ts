@@ -50,7 +50,9 @@ export type View =
   /** Two pasted texts compared. */
   | { kind: "diff" }
   /** Checking, formatting and minifying pasted JSON. */
-  | { kind: "json" };
+  | { kind: "json" }
+  /** A script from the Scripts or Shell page. */
+  | { kind: "script"; name: string };
 
 export interface Notice {
   tone: "info" | "error";

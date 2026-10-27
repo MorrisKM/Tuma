@@ -21,6 +21,7 @@ pub mod perf;
 pub mod runner;
 pub mod runs;
 pub mod script;
+pub mod scripts;
 pub mod secrets;
 pub mod settings;
 pub mod sse;

@@ -1,4 +1,7 @@
+import { Check, Copy } from "lucide-react";
+import { useState } from "react";
 import type { Choice } from "../headers";
+import { formatRows, parseRows } from "../rows";
 import type { KeyValue, Part } from "../types";
 import { VariableInput } from "./VariableInput";
 
@@ -19,7 +22,10 @@ interface Props<T extends KeyValue> {
   valueChoices?: (name: string) => Choice[];
 }
 
-/** An editable table of name/value rows. There is always an empty row at the end; typing in it adds a row. */
+/**
+ * An editable table of name/value rows. There is always an empty row at the end; typing in it adds a row. Rows can be
+ * copied as `name: value` lines, and pasting such lines (or a query string) into a name adds them as rows.
+ */
 export function KeyValueEditor<T extends KeyValue>({
   rows,
   onChange,
@@ -40,6 +46,28 @@ export function KeyValueEditor<T extends KeyValue>({
     onChange(JSON.stringify(last) === JSON.stringify(blank()) ? next.slice(0, -1) : next);
   };
   const remove = (index: number) => onChange(rows.filter((_, i) => i !== index));
+  // Which row was just copied ("all" for every row), for a moment.
+  const [copied, setCopied] = useState<number | "all" | null>(null);
+  const copy = (which: number | "all") =>
+    void navigator.clipboard.writeText(formatRows(which === "all" ? rows : [rows[which]])).then(() => {
+      setCopied(which);
+      setTimeout(() => setCopied((c) => (c === which ? null : c)), 1200);
+    });
+  /** Copied rows pasted into a name: they replace an empty row, or go after the one pasted into. */
+  const paste = (index: number, e: React.ClipboardEvent) => {
+    const pasted = parseRows(e.clipboardData.getData("text/plain"));
+    if (!pasted) return;
+    e.preventDefault();
+    // The rows are in; suggestions for the field pasted into would only cover them.
+    (e.currentTarget as HTMLElement).blur();
+    const fresh = pasted
+      .filter((p) => !rows.some((r) => r.name === p.name && r.value === p.value))
+      .map((p) => ({ ...blank(), ...p }));
+    const target = all[index];
+    const empty = !target.name && !target.value;
+    const next = [...all.slice(0, empty ? index : index + 1), ...fresh, ...all.slice(index + 1)];
+    onChange(next.filter((r, i) => i < next.length - 1 || JSON.stringify(r) !== JSON.stringify(blank())));
+  };
 
   return (
     <div className="kv">
@@ -64,6 +92,7 @@ export function KeyValueEditor<T extends KeyValue>({
               spellCheck={false}
               choices={nameChoices?.filter((c) => !taken(c.value))}
               onChange={(name) => setRow({ name } as Partial<T>)}
+              onPaste={(e) => paste(i, e)}
             />
             {renderValue?.(row, setRow) ?? (
               <VariableInput
@@ -76,12 +105,35 @@ export function KeyValueEditor<T extends KeyValue>({
               />
             )}
             {renderExtra?.(row, setRow)}
+            {isNew ? (
+              <span className="kv-copy" />
+            ) : (
+              <button
+                className="icon-button kv-copy"
+                onClick={() => copy(i)}
+                aria-label="Copy this row"
+                title="Copy this row, to paste into another request's Name field"
+              >
+                {copied === i ? <Check size={13} /> : <Copy size={13} />}
+              </button>
+            )}
             <button className="icon-button" onClick={() => remove(i)} disabled={isNew} aria-label="Remove">
               ×
             </button>
           </div>
         );
       })}
+      {rows.length > 1 && (
+        <div className="kv-footer">
+          <button
+            className="link-button"
+            onClick={() => copy("all")}
+            title="Copies every row as name: value lines; paste them into a Name field of another request"
+          >
+            {copied === "all" ? "Copied" : `Copy all ${rows.length}`}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

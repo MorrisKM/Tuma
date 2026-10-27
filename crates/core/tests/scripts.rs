@@ -1,7 +1,7 @@
 //! Scripts end to end: a Postman collection with typical scripts, imported and run unchanged against a local server.
 //!
 //! Routes: `POST /login` returns `{"token": "tok-<user>"}`, `GET /profile` needs that token and returns
-//! `{"user": ...}`, `GET /ping` returns `pong`, anything else is a 500.
+//! `{"user": ...}`, `GET /ping` returns `pong`, `/echo` returns what it was sent, anything else is a 500.
 
 use std::convert::Infallible;
 use std::fs;
@@ -62,6 +62,27 @@ async fn handle(
             }
         }
         ("GET", "/ping") => Ok(hyper::Response::new(Full::new(Bytes::from("pong")))),
+        (method, "/echo") => {
+            let header = |name: &str| {
+                parts
+                    .headers
+                    .get(name)
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("")
+                    .to_string()
+            };
+            reply(
+                200,
+                json!({
+                    "method": method,
+                    "query": parts.uri.query().unwrap_or(""),
+                    "authorization": header("authorization"),
+                    "contentType": header("content-type"),
+                    "body": String::from_utf8_lossy(&body),
+                })
+                .to_string(),
+            )
+        }
         _ => reply(500, "{}".into()),
     }
 }
@@ -270,4 +291,86 @@ async fn failing_scripts_fail_the_run() {
     );
     let xml = runs::junit(&report, "Accounts");
     assert!(xml.contains("failures=\"1\""), "{xml}");
+}
+
+/// A standalone script, as on the Scripts page: tuma.post with a query, headers and a JSON body, reading the
+/// environment, and a file and a result coming back.
+#[tokio::test(flavor = "multi_thread")]
+async fn standalone_scripts_send_requests_with_tuma() {
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+    use tuma_core::scripts::{self, Kind, Script, ScriptFile};
+
+    let base = server().await;
+    let dir = TempDir::new("standalone-script");
+    let ws = Workspace::create(&dir.0, "Scripts").unwrap();
+    let secrets = MemoryStore::default();
+    ws.create_environment("UAT").unwrap();
+    ws.write_environment(
+        "UAT",
+        &[
+            VariableValue {
+                name: "baseUrl".into(),
+                value: base,
+                enabled: true,
+                secret: false,
+            },
+            VariableValue {
+                name: "token".into(),
+                value: "key:secret".into(),
+                enabled: true,
+                secret: true,
+            },
+        ],
+        &secrets,
+    )
+    .unwrap();
+    let source = r#"
+        const token = pm.environment.get("token");
+        const r = await tuma.post(`${pm.environment.get("baseUrl")}/echo`, {
+          query: { filters: [["id", "=", 5]], limit: 1, "tag[]": ["a", "b"] },
+          headers: { Authorization: `token ${token}` },
+          json: { name: "Ann" },
+        });
+        const echo = r.json();
+        tuma.saveFile("echo.json", echo);
+        return { code: r.code, ...echo };
+    "#;
+    scripts::write(
+        &ws,
+        &Script {
+            name: "Echo".into(),
+            kind: Kind::Javascript,
+            settings: ScriptFile::default(),
+            source: source.into(),
+        },
+    )
+    .unwrap();
+    let outcome = scripts::run(
+        scripts::RunOptions {
+            workspace: &ws,
+            name: "Echo",
+            environment: Some("UAT"),
+            inputs: &BTreeMap::new(),
+            extra_args: "",
+            secrets: &secrets,
+            network: None,
+            stop: Arc::default(),
+        },
+        Arc::new(|_| {}),
+    )
+    .await
+    .unwrap();
+    assert!(outcome.ok, "{:?}", outcome.error);
+    let result = outcome.result.unwrap();
+    assert_eq!(result["code"], 200);
+    assert_eq!(result["method"], "POST");
+    assert_eq!(
+        result["query"],
+        "filters=%5B%5B%22id%22%2C%22%3D%22%2C5%5D%5D&limit=1&tag%5B%5D=a&tag%5B%5D=b"
+    );
+    assert_eq!(result["authorization"], "token key:secret");
+    assert_eq!(result["contentType"], "application/json");
+    assert_eq!(result["body"], r#"{"name":"Ann"}"#);
+    assert_eq!(outcome.files[0].name, "echo.json");
 }

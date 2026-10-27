@@ -246,3 +246,73 @@ export const grpcSend = (id: string, json: string, request: RequestFile, path: s
   invoke<void>("grpc_send", { id, json, request, path, environment });
 export const grpcEnd = (id: string) => invoke<void>("grpc_end", { id });
 export const grpcCancel = (id: string) => invoke<void>("grpc_cancel", { id });
+
+// Scripts (the Scripts and Shell pages), in the workspace's scripts/ folder.
+
+export type ScriptKind = "javascript" | "command";
+export type InputType = "text" | "number" | "boolean" | "choice";
+
+export interface ScriptInput {
+  name: string;
+  /** Absent for text. */
+  type?: InputType;
+  label?: string;
+  description?: string;
+  default?: string;
+  options?: string[];
+  /** For a shell script: how the value is passed, such as --count or --count=. */
+  arg?: string;
+}
+
+/** scripts/<name>.yaml. Fields that are empty are absent. */
+export interface ScriptSettings {
+  description?: string;
+  inputs?: ScriptInput[];
+  command?: string;
+  cwd?: string;
+  env?: { name: string; value: string; enabled?: boolean }[];
+}
+
+export interface Script {
+  name: string;
+  kind: ScriptKind;
+  settings: ScriptSettings;
+  source: string;
+}
+
+export interface ScriptSummary {
+  name: string;
+  kind: ScriptKind;
+  description: string;
+}
+
+export interface ScriptOutcome {
+  ok: boolean;
+  exitCode: number | null;
+  error: string | null;
+  stopped: boolean;
+  durationMs: number;
+  files: { name: string; content: string }[];
+  result: unknown;
+}
+
+/** What a run reports as it goes, as "script-event" events. */
+export type ScriptEvent =
+  | { kind: "command" | "stdout" | "stderr"; text: string }
+  | { kind: "console"; text: { level: string; text: string } };
+
+export const scriptsList = () => invoke<ScriptSummary[]>("scripts_list");
+export const scriptRead = (name: string) => invoke<Script>("script_read", { name });
+export const scriptWrite = (script: Script) => invoke<void>("script_write", { script });
+export const scriptCreate = (name: string, kind: ScriptKind) => invoke<string>("script_create", { name, kind });
+export const scriptRename = (name: string, newName: string) => invoke<string>("script_rename", { name, newName });
+export const scriptDelete = (name: string) => invoke<void>("script_delete", { name });
+export const scriptRun = (
+  runId: string,
+  name: string,
+  environment: string | null,
+  inputs: Record<string, string>,
+  extraArgs: string,
+) => invoke<ScriptOutcome>("script_run", { runId, name, environment, inputs, extraArgs });
+export const scriptStop = (runId: string) => invoke<void>("script_stop", { runId });
+export const scriptSaveFile = (file: string, content: string) => invoke<void>("script_save_file", { file, content });

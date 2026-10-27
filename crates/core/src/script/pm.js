@@ -852,6 +852,56 @@
   Object.defineProperty(pm, "expect", { get: () => chai().expect });
   globalThis.pm = pm;
 
+  // Standalone scripts (the Scripts page and `tuma script run`): their inputs, files to save, and a shorter way to
+  // send requests than pm.sendRequest.
+  if (input.inputs) {
+    output.files = [];
+    // Query values that are objects or arrays are sent as JSON (as Frappe's filters are), except under a key ending
+    // in [], which is repeated once per item.
+    const query = (params) => {
+      if (!params) return "";
+      const pairs = [];
+      for (const [k, v] of Object.entries(params)) {
+        if (v === undefined || v === null) continue;
+        for (const item of k.endsWith("[]") ? [].concat(v) : [v]) {
+          const text = typeof item === "object" ? JSON.stringify(item) : String(item);
+          pairs.push(`${encodeURIComponent(k)}=${encodeURIComponent(text)}`);
+        }
+      }
+      return pairs.join("&");
+    };
+    const request = (options, more) => {
+      const o = typeof options === "string" ? { url: options, ...(more || {}) } : options || {};
+      const q = query(o.query);
+      const url = q ? `${o.url}${String(o.url).includes("?") ? "&" : "?"}${q}` : o.url;
+      const header = { ...(o.headers || {}) };
+      let body;
+      if (o.json !== undefined) {
+        body = { mode: "raw", raw: JSON.stringify(o.json) };
+      } else if (o.form) {
+        body = { mode: "urlencoded", urlencoded: Object.entries(o.form).map(([key, value]) => ({ key, value: String(value) })) };
+      } else if (o.body !== undefined) {
+        body = { mode: "raw", raw: typeof o.body === "string" ? o.body : JSON.stringify(o.body) };
+      }
+      return sendRequest({ url, method: o.method || (body ? "POST" : "GET"), header, body, timeout: o.timeout });
+    };
+    const method = (name) => (url, options) => request({ ...(options || {}), url, method: name });
+    globalThis.tuma = {
+      inputs: Object.freeze({ ...input.inputs }),
+      request,
+      get: method("GET"),
+      post: method("POST"),
+      put: method("PUT"),
+      patch: method("PATCH"),
+      delete: method("DELETE"),
+      saveFile(name, content) {
+        const text = typeof content === "string" ? content : JSON.stringify(content, null, 2);
+        output.files.push({ name: String(name), content: text });
+      },
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    };
+  }
+
   // The older Postman API, which imported collections still use.
 
   const res = input.response;
@@ -896,7 +946,11 @@
       errors.push({ script: label, message: message(e) });
       return;
     }
-    track(fn());
+    track(
+      fn().then((value) => {
+        if (input.inputs && value !== undefined) output.result = value;
+      }),
+    );
   };
   // The legacy tests object, read after each script.
   globalThis.__collectTests = () => {
@@ -926,5 +980,7 @@
       skipRequest: output.skipRequest,
       ...("nextRequest" in output ? { nextRequest: output.nextRequest } : {}),
       visualizer: output.visualizer,
+      ...(output.files && output.files.length ? { files: output.files } : {}),
+      ...(output.result !== undefined ? { result: output.result } : {}),
     });
 })();

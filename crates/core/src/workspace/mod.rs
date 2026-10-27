@@ -35,6 +35,8 @@ use files::{
 const WORKSPACE_FILE: &str = "workspace.yaml";
 const FOLDER_FILE: &str = "_folder.yaml";
 const ENVIRONMENTS: &str = "environments";
+/// Not a collection either: the Scripts page's scripts.
+const SCRIPTS: &str = crate::scripts::DIR;
 const EXTENSION: &str = "yaml";
 
 #[derive(Debug, thiserror::Error)]
@@ -271,7 +273,7 @@ impl Workspace {
         let mut collections = Vec::new();
         for entry in list_dir(&self.root)? {
             let name = dir_name(&entry);
-            if entry.is_dir() && !name.starts_with('.') && name != ENVIRONMENTS {
+            if entry.is_dir() && !name.starts_with('.') && name != ENVIRONMENTS && name != SCRIPTS {
                 collections.push(self.folder_node(&entry, NodeKind::Collection)?);
             }
         }
@@ -387,7 +389,7 @@ impl Workspace {
             None => self.root.clone(),
         };
         let mut name = unique_name(&dir, &file_name(name))?;
-        if parent.is_none() && name == ENVIRONMENTS {
+        if parent.is_none() && (name == ENVIRONMENTS || name == SCRIPTS) {
             name = unique_name(&dir, &format!("{name} collection"))?;
         }
         let path = dir.join(&name);
@@ -609,7 +611,7 @@ impl Workspace {
             old_name.clone()
         } else {
             let mut name = unique_name(&to, &old_name)?;
-            if to == self.root && name == ENVIRONMENTS {
+            if to == self.root && (name == ENVIRONMENTS || name == SCRIPTS) {
                 name = unique_name(&to, &format!("{name} collection"))?;
             }
             name
