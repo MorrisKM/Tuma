@@ -831,9 +831,18 @@ export const useStore = create<State>((set, get) => {
         // Keep where the request is saved and what it is called; take everything else from the command.
         const next = fromRequestFile(file, draft.path, draft.name);
         set({ draft: next, preview: false });
-        if (ignored.length) {
-          set({ notice: { tone: "info", text: `Imported the cURL command. Ignored: ${ignored.join(", ")}` } });
-        }
+        const script = file.scripts?.preRequest ?? "";
+        const notes = [
+          ...(script
+            ? [
+                /^\/\/ (Collection|Folder) .* pre-request script$/m.test(script)
+                  ? "Its pre-request scripts are in the Scripts tab, the collection's and folders' too: delete those if the request already inherits them here."
+                  : "Its pre-request script is in the Scripts tab.",
+              ]
+            : []),
+          ...(ignored.length ? [`Ignored: ${ignored.join(", ")}`] : []),
+        ];
+        if (notes.length) set({ notice: { tone: "info", text: `Imported the cURL command. ${notes.join(" ")}` } });
       }),
 
     send: async () => {

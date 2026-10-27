@@ -1,10 +1,13 @@
 //! cURL commands in and out: paste one from a browser's "Copy as cURL" or API docs, or copy a request as one.
 
 use crate::http::{ApiKeyLocation, Auth as HttpAuth, Body as HttpBody, Request};
-use crate::workspace::files::{Auth, Body, KeyValue, Part, RequestFile};
+use crate::workspace::files::{Auth, Body, KeyValue, Part, RequestFile, Scripts};
 
-/// Reads a cURL command into a request. Unknown options are ignored, and listed in the second value.
+/// Reads a cURL command into a request. Unknown options are ignored, and listed in the second value. Pre-request
+/// scripts in comments above the command, as Tuma writes them when it copies a request as cURL, become the request's
+/// pre-request script.
 pub fn parse(command: &str) -> Result<(RequestFile, Vec<String>), String> {
+    let (scripts, command) = crate::codegen::scripts_from_comments(command);
     let words = split(command)?;
     let mut words = words.into_iter().peekable();
     match words.next().as_deref() {
@@ -187,9 +190,27 @@ pub fn parse(command: &str) -> Result<(RequestFile, Vec<String>), String> {
             verify_tls: !insecure,
             ..Default::default()
         },
+        scripts: Scripts {
+            pre_request: joined_scripts(&scripts),
+            test: String::new(),
+        },
         ..RequestFile::default()
     };
     Ok((file, ignored))
+}
+
+/// One script from several: one alone as it is; more (a collection's or folder's too) each under its label, as
+/// they ran, so ones the request inherits where it is pasted can be told apart and deleted.
+fn joined_scripts(scripts: &[crate::script::Script]) -> String {
+    match scripts {
+        [] => String::new(),
+        [one] => one.source.clone(),
+        many => many
+            .iter()
+            .map(|s| format!("// {} pre-request script\n{}", s.label, s.source))
+            .collect::<Vec<_>>()
+            .join("\n\n"),
+    }
 }
 
 fn form_fields(data: &str) -> Vec<KeyValue> {
@@ -471,6 +492,46 @@ pub fn to_curl(request: &Request) -> String {
 mod tests {
     use super::*;
     use crate::http::KeyValue as HttpKeyValue;
+
+    #[test]
+    fn scripts_copied_with_a_command_come_back_when_it_is_pasted() {
+        use crate::codegen::{Language, with_scripts};
+        use crate::script::Script;
+        let script = |label: &str, source: &str| Script {
+            label: label.into(),
+            source: source.into(),
+        };
+        let command = "curl https://api.example.com/users \\\n  -H 'X-Trace: t1'";
+
+        // The request's own script, blank lines and indentation kept.
+        let source = "const id = pm.variables.get('id');\n\nif (id) {\n  pm.request.headers.add({ key: 'X-Id', value: id });\n}";
+        let copied = with_scripts(command, &[script("request", source)], Language::Curl);
+        assert!(copied.starts_with("# Made after running"), "{copied}");
+        let (file, ignored) = parse(&copied).unwrap();
+        assert!(ignored.is_empty(), "{ignored:?}");
+        assert_eq!(file.url, "https://api.example.com/users");
+        assert_eq!(file.headers[0].name, "X-Trace");
+        assert_eq!(file.scripts.pre_request, source);
+
+        // With a collection's script too: each under its label.
+        let copied = with_scripts(
+            command,
+            &[
+                script("collection Users", "pm.environment.set('token', 'x');"),
+                script("request", "pm.variables.set('id', '7');"),
+            ],
+            Language::Curl,
+        );
+        let (file, _) = parse(&copied).unwrap();
+        assert_eq!(
+            file.scripts.pre_request,
+            "// Collection Users pre-request script\npm.environment.set('token', 'x');\n\n\
+             // Request pre-request script\npm.variables.set('id', '7');"
+        );
+
+        // A plain command has no script.
+        assert_eq!(parse(command).unwrap().0.scripts.pre_request, "");
+    }
 
     #[test]
     fn browser_copy_as_curl() {

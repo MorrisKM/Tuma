@@ -638,37 +638,16 @@ pub async fn snippet(
         tuma_core::codegen::strip_auth(&mut prepared.request);
         (prepared.request, prepared.unresolved)
     };
-    let mut code = tuma_core::codegen::generate(&request, language);
-    // cURL cannot run scripts: they ran once to make this code, and are shown above it to rerun for fresh values.
-    if !scripts.is_empty() {
-        let mut text = String::from(
-            "Made after running these pre-request scripts once; what they set is in the code below.\n",
-        );
-        for script in &scripts {
-            text.push_str(&format!(
-                "\n{} pre-request script:\n",
-                capitalized(&script.label)
-            ));
-            for line in script.source.trim_end().lines() {
-                text.push_str(&format!("  {line}\n"));
-            }
-        }
-        code = format!("{}\n{code}", tuma_core::codegen::comment(&text, language));
-    }
+    let code = tuma_core::codegen::with_scripts(
+        &tuma_core::codegen::generate(&request, language),
+        &scripts,
+        language,
+    );
     Ok(Snippet {
         contains_secrets: secret_values.iter().any(|s| code.contains(s.as_str())),
         code,
         unresolved: unresolved.into_iter().collect(),
     })
-}
-
-/// "collection Users" as "Collection Users".
-fn capitalized(text: &str) -> String {
-    let mut chars = text.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().chain(chars).collect(),
-        None => String::new(),
-    }
 }
 
 /// Reads a cURL command into a request. Options Tuma ignores are returned so the UI can mention them.

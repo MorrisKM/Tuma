@@ -1010,7 +1010,8 @@ select.method {
 
 .url-box .method:focus {
   box-shadow: none;
-  background: var(--bg-hover);
+  /* The color only: the shorthand would also clear the arrow, which is a background image. */
+  background-color: var(--bg-hover);
 }
 
 .url-box .method:disabled {

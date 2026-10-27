@@ -126,7 +126,8 @@ export function UrlEditor({ value, onChange, onSubmit, onPasteCurl, scope, place
       EditorView.domEventHandlers({
         paste: (event, v) => {
           const text = event.clipboardData?.getData("text/plain") ?? "";
-          if (/^\s*curl\s/i.test(text)) {
+          // A cURL command, perhaps after comments: Tuma writes a request's pre-request scripts above it.
+          if (/^\s*(?:#[^\n]*\n\s*)*curl\s/i.test(text)) {
             event.preventDefault();
             props.current.onPasteCurl(text);
             return true;

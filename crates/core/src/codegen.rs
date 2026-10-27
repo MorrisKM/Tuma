@@ -4,6 +4,7 @@ use serde_json::Value;
 
 use crate::curl::{auth_headers, full_url};
 use crate::http::{Body, Request};
+use crate::script::Script;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -49,6 +50,76 @@ pub fn comment(text: &str, language: Language) -> String {
             }
         })
         .collect()
+}
+
+const SCRIPTS_NOTE: &str =
+    "Made after running these pre-request scripts once; what they set is in the code below.";
+const SCRIPT_HEADING: &str = " pre-request script:";
+
+/// Code with the pre-request scripts that made it above it, as comments, since the code cannot run them. Pasting
+/// the cURL command into Tuma reads them back ([`scripts_from_comments`]).
+pub fn with_scripts(code: &str, scripts: &[Script], language: Language) -> String {
+    if scripts.is_empty() {
+        return code.to_string();
+    }
+    let mut text = format!("{SCRIPTS_NOTE}\n");
+    for script in scripts {
+        text.push_str(&format!(
+            "\n{}{SCRIPT_HEADING}\n",
+            capitalized(&script.label)
+        ));
+        for line in script.source.trim_end().lines() {
+            text.push_str(&format!("  {line}\n"));
+        }
+    }
+    format!("{}\n{code}", comment(&text, language))
+}
+
+/// The scripts [`with_scripts`] wrote above a command, labelled as there ("Request", "Collection Users"), and the
+/// command after its comments.
+pub fn scripts_from_comments(text: &str) -> (Vec<Script>, &str) {
+    let mut scripts: Vec<Script> = Vec::new();
+    let mut rest = text;
+    while !rest.is_empty() {
+        let (line, after) = rest.split_once('\n').unwrap_or((rest, ""));
+        let line = line.trim_end_matches('\r');
+        let trimmed = line.trim_start();
+        let content = match trimmed
+            .strip_prefix("//")
+            .or_else(|| trimmed.strip_prefix('#'))
+        {
+            Some(content) => content,
+            None if trimmed.is_empty() => "",
+            None => break,
+        };
+        // The marker is followed by a space, and a script's lines by two more.
+        let content = content.strip_prefix(' ').unwrap_or(content);
+        if let Some(label) = content.strip_suffix(SCRIPT_HEADING) {
+            scripts.push(Script {
+                label: label.trim().to_string(),
+                source: String::new(),
+            });
+        } else if let Some(script) = scripts.last_mut() {
+            script
+                .source
+                .push_str(content.strip_prefix("  ").unwrap_or(content));
+            script.source.push('\n');
+        }
+        rest = after;
+    }
+    for script in &mut scripts {
+        script.source = script.source.trim_end().to_string();
+    }
+    (scripts, rest)
+}
+
+/// "collection Users" as "Collection Users".
+fn capitalized(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
 }
 
 /// The headers to write out: the request's own, its content type when the body implies one and none is set, and auth.
