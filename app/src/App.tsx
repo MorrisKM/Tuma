@@ -8,6 +8,8 @@ import { useConsole } from "./console";
 import { RunnerView } from "./components/RunnerView";
 import { SettingsView } from "./components/SettingsView";
 import { FolderEditor } from "./components/FolderEditor";
+import { DiffView } from "./components/DiffView";
+import { JsonView } from "./components/JsonView";
 import { MockView } from "./components/MockView";
 import { PerfView } from "./components/PerfView";
 import { mocks } from "./mocks";
@@ -166,6 +168,8 @@ function App() {
         {view.kind === "runner" && <RunnerView key={view.path} path={view.path} />}
         {view.kind === "settings" && <SettingsView />}
         {view.kind === "mock" && <MockView key={view.id} id={view.id} />}
+        {view.kind === "diff" && <DiffView />}
+        {view.kind === "json" && <JsonView />}
         {view.kind === "perf" && <PerfView key={view.path} path={view.path} />}
         {consoleOpen && <ConsolePanel />}
         <StatusBar version={version} environment={workspace ? environment : undefined} />

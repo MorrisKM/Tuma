@@ -5,6 +5,7 @@ import { normalizeVariables } from "../draft";
 import { useStore } from "../store";
 import type { FolderFile, KeyValue, VariableValue } from "../types";
 import { AuthForm } from "./AuthForm";
+import { HEADER_NAMES, headerValues } from "../headers";
 import { blankRow, KeyValueEditor } from "./KeyValueEditor";
 import { ScriptsEditor } from "./ScriptsEditor";
 import { Tabs } from "./Tabs";
@@ -126,7 +127,13 @@ export function FolderEditor({ path }: { path: string }) {
         )}
         {tab === "headers" && (
           <>
-            <KeyValueEditor rows={headers} onChange={(headers) => setFolder({ ...folder, headers })} blank={blankRow} />
+            <KeyValueEditor
+              rows={headers}
+              onChange={(headers) => setFolder({ ...folder, headers })}
+              blank={blankRow}
+              nameChoices={HEADER_NAMES}
+              valueChoices={headerValues}
+            />
             <p className="hint">Sent with every request inside, unless a request sets the same header.</p>
           </>
         )}

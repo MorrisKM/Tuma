@@ -13,11 +13,12 @@ import { ConsoleView, TestsView, testsLabel, VisualizerView } from "./ScriptResu
 import { Logo } from "./ui";
 import { Tabs } from "./Tabs";
 import { findUrls, urlLinks } from "../links";
+import { CompareView } from "./CompareView";
 
 /** Links in a response open a new request; made once, so the editor is not reconfigured on every render. */
 const links = urlLinks((url) => useStore.getState().openUrl(url));
 
-type Tab = "body" | "events" | "tests" | "console" | "visualize" | "headers" | "cookies" | "timing" | "request";
+type Tab = "compare" | "body" | "events" | "tests" | "console" | "visualize" | "headers" | "cookies" | "timing" | "request";
 type View = "pretty" | "raw" | "preview";
 
 export function ResponsePanel() {
@@ -27,6 +28,9 @@ export function ResponsePanel() {
   const live = useStore((s) => (s.sending ? s.live[s.sending] : undefined));
   const websocket = useStore((s) => isWebSocket(s.draft.url));
   const grpc = useStore((s) => isGrpc(s.draft.url));
+  const kept = useStore((s) => s.kept.length);
+  const comparing = useStore((s) => s.compare !== null);
+  const setCompare = useStore((s) => s.setCompare);
   const [tab, setTab] = useState<Tab>("body");
   // A finished event stream opens on its events.
   useEffect(() => {
@@ -47,6 +51,16 @@ export function ResponsePanel() {
       <section className="response-panel">
         <div className="panel-body">
           <MessageLog />
+        </div>
+      </section>
+    );
+  }
+  // Comparing, before anything came back in this tab: from the command palette.
+  if (comparing && !response) {
+    return (
+      <section className="response-panel">
+        <div className="panel-body">
+          <CompareView />
         </div>
       </section>
     );
@@ -121,20 +135,27 @@ export function ResponsePanel() {
   const tests = testsLabel(response.checks, response.tests, response.scriptErrors);
   const setCookies = response.headers.filter((h) => h.name === "set-cookie").map((h) => parseSetCookie(h.value));
   // A tab that this response doesn't have shows the body instead.
-  const shown: Tab =
+  const missing =
     (tab === "events" && !response.events) ||
     (tab === "tests" && !tests) ||
     (tab === "console" && !response.console.length && !response.scriptErrors.length) ||
     (tab === "visualize" && !response.visualizer) ||
-    (tab === "cookies" && !setCookies.length)
-      ? "body"
-      : tab;
+    (tab === "cookies" && !setCookies.length);
+  const shown: Tab = comparing ? "compare" : missing ? "body" : tab;
+  const choose = (next: Tab) => {
+    if (next === "compare") {
+      setCompare({ a: null, b: null });
+    } else {
+      setCompare(null);
+      setTab(next);
+    }
+  };
 
   return (
     <section className={`response-panel${sending ? " stale" : ""}`}>
       <Tabs
         active={shown}
-        onChange={setTab}
+        onChange={choose}
         tabs={[
           ...(response.events ? [{ id: "events" as Tab, label: "Events", count: response.events.length }] : []),
           { id: "body", label: "Body" },
@@ -147,6 +168,7 @@ export function ResponsePanel() {
           ...(setCookies.length ? [{ id: "cookies" as Tab, label: "Cookies", count: setCookies.length }] : []),
           { id: "timing", label: "Timing" },
           { id: "request", label: "Request" },
+          { id: "compare", label: "Compare", count: kept > 1 ? kept : undefined },
         ]}
       >
         <span className="response-actions">
@@ -157,6 +179,7 @@ export function ResponsePanel() {
       <Unresolved names={response.unresolved} />
       <div className="panel-body">
         {shown === "events" && response.events && <EventsView events={response.events} live={false} />}
+        {shown === "compare" && <CompareView />}
         {shown === "body" && <BodyView response={response} />}
         {shown === "tests" && (
           <TestsView checks={response.checks} tests={response.tests} errors={response.scriptErrors} />
@@ -307,11 +330,11 @@ function StatusLine({ response }: { response: Response }) {
   );
 }
 
-function contentType(response: Response): string {
+export function contentType(response: Response): string {
   return response.headers.find((h) => h.name === "content-type")?.value.split(";")[0].trim().toLowerCase() ?? "";
 }
 
-function languageFor(type: string): Language {
+export function languageFor(type: string): Language {
   if (type.includes("json")) return "json";
   if (type.includes("html")) return "html";
   if (type.includes("xml")) return "xml";

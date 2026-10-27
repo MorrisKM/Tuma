@@ -143,6 +143,22 @@ export function CodeEditor({ value, onChange, language = "text", readOnly = fals
   return <div className="code-editor" ref={host} />;
 }
 
+/** A viewer's setup, or with `editable` an editor's, for editors made elsewhere such as the comparisons'. */
+export function viewerExtensions(language: Language, editable = false): Extension {
+  return [
+    lineNumbers(),
+    search({ top: true }),
+    highlightSelectionMatches(),
+    syntaxHighlighting(highlight),
+    editable ? history() : [],
+    keymap.of([...defaultKeymap, ...searchKeymap, ...(editable ? [...historyKeymap, indentWithTab] : [])]),
+    EditorView.lineWrapping,
+    EditorState.readOnly.of(!editable),
+    languages[language](),
+    theme,
+  ];
+}
+
 /** Opens the search (and replace) panel of the editor inside `container`, if there is one. */
 export function openSearchIn(container: Element | null): boolean {
   const dom = container?.querySelector<HTMLElement>(".cm-editor");

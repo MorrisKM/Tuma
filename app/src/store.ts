@@ -46,7 +46,11 @@ export type View =
   /** A performance test of a request, folder or collection. */
   | { kind: "perf"; path: string }
   /** A running mock server and the requests it answered. */
-  | { kind: "mock"; id: string };
+  | { kind: "mock"; id: string }
+  /** Two pasted texts compared. */
+  | { kind: "diff" }
+  /** Checking, formatting and minifying pasted JSON. */
+  | { kind: "json" };
 
 export interface Notice {
   tone: "info" | "error";
@@ -68,7 +72,30 @@ export interface Tab {
   sending: string | null;
   /** A preview tab is replaced by the next request opened from the tree, until it is edited. */
   preview: boolean;
+  /** Its latest responses, oldest first, to compare. */
+  kept: Kept[];
+  /** The two kept responses being compared, by id; null when the response panel isn't comparing. */
+  compare: Compare | null;
 }
+
+/** A response kept in a tab for comparing. */
+export interface Kept {
+  id: string;
+  /** Unix ms, when it arrived. */
+  at: number;
+  /** The environment it was sent in. */
+  environment: string | null;
+  response: Response;
+}
+
+/** What the response panel compares: `a` is the baseline. A missing id means the default pick. */
+export interface Compare {
+  a: string | null;
+  b: string | null;
+}
+
+/** How many responses a tab keeps to compare. */
+const KEEP = 10;
 
 interface State {
   workspace: WorkspaceInfo | null;
@@ -88,6 +115,8 @@ interface State {
   error: RequestError | null;
   sending: string | null;
   preview: boolean;
+  kept: Kept[];
+  compare: Compare | null;
   /** Changes whenever the draft is replaced by another document (another tab, or a reload from disk), so editors
    * start a fresh undo history instead of undoing into the previous document. */
   generation: number;
@@ -151,6 +180,10 @@ interface State {
   /** The tabs with the active one up to date, for display. */
   allTabs: () => Tab[];
   newTab: () => void;
+  /** Shows the comparison of two kept responses, or with null the response again. */
+  setCompare: (compare: Compare | null) => void;
+  /** Sends the request once in each environment (null for none) and compares the responses. */
+  compareEnvironments: (environments: (string | null)[]) => Promise<void>;
   /** Opens a new tab with a request to this URL, such as a link in a response. */
   openUrl: (url: string) => void;
   switchTab: (id: string) => void;
@@ -202,7 +235,7 @@ export const tabDirty = (t: Pick<Tab, "draft" | "saved">) =>
 
 const blankTab = (): Tab => {
   const draft = newDraft();
-  return { id: crypto.randomUUID(), draft, saved: snapshot(draft), response: null, error: null, sending: null, preview: false };
+  return { id: crypto.randomUUID(), draft, saved: snapshot(draft), response: null, error: null, sending: null, preview: false, kept: [], compare: null };
 };
 
 // The selected environment is remembered per workspace, on this machine only.
@@ -249,6 +282,8 @@ export const useStore = create<State>((set, get) => {
       error: s.error,
       sending: s.sending,
       preview: s.preview,
+      kept: s.kept,
+      compare: s.compare,
     };
   };
 
@@ -263,6 +298,8 @@ export const useStore = create<State>((set, get) => {
       error: tab.error,
       sending: tab.sending,
       preview: tab.preview,
+      kept: tab.kept,
+      compare: tab.compare,
       view: { kind: "request" },
       generation: get().generation + 1,
     });
@@ -277,6 +314,16 @@ export const useStore = create<State>((set, get) => {
     } else {
       set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
     }
+  };
+
+  /** A tab as it is now, whether or not it is the active one. */
+  const tabOf = (id: string): Tab | undefined => (id === get().activeTab ? current() : get().tabs.find((t) => t.id === id));
+
+  /** Keeps a response in its tab, to compare. */
+  const keep = (id: string, response: Response, environment: string | null): Kept => {
+    const entry: Kept = { id: crypto.randomUUID(), at: Date.now(), environment, response };
+    patchTab(id, { kept: [...(tabOf(id)?.kept ?? []), entry].slice(-KEEP) });
+    return entry;
   };
 
   /** Opens a draft: in the active tab when it is a preview or blank, otherwise in a new tab. */
@@ -351,6 +398,8 @@ export const useStore = create<State>((set, get) => {
     error: null,
     sending: null,
     preview: false,
+    kept: [],
+    compare: null,
     generation: 0,
     scope: [],
     savingAs: false,
@@ -862,6 +911,7 @@ export const useStore = create<State>((set, get) => {
       try {
         const response = await api.sendRequest(id, toRequestFile(draft), draft.path, environment);
         patchTab(activeTab, { response, error: null });
+        keep(activeTab, response, environment);
         logResponse(draft, response, started);
       } catch (e) {
         const error = e as RequestError;
@@ -875,6 +925,50 @@ export const useStore = create<State>((set, get) => {
         });
         void get().loadHistory();
       }
+    },
+
+    setCompare: (compare) => set({ compare }),
+
+    compareEnvironments: async (environments) => {
+      const { draft, sending, activeTab } = get();
+      if (sending || !draft.url.trim() || isWebSocket(draft.url) || isGrpc(draft.url)) return;
+      const kept: Kept[] = [];
+      const failed: string[] = [];
+      set({ view: { kind: "request" }, preview: false, compare: { a: null, b: null } });
+      for (const environment of environments) {
+        const id = crypto.randomUUID();
+        patchTab(activeTab, { sending: id });
+        const started = Date.now();
+        try {
+          const response = await api.sendRequest(id, toRequestFile(draft), draft.path, environment);
+          patchTab(activeTab, { response, error: null });
+          kept.push(keep(activeTab, response, environment));
+          logResponse(draft, response, started);
+        } catch (e) {
+          const error = e as RequestError;
+          if (error.kind === "cancelled") break;
+          failed.push(`${environment ?? "No environment"}: ${error.message}`);
+          logFailure(draft, error, started);
+        } finally {
+          patchTab(activeTab, { sending: null });
+          set((s) => {
+            const { [id]: _, ...live } = s.live;
+            return { live };
+          });
+        }
+      }
+      // The first two that came back; the others are a pick away.
+      if (kept.length >= 2) patchTab(activeTab, { compare: { a: kept[0].id, b: kept[1].id } });
+      if (failed.length) {
+        set({
+          notice: {
+            tone: "error",
+            text: `Not every environment answered${kept.length < 2 ? ", so there is nothing to compare" : ""}.`,
+            details: failed,
+          },
+        });
+      }
+      void get().loadHistory();
     },
 
     cancel: () => {

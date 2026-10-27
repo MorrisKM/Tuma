@@ -32,6 +32,24 @@ export function CommandPalette() {
       { id: "save", label: "Save request", hint: "Ctrl+S", run: () => void s.save() },
       { id: "close", label: "Close tab", hint: "Ctrl+W", run: () => void s.closeTab(s.activeTab) },
       { id: "url", label: "Focus the URL", hint: "Ctrl+L", run: () => setTimeout(focusUrl) },
+      {
+        id: "compare",
+        label: "Compare responses: this request's, or across environments",
+        hint: "Compare",
+        run: () => useStore.setState({ compare: { a: null, b: null }, view: { kind: "request" } }),
+      },
+      {
+        id: "diff",
+        label: "Compare text: paste two texts or JSON and see the differences",
+        hint: "Compare",
+        run: () => useStore.setState({ view: { kind: "diff" } }),
+      },
+      {
+        id: "json",
+        label: "JSON tools: validate, format or minify JSON",
+        hint: "JSON",
+        run: () => useStore.setState({ view: { kind: "json" } }),
+      },
       { id: "code", label: "Copy as code (cURL, Python, JavaScript)", run: () => useStore.setState({ snippetOpen: true }) },
       {
         id: "curl",

@@ -9,6 +9,7 @@ import { AuthForm } from "./AuthForm";
 import { CryptoEditor } from "./CryptoEditor";
 import { ExamplesEditor } from "./ExamplesEditor";
 import { CodeEditor, type Language } from "./CodeEditor";
+import { HEADER_NAMES, headerValues } from "../headers";
 import { blankPart, blankRow, KeyValueEditor } from "./KeyValueEditor";
 import { GraphqlEditor } from "./GraphqlEditor";
 import { GrpcMessage, GrpcProtos } from "./GrpcViews";
@@ -100,7 +101,13 @@ function Headers() {
   const headers = useStore((s) => s.draft.headers);
   return (
     <>
-      <KeyValueEditor rows={headers} onChange={(headers) => useStore.getState().update({ headers })} blank={blankRow} />
+      <KeyValueEditor
+        rows={headers}
+        onChange={(headers) => useStore.getState().update({ headers })}
+        blank={blankRow}
+        nameChoices={HEADER_NAMES}
+        valueChoices={headerValues}
+      />
       <p className="hint">
         Headers set on the collection and its folders are sent too, unless you set the same header here. Tuma adds
         User-Agent, Accept, Accept-Encoding and Content-Type unless you set them. The Request tab of the response shows

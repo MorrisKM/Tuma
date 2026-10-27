@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Braces,
   Bot,
   Check,
   ChevronDown,
@@ -9,6 +10,7 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  GitCompareArrows,
   Globe,
   Layers,
   Library,
@@ -104,6 +106,24 @@ function Rail() {
           <span className="rail-label">{label}</span>
         </button>
       ))}
+      <button
+        className={`rail-button${view === "diff" ? " active" : ""}`}
+        onClick={() => useStore.setState({ view: { kind: "diff" } })}
+        aria-label="Compare text"
+        aria-pressed={view === "diff"}
+      >
+        <GitCompareArrows size={18} strokeWidth={1.75} />
+        <span className="rail-label">Compare text</span>
+      </button>
+      <button
+        className={`rail-button${view === "json" ? " active" : ""}`}
+        onClick={() => useStore.setState({ view: { kind: "json" } })}
+        aria-label="JSON tools"
+        aria-pressed={view === "json"}
+      >
+        <Braces size={18} strokeWidth={1.75} />
+        <span className="rail-label">JSON tools</span>
+      </button>
       <div className="rail-spacer" />
       <button
         className={`rail-button${view === "agents" ? " active" : ""}`}
