@@ -3,6 +3,17 @@
 All notable changes to Tuma. Versions follow [Semantic Versioning](https://semver.org/): the workspace file format
 and the `tuma` command's options and `--json` output are the public interface.
 
+## 1.1.1 (2026-10-27)
+
+### Added
+
+- Pasting a cURL command copied with "Auth and scripts" brings its pre-request scripts back into the request's
+  Scripts tab. Scripts from a collection or folder come each under its label.
+
+### Fixed
+
+- The method list's arrow no longer disappears when the list is clicked.
+
 ## 1.1.0 (2026-10-26)
 
 ### Added
