@@ -2,7 +2,15 @@ import { type InputHTMLAttributes, type TextareaHTMLAttributes, useLayoutEffect,
 import { createPortal } from "react-dom";
 import type { Choice } from "../headers";
 import { useStore } from "../store";
-import { matching, NO_ENVIRONMENT, noEnvironment, type Suggestion, suggestions, typedVariable } from "../variables";
+import {
+  describeVariable,
+  matching,
+  NO_ENVIRONMENT,
+  noEnvironment,
+  type Suggestion,
+  suggestions,
+  typedVariable,
+} from "../variables";
 
 type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> & {
   value: string;
@@ -18,6 +26,93 @@ type Field = HTMLInputElement | HTMLTextAreaElement;
 
 /** A whole value that is one {{variable}}, possibly not closed yet. */
 const REFERENCE = /^\{\{\s*[\w$.-]*\s*(\}\}?)?$/;
+
+/** A {{variable}} anywhere in the text. */
+const VARIABLE = /\{\{\s*([^{}]+?)\s*\}\}/g;
+
+/** The {{variable}} under the pointer, if any, and where it is drawn. */
+interface Hover {
+  name: string;
+  left: number;
+  top: number;
+}
+
+/** The style a copy of a field needs to lay its text out the same way. */
+const LAYOUT = [
+  "boxSizing",
+  "width",
+  "paddingTop",
+  "paddingRight",
+  "paddingBottom",
+  "paddingLeft",
+  "borderTopWidth",
+  "borderRightWidth",
+  "borderBottomWidth",
+  "borderLeftWidth",
+  "borderStyle",
+  "fontFamily",
+  "fontSize",
+  "fontWeight",
+  "fontStyle",
+  "letterSpacing",
+  "lineHeight",
+  "tabSize",
+  "textTransform",
+  "whiteSpace",
+  "overflowWrap",
+  "wordBreak",
+] as const;
+
+/**
+ * Finds the {{variable}} at a point in a field. A field can't say which character is where, so its text is laid out
+ * again in a hidden copy over it, with each variable in a span that can be measured.
+ */
+function variableAt(el: Field, x: number, y: number): Hover | null {
+  const text = el.value;
+  // A masked password's dots aren't its characters.
+  if (!text.includes("{{") || (el instanceof HTMLInputElement && el.type === "password")) return null;
+  const box = el.getBoundingClientRect();
+  const style = getComputedStyle(el);
+  const copy = document.createElement("div");
+  for (const key of LAYOUT) copy.style[key] = style[key];
+  // An <input> is always one line.
+  if (el instanceof HTMLInputElement) copy.style.whiteSpace = "pre";
+  Object.assign(copy.style, {
+    position: "fixed",
+    left: `${box.left - el.scrollLeft}px`,
+    top: `${box.top - el.scrollTop}px`,
+    borderColor: "transparent",
+    visibility: "hidden",
+    pointerEvents: "none",
+    overflow: "visible",
+  });
+  let at = 0;
+  const spans: { name: string; span: HTMLSpanElement }[] = [];
+  for (const m of text.matchAll(VARIABLE)) {
+    copy.append(text.slice(at, m.index));
+    const span = document.createElement("span");
+    span.textContent = m[0];
+    copy.append(span);
+    spans.push({ name: m[1], span });
+    at = m.index! + m[0].length;
+  }
+  copy.append(text.slice(at));
+  document.body.append(copy);
+  try {
+    for (const { name, span } of spans) {
+      for (const r of span.getClientRects()) {
+        // An <input> centers its line, which the copy may not: there only the horizontal position counts.
+        const inLine = el instanceof HTMLInputElement || (y >= r.top && y <= r.bottom);
+        if (x >= r.left && x <= r.right && inLine) {
+          return { name, left: Math.max(r.left, box.left), top: Math.max(r.top, box.top) };
+        }
+      }
+    }
+    return null;
+  } finally {
+    copy.remove();
+  }
+}
 
 interface Open {
   /** A {{variable}} to complete, or a choice to replace the whole text. */
@@ -56,6 +151,7 @@ export function VariableInput({ value, onChange, onKeyDown, onBlur, onFocus, cho
   const input = useRef<Field>(null);
   const [open, setOpen] = useState<Open | null>(null);
   const [focused, setFocused] = useState(false);
+  const [hover, setHover] = useState<Hover | null>(null);
   // Passwords stay in an <input>, which masks them.
   const grows = !rest.type || rest.type === "text";
 
@@ -135,6 +231,7 @@ export function VariableInput({ value, onChange, onKeyDown, onBlur, onFocus, cho
       // One line, as in an <input>: pasted line breaks are dropped.
       const text = e.target.value.replace(/\r?\n/g, "");
       onChange(text);
+      setHover(null);
       refresh(e.target);
     },
     onKeyDown: (e: React.KeyboardEvent<Field>) => {
@@ -166,6 +263,12 @@ export function VariableInput({ value, onChange, onKeyDown, onBlur, onFocus, cho
       if (choices) refresh(e.target);
       onFocus?.(e as React.FocusEvent<HTMLInputElement>);
     },
+    // Over a {{variable}}, its value, as in the URL bar.
+    onMouseMove: (e: React.MouseEvent<Field>) => {
+      const found = variableAt(e.currentTarget, e.clientX, e.clientY);
+      setHover((h) => (found?.name === h?.name && found?.left === h?.left && found?.top === h?.top ? h : found));
+    },
+    onMouseLeave: () => setHover(null),
     onClick: (e: React.MouseEvent<Field>) => {
       if (choices && !open) refresh(e.currentTarget);
     },
@@ -221,6 +324,22 @@ export function VariableInput({ value, onChange, onKeyDown, onBlur, onFocus, cho
           </ul>,
           document.body,
         )}
+      {hover && !open && <VariableHover {...hover} />}
     </>
+  );
+}
+
+/** The value of the {{variable}} under the pointer, above it. */
+function VariableHover({ name, left, top }: Hover) {
+  const info = describeVariable(name, useStore.getState().scope);
+  return createPortal(
+    <div className="cm-tooltip var-hover" style={{ left, top }}>
+      <div className="var-tooltip">
+        <strong>{name}</strong>
+        <div className={info.missing ? "missing" : undefined}>{info.detail}</div>
+        {info.source && <div className="source">{info.source}</div>}
+      </div>
+    </div>,
+    document.body,
   );
 }

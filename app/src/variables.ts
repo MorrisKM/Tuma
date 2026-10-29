@@ -77,3 +77,19 @@ export function variableCompletion(scope: () => VariableHint[]) {
 
 /** variableCompletion with the current request's variables, for editors outside the URL bar. */
 export const requestVariableCompletion = () => variableCompletion(() => useStore.getState().scope);
+
+/** What a {{variable}} hover shows: its value, or why it has none, and where it comes from. */
+export function describeVariable(
+  name: string,
+  scope: VariableHint[],
+): { detail: string; source?: string; missing?: boolean } {
+  const found = scope.find((v) => v.name === name);
+  if (found) {
+    return {
+      detail: found.secret ? "Secret (kept in the OS keychain)" : found.value || "(empty)",
+      source: `from ${found.source}`,
+    };
+  }
+  if (DYNAMIC[name]) return { detail: `Generated on each send: ${DYNAMIC[name]}` };
+  return { detail: "No value in scope: it is sent as written. Set it in an environment or folder.", missing: true };
+}

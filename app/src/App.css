@@ -933,6 +933,7 @@ body.resizing-y * {
 
 .request-bar {
   display: flex;
+  align-items: flex-start;
   gap: 8px;
   padding: 10px 14px 12px;
 }
@@ -942,7 +943,8 @@ body.resizing-y * {
   min-width: 0;
   display: flex;
   align-items: stretch;
-  height: 36px;
+  /* Grows while the URL editor is focused and wraps a long URL. */
+  min-height: 36px;
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
@@ -958,7 +960,7 @@ body.resizing-y * {
 
 .url-box .method {
   width: 92px;
-  height: auto;
+  height: 34px;
   flex-shrink: 0;
   border: none;
   border-right: 1px solid var(--border);
@@ -972,7 +974,7 @@ body.resizing-y * {
 
 .url-box .protocol {
   width: auto;
-  height: auto;
+  height: 34px;
   flex-shrink: 0;
   border: none;
   border-right: 1px solid var(--border);
@@ -1008,6 +1010,12 @@ body.resizing-y * {
 /* After the protocol, the method is no longer the first box. */
 .url-box .protocol + .method {
   border-radius: 0;
+}
+
+/* The pickers keep the bar's height when the URL grows. */
+.url-box .protocol,
+.url-box .method {
+  align-self: flex-start;
 }
 
 .url-box .method:not(:disabled) {
@@ -2619,6 +2627,20 @@ label.check {
   padding: 6px 12px;
 }
 
+.url .cm-editor.cm-focused .cm-scroller {
+  max-height: 168px;
+  overflow-y: auto;
+}
+
+.url .cm-content.cm-lineWrapping {
+  word-break: break-all;
+}
+
+.url .cm-selectionBackground,
+.url .cm-content ::selection {
+  background: var(--selection) !important;
+}
+
 .url .cm-line {
   padding: 0;
 }
@@ -2674,6 +2696,14 @@ label.check {
 
 .var-tooltip .missing {
   color: var(--fail);
+}
+
+/* The hover over a {{variable}} in a text field (VariableInput), drawn as the URL editor's. */
+.var-hover {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  transform: translateY(calc(-100% - 4px));
 }
 
 .cm-tooltip-autocomplete ul li {

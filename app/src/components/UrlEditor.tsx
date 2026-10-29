@@ -1,9 +1,10 @@
 import { history, historyKeymap, isolateHistory } from "@codemirror/commands";
-import { EditorState, type Extension, StateEffect } from "@codemirror/state";
+import { Compartment, EditorState, type Extension, StateEffect } from "@codemirror/state";
 import { external } from "./CodeEditor";
 import {
   Decoration,
   type DecorationSet,
+  drawSelection,
   EditorView,
   hoverTooltip,
   keymap,
@@ -13,12 +14,15 @@ import {
 } from "@codemirror/view";
 import { useEffect, useRef } from "react";
 import type { VariableHint } from "../types";
-import { DYNAMIC, variableCompletion } from "../variables";
+import { DYNAMIC, describeVariable, variableCompletion } from "../variables";
 
 const VARIABLE = /\{\{\s*([^{}]+?)\s*\}\}/g;
 
 /** Tells the decorations to recompute when the variables in scope change. */
 const rescan = StateEffect.define<null>();
+
+/** Line wrapping, on while the editor is focused so a long URL shows in full, as the fields below do. */
+const wrap = new Compartment();
 
 interface Props {
   value: string;
@@ -77,31 +81,26 @@ export function UrlEditor({ value, onChange, onSubmit, onPasteCurl, scope, place
         const start = m.index!;
         const end = start + m[0].length;
         if (pos < start || pos > end) continue;
-        const found = lookup(m[1]);
         return {
           pos: start,
           end,
           above: true,
           create: () => {
+            const info = describeVariable(m[1], props.current.scope);
             const dom = document.createElement("div");
             dom.className = "var-tooltip";
             const name = document.createElement("strong");
             name.textContent = m[1];
             const detail = document.createElement("div");
-            if (!found) {
-              detail.textContent = "No value in scope: it is sent as written. Set it in an environment or folder.";
-              detail.className = "missing";
-            } else if ("dynamic" in found) {
-              detail.textContent = `Generated on each send: ${found.dynamic}`;
-            } else {
-              detail.textContent = found.secret ? "Secret (kept in the OS keychain)" : found.value || "(empty)";
+            detail.textContent = info.detail;
+            if (info.missing) detail.className = "missing";
+            dom.append(name, detail);
+            if (info.source) {
               const from = document.createElement("div");
               from.className = "source";
-              from.textContent = `from ${found.source}`;
-              dom.append(name, detail, from);
-              return { dom };
+              from.textContent = info.source;
+              dom.append(from);
             }
-            dom.append(name, detail);
             return { dom };
           },
         };
@@ -113,6 +112,10 @@ export function UrlEditor({ value, onChange, onSubmit, onPasteCurl, scope, place
       // One line: Enter sends, and pasted line breaks become spaces.
       EditorState.transactionFilter.of((tr) => (tr.newDoc.lines > 1 ? [] : tr)),
       history(),
+      // CodeMirror's own caret: the native one, moved across the colored {{variables}}, can leave copies behind.
+      drawSelection(),
+      wrap.of([]),
+      EditorView.focusChangeEffect.of((_, focusing) => wrap.reconfigure(focusing ? EditorView.lineWrapping : [])),
       keymap.of([
         ...historyKeymap,
         {
@@ -137,6 +140,11 @@ export function UrlEditor({ value, onChange, onSubmit, onPasteCurl, scope, place
             v.dispatch(v.state.replaceSelection(text.replace(/\s*\n\s*/g, " ")));
             return true;
           }
+          return false;
+        },
+        // Back to one line, showing the URL's start.
+        blur: (_, v) => {
+          requestAnimationFrame(() => (v.scrollDOM.scrollLeft = 0));
           return false;
         },
       }),
@@ -167,6 +175,7 @@ export function UrlEditor({ value, onChange, onSubmit, onPasteCurl, scope, place
       // Another request: its text, with no undo history, so Ctrl+Z never brings back the last one's URL.
       shown.current = doc;
       v.setState(EditorState.create({ doc: value, extensions: extensions.current }));
+      if (v.hasFocus) v.dispatch({ effects: wrap.reconfigure(EditorView.lineWrapping) });
     } else if (v.state.doc.toString() !== value) {
       // The same request changed from outside, such as from the query parameters: one step of its own for Ctrl+Z.
       v.dispatch({
