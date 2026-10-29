@@ -3,6 +3,22 @@
 All notable changes to Tuma. Versions follow [Semantic Versioning](https://semver.org/): the workspace file format
 and the `tuma` command's options and `--json` output are the public interface.
 
+## 1.3.1 (2026-10-29)
+
+### Added
+
+- Hovering a `{{variable}}` in a parameter, header, auth or other field shows its value and where it comes from, as
+  in the URL bar.
+
+### Changed
+
+- The URL bar wraps a long URL when clicked and grows to show all of it, as the fields below do, then goes back to
+  one line when you leave it.
+
+### Fixed
+
+- Moving through the URL with the arrow keys could leave several cursors drawn in it.
+
 ## 1.3.0 (2026-10-27)
 
 ### Added
