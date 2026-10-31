@@ -370,8 +370,8 @@
             <tr><th>System</th><th>File</th><th>How</th></tr>
             <tr><td>Windows</td><td><code>-setup.exe</code> or <code>.msi</code></td><td>Run it. Your workspaces are kept when you install a newer version.</td></tr>
             <tr><td>macOS</td><td><code>.dmg</code></td><td>Open it and drag Tuma to Applications. Apple Silicon (<code>aarch64</code>) only; on an Intel Mac, <a href="#install">build from source</a> below. It isn't signed by Apple yet, so the first time macOS blocks it: open System Settings → Privacy &amp; Security and click Open Anyway.</td></tr>
-            <tr><td>Debian, Ubuntu</td><td><code>.deb</code></td><td><code>sudo apt install ./Tuma_1.3.1_amd64.deb</code></td></tr>
-            <tr><td>Fedora, openSUSE</td><td><code>.rpm</code></td><td><code>sudo dnf install ./Tuma-1.3.1-1.x86_64.rpm</code></td></tr>
+            <tr><td>Debian, Ubuntu</td><td><code>.deb</code></td><td><code>sudo apt install ./Tuma_1.4.0_amd64.deb</code></td></tr>
+            <tr><td>Fedora, openSUSE</td><td><code>.rpm</code></td><td><code>sudo dnf install ./Tuma-1.4.0-1.x86_64.rpm</code></td></tr>
             <tr><td>Any Linux</td><td><code>.AppImage</code></td><td><code>chmod +x Tuma_*.AppImage</code>, then run it.</td></tr>
           </table>
           <div class="note warn">With <code>apt</code>, write <code>./</code> in front of the file name. Without it, apt looks for a package of that name in its repositories and fails with "Unsupported file given on commandline".</div>
@@ -467,6 +467,7 @@ pnpm tauri build   <span class="c"># build installers for your system</span><but
             <tr><td>Bearer, Basic, API key</td><td>In a header or the query string.</td></tr>
             <tr><td>OAuth 2.0</td><td>Authorization code (with PKCE), client credentials, password and implicit. Tokens are kept in the keychain and refreshed.</td></tr>
             <tr><td>JWT</td><td>Signs a token from claims you write.</td></tr>
+            <tr><td>Token from another request</td><td>Pick a saved request, such as a login, and the part of its response that is the token. It is kept in the keychain, reused, and fetched again when a saved token gets a 401.</td></tr>
             <tr><td>Digest, OAuth 1.0, AWS Signature v4</td><td>Signed for every send.</td></tr>
           </table>
           <p>Proxies, client certificates, extra CA certificates and the cookie jar are machine settings (Settings), shared with the CLI. The cookie manager lets you view, edit and delete cookies per domain.</p>
@@ -556,7 +557,7 @@ tuma docs "Users API" -o api.html<button class="copy">Copy</button></div>
             <tr><td>Postman collections and environments</td><td>Import button, or <code>tuma import</code></td></tr>
             <tr><td>Insomnia, Bruno, plain JSON environments</td><td>Import button; environments also from the Environments section</td></tr>
             <tr><td>OpenAPI 3 / Swagger 2</td><td>File or URL; <code>tuma openapi discover --server http://localhost:8000 --import</code> finds a running API's spec</td></tr>
-            <tr><td>HAR recordings, cURL commands</td><td>Import button; paste cURL straight into the URL bar</td></tr>
+            <tr><td>HAR recordings, cURL commands</td><td>Import button; paste cURL straight into the URL bar. A commented script above the command can go in the Scripts tab, after a preview</td></tr>
           </table>
           <p>Export a collection as Postman Collection v2.1 (which Postman, Insomnia and Bruno import), or a whole workspace as a <code>.zip</code>. Collections imported from a spec can be synced when the spec changes.</p>
         </section>
