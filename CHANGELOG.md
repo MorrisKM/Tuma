@@ -3,6 +3,26 @@
 All notable changes to Tuma. Versions follow [Semantic Versioning](https://semver.org/): the workspace file format
 and the `tuma` command's options and `--json` output are the public interface.
 
+## 1.4.0 (2026-10-31)
+
+### Added
+
+- A new auth type, **Token from another request**: choose a saved request, such as a login, and the part of its
+  response that is the token. The token is reused, including after a restart, and fetched again only when there is
+  none saved, when the login request changes, or when a saved token gets a 401, which also retries the request once.
+- Pasting a cURL command with a commented script asks whether to uncomment it into the request's Scripts tab, with a
+  preview. Comments written by hand count too, with `#` or `//`. Variables it needs that nothing provides are added to
+  the current environment with empty values.
+
+### Changed
+
+- When a long URL wraps, only the URL field grows; the protocol and method pickers keep their height. The focus
+  highlight now surrounds just the focused part of the bar.
+
+### Fixed
+
+- The workspace menu's items, such as "Import a workspace folder…", wrapped and overflowed in a narrow sidebar.
+
 ## 1.3.1 (2026-10-29)
 
 ### Added
