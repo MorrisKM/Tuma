@@ -503,7 +503,7 @@ fn payload(content_type: &str, content: &str) -> Payload {
 fn auth_doc(auth: &Auth) -> AuthDoc {
     match auth {
         Auth::None => AuthDoc::None,
-        Auth::Bearer { .. } => AuthDoc::Bearer,
+        Auth::Bearer { .. } | Auth::RequestToken(_) => AuthDoc::Bearer,
         Auth::Basic { .. } => AuthDoc::Basic,
         Auth::ApiKey { key, location, .. } => AuthDoc::ApiKey {
             name: key.clone(),

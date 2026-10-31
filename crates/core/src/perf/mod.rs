@@ -120,6 +120,14 @@ pub async fn prepare(
                     .join(", ")
             ));
         }
+        crate::request_token::resolve(
+            &mut prepared.request.auth,
+            Some(workspace),
+            environment,
+            secrets,
+            network,
+        )
+        .await?;
         if let http::Auth::OAuth2(oauth) = &mut prepared.request.auth {
             let token =
                 crate::oauth2::token_for(oauth, Some(workspace.id()), secrets, network).await?;

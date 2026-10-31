@@ -1,6 +1,6 @@
 import { autocompletion, type Completion, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
 import { useStore } from "./store";
-import type { VariableHint } from "./types";
+import type { RequestFile, VariableHint } from "./types";
 
 /** Postman-style variables Tuma generates on each send. */
 export const DYNAMIC: Record<string, string> = {
@@ -18,6 +18,25 @@ export interface Suggestion {
   /** The value, "secret", or what a dynamic variable generates. */
   info: string;
   dynamic: boolean;
+}
+
+/**
+ * What a pasted request and its script read but nothing provides: {{variables}} anywhere in them, and
+ * pm.environment.get / pm.variables.get in the script. Left out: dynamic variables, those in scope, and those the
+ * script sets itself.
+ */
+export function neededVariables(file: RequestFile, scope: VariableHint[]): string[] {
+  const script = file.scripts?.preRequest ?? "";
+  const names = (text: string, pattern: RegExp) => [...text.matchAll(pattern)].map((m) => m[1]);
+  const provided = new Set([
+    ...scope.map((v) => v.name),
+    ...names(script, /\bpm\.(?:environment|variables)\.set\(\s*["'`]([^"'`]+)["'`]/g),
+  ]);
+  const read = [
+    ...names(JSON.stringify(file), /\{\{\s*([^{}]+?)\s*\}\}/g),
+    ...names(script, /\bpm\.(?:environment|variables)\.get\(\s*["'`]([^"'`]+)["'`]/g),
+  ];
+  return [...new Set(read)].filter((name) => !name.startsWith("$") && !provided.has(name));
 }
 
 /** The variables to offer, those in scope first, then the dynamic ones. */

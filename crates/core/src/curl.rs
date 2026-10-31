@@ -531,6 +531,24 @@ mod tests {
 
         // A plain command has no script.
         assert_eq!(parse(command).unwrap().0.scripts.pre_request, "");
+
+        // A script commented out by hand, with either marker.
+        let pasted = format!(
+            "#!/bin/sh\n# const id = pm.environment.get('id');\n#\n#   pm.variables.set('x', id);\n{command}"
+        );
+        assert_eq!(
+            parse(&pasted).unwrap().0.scripts.pre_request,
+            "const id = pm.environment.get('id');\n\n  pm.variables.set('x', id);"
+        );
+        let pasted = format!("// pm.variables.set('x', 1);\n{command}");
+        assert_eq!(
+            parse(&pasted).unwrap().0.scripts.pre_request,
+            "pm.variables.set('x', 1);"
+        );
+
+        // A note about the command is not a script.
+        let pasted = format!("# List the users (admins only)\n{command}");
+        assert_eq!(parse(&pasted).unwrap().0.scripts.pre_request, "");
     }
 
     #[test]

@@ -133,6 +133,7 @@ impl Scopes {
                 access_token: a.access_token.clone(),
                 ..resolve_fields(a, &mut u)
             }),
+            Auth::RequestToken(a) => Auth::RequestToken(a.clone()),
             Auth::None => Auth::None,
             Auth::Bearer { token } => Auth::Bearer { token: u(token) },
             Auth::Basic { username, password } => Auth::Basic {

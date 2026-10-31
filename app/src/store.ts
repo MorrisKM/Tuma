@@ -16,6 +16,7 @@ import {
 } from "./draft";
 import { stripJsonc } from "./jsonc";
 import { useLayout } from "./layout";
+import { neededVariables } from "./variables";
 import type {
   RequestFile,
   HistoryEntry,
@@ -219,6 +220,10 @@ interface State {
   exportCollection: (path: string) => Promise<void>;
   /** Replaces the active request with a cURL command's. */
   importCurl: (command: string) => Promise<void>;
+  /** A pasted cURL command with a script, waiting for the choice of whether to keep the script. */
+  curlImport: CurlImport | null;
+  /** Finishes that import, with the script (and adding the variables it needs) or without. */
+  finishCurlImport: (keepScript: boolean) => Promise<void>;
 
   send: () => Promise<void>;
   cancel: () => void;
@@ -226,6 +231,14 @@ interface State {
   loadHistory: () => Promise<void>;
   clearHistory: () => Promise<void>;
   notify: (notice: Notice | null) => void;
+}
+
+/** A parsed cURL command with a script, and the variables the script and request need that nothing provides. */
+export interface CurlImport {
+  file: RequestFile;
+  ignored: string[];
+  script: string;
+  variables: string[];
 }
 
 const snapshot = (d: Draft) => JSON.stringify({ ...toRequestFile(d), path: d.path });
@@ -268,6 +281,38 @@ export const useStore = create<State>((set, get) => {
     } catch (e) {
       set({ notice: { tone: "error", text: message(e) } });
     }
+  };
+
+  /** Takes a cURL command's request into the active tab, keeping where it is saved and what it is called. */
+  const applyCurl = (file: RequestFile, ignored: string[], note = "") => {
+    const { draft } = get();
+    set({ draft: fromRequestFile(file, draft.path, draft.name), preview: false });
+    const script = file.scripts?.preRequest ?? "";
+    const notes = [
+      ...(script
+        ? [
+            /^\/\/ (Collection|Folder) .* pre-request script$/m.test(script)
+              ? "Its pre-request scripts are in the Scripts tab, the collection's and folders' too: delete those if the request already inherits them here."
+              : "Its pre-request script is in the Scripts tab.",
+          ]
+        : []),
+      ...(note ? [note] : []),
+      ...(ignored.length ? [`Ignored: ${ignored.join(", ")}`] : []),
+    ];
+    if (notes.length) set({ notice: { tone: "info", text: `Imported the cURL command. ${notes.join(" ")}` } });
+  };
+
+  /** Adds the variables an environment does not have yet, without values; returns those added. */
+  const addEmptyVariables = async (environment: string, names: string[]) => {
+    const variables = await api.environmentRead(environment);
+    const added = names.filter((name) => !variables.some((v) => v.name === name));
+    if (added.length) {
+      await api.environmentWrite(environment, [
+        ...variables,
+        ...added.map((name) => ({ name, value: "", secret: false, enabled: true })),
+      ]);
+    }
+    return added;
   };
 
   const ask_ = (text: string) =>
@@ -411,6 +456,7 @@ export const useStore = create<State>((set, get) => {
     docs: null,
     cookies: null,
     snippetOpen: false,
+    curlImport: null,
     history: [],
     notice: null,
     live: {},
@@ -878,22 +924,23 @@ export const useStore = create<State>((set, get) => {
     importCurl: (command) =>
       attempt(async () => {
         const [file, ignored] = await api.parseCurl(command);
-        const { draft } = get();
-        // Keep where the request is saved and what it is called; take everything else from the command.
-        const next = fromRequestFile(file, draft.path, draft.name);
-        set({ draft: next, preview: false });
         const script = file.scripts?.preRequest ?? "";
-        const notes = [
-          ...(script
-            ? [
-                /^\/\/ (Collection|Folder) .* pre-request script$/m.test(script)
-                  ? "Its pre-request scripts are in the Scripts tab, the collection's and folders' too: delete those if the request already inherits them here."
-                  : "Its pre-request script is in the Scripts tab.",
-              ]
-            : []),
-          ...(ignored.length ? [`Ignored: ${ignored.join(", ")}`] : []),
-        ];
-        if (notes.length) set({ notice: { tone: "info", text: `Imported the cURL command. ${notes.join(" ")}` } });
+        if (!script) return applyCurl(file, ignored);
+        const { draft, environment, workspace } = get();
+        const scope = workspace ? await api.variablesInScope(draft.path, environment) : [];
+        set({ curlImport: { file, ignored, script, variables: neededVariables(file, scope) } });
+      }),
+
+    finishCurlImport: (keepScript) =>
+      attempt(async () => {
+        const { curlImport, environment } = get();
+        if (!curlImport) return;
+        set({ curlImport: null });
+        const { file, ignored, variables } = curlImport;
+        if (!keepScript) return applyCurl({ ...file, scripts: { ...file.scripts, preRequest: "" } }, ignored);
+        const added = environment && variables.length ? await addEmptyVariables(environment, variables) : [];
+        applyCurl(file, ignored, added.length ? `Added ${added.join(", ")} to ${environment} with empty values.` : "");
+        if (added.length) await get().loadScope();
       }),
 
     send: async () => {

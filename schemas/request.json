@@ -481,6 +481,20 @@
           "required": [
             "type"
           ]
+        },
+        {
+          "description": "A bearer token read from another saved request's response, which is sent first.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "requestToken"
+            }
+          },
+          "$ref": "#/$defs/RequestTokenAuth",
+          "required": [
+            "type"
+          ]
         }
       ]
     },
@@ -737,6 +751,22 @@
           "description": "Sent as `Authorization: <prefix> <token>`.",
           "type": "string",
           "default": "Bearer"
+        }
+      }
+    },
+    "RequestTokenAuth": {
+      "description": "A bearer token read from the response of another saved request.",
+      "type": "object",
+      "properties": {
+        "request": {
+          "description": "The saved request to send, by its path in the workspace.",
+          "type": "string",
+          "default": ""
+        },
+        "path": {
+          "description": "The JSON path of the token in its response, such as `$.data.token`. Empty means the whole body.",
+          "type": "string",
+          "default": ""
         }
       }
     },

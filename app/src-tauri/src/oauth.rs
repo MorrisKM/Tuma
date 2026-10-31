@@ -67,6 +67,31 @@ fn status(
     }
 }
 
+/// Sends a saved request for token-from-a-request auth, returning its body to choose the token from.
+#[tauri::command]
+pub async fn request_token_body(
+    open: tauri::State<'_, Open>,
+    request: String,
+    environment: Option<String>,
+) -> Result<String> {
+    let ws = open
+        .0
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or("no workspace is open")?;
+    let network =
+        tuma_core::settings::network_for(Some(&ws), secrets()).map_err(|e| e.to_string())?;
+    tuma_core::request_token::fetch(
+        &ws,
+        &request,
+        environment.as_deref(),
+        secrets(),
+        Some(&network),
+    )
+    .await
+}
+
 #[tauri::command]
 pub fn oauth2_status(
     open: tauri::State<'_, Open>,

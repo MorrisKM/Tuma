@@ -942,28 +942,35 @@ body.resizing-y * {
   flex: 1;
   min-width: 0;
   display: flex;
-  align-items: stretch;
-  /* Grows while the URL editor is focused and wraps a long URL. */
-  min-height: 36px;
-  background: var(--bg-input);
+  /* Each part has its own border, so only the URL grows when it wraps a long URL. */
+  align-items: flex-start;
+}
+
+.url-box > * {
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
   transition:
     border-color 0.12s,
     box-shadow 0.12s;
 }
 
-.url-box:focus-within {
+/* Neighbors share one border line. */
+.url-box > * + * {
+  margin-left: -1px;
+}
+
+/* Raised so the whole accent border and ring show over the neighbors. */
+.url-box > :focus,
+.url-box > :focus-within {
+  position: relative;
+  z-index: 1;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .url-box .method {
   width: 92px;
-  height: 34px;
+  height: 36px;
   flex-shrink: 0;
-  border: none;
-  border-right: 1px solid var(--border);
   border-radius: var(--radius) 0 0 var(--radius);
   background: var(--bg-subtle);
   font-family: var(--mono);
@@ -974,10 +981,8 @@ body.resizing-y * {
 
 .url-box .protocol {
   width: auto;
-  height: 34px;
+  height: 36px;
   flex-shrink: 0;
-  border: none;
-  border-right: 1px solid var(--border);
   border-radius: var(--radius) 0 0 var(--radius);
   background-color: var(--bg-subtle);
   font-weight: 600;
@@ -995,7 +1000,6 @@ body.resizing-y * {
 }
 
 .url-box .protocol:focus {
-  box-shadow: none;
   background-color: var(--bg-hover);
 }
 
@@ -1010,12 +1014,6 @@ body.resizing-y * {
 /* After the protocol, the method is no longer the first box. */
 .url-box .protocol + .method {
   border-radius: 0;
-}
-
-/* The pickers keep the bar's height when the URL grows. */
-.url-box .protocol,
-.url-box .method {
-  align-self: flex-start;
 }
 
 .url-box .method:not(:disabled) {
@@ -1041,7 +1039,6 @@ select.method {
 }
 
 .url-box .method:focus {
-  box-shadow: none;
   /* The color only: the shorthand would also clear the arrow, which is a background image. */
   background-color: var(--bg-hover);
 }
@@ -1947,12 +1944,24 @@ label.check {
 
 .menu.menu-left {
   left: 8px;
-  right: 8px;
+  right: auto;
 }
 
+/* Sized to its labels, not the sidebar, so items stay on one line when the sidebar is narrow. */
 .menu.workspace-menu {
+  width: max-content;
+  min-width: calc(100% - 16px);
+  max-width: min(360px, calc(100vw - 24px));
   max-height: 70vh;
   overflow-y: auto;
+}
+
+.workspace-menu button {
+  white-space: nowrap;
+}
+
+.workspace-menu button svg {
+  flex-shrink: 0;
 }
 
 .menu-text {
@@ -1963,6 +1972,11 @@ label.check {
 }
 
 .workspace-menu .menu-caption {
+  /* A long path wraps inside the menu instead of widening it. */
+  box-sizing: border-box;
+  width: 0;
+  min-width: 100%;
+  overflow-wrap: anywhere;
   border-bottom: none;
   border-top: 1px solid var(--border);
   margin: 4px 0 0;
@@ -2600,8 +2614,11 @@ label.check {
 .url {
   flex: 1;
   min-width: 0;
+  min-height: 36px;
   display: flex;
   align-items: center;
+  background: var(--bg-input);
+  border-radius: 0 var(--radius) var(--radius) 0;
 }
 
 .url .cm-editor {
@@ -2844,6 +2861,65 @@ label.check {
 
 .snippet-code {
   height: min(52vh, 460px);
+}
+
+.token-source-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.token-source-values {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.token-source-values button {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 26px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.token-source-values button:hover {
+  background: var(--bg-hover);
+}
+
+.token-source-values button.active {
+  background: var(--accent-soft);
+}
+
+.token-source-values span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.token-source-values span:first-child {
+  flex-shrink: 0;
+  max-width: 60%;
+}
+
+.curl-import-script {
+  height: min(40vh, 340px);
+}
+
+.curl-import-variables {
+  overflow-wrap: anywhere;
 }
 
 .hint.warning {

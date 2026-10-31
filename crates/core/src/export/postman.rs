@@ -112,6 +112,10 @@ fn auth_json(auth: &Auth) -> Value {
     match auth {
         Auth::None => json!({ "type": "noauth" }),
         Auth::Bearer { token } => json!({ "type": "bearer", "bearer": [pair("token", token)] }),
+        // Postman can't fetch a token from a request: bearer auth with a variable for the user to fill.
+        Auth::RequestToken(_) => {
+            json!({ "type": "bearer", "bearer": [pair("token", "{{token}}")] })
+        }
         Auth::Basic { username, password } => {
             json!({ "type": "basic", "basic": [pair("username", username), pair("password", password)] })
         }

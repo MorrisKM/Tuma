@@ -19,6 +19,7 @@ import { RequestBar } from "./components/RequestBar";
 import { RequestPanel } from "./components/RequestPanel";
 import { ResponsePanel } from "./components/ResponsePanel";
 import { CookiesDialog } from "./components/CookiesDialog";
+import { CurlImportDialog } from "./components/CurlImportDialog";
 import { DocsDialog } from "./components/DocsDialog";
 import { NewWorkspaceDialog } from "./components/NewWorkspaceDialog";
 import { SaveDialog } from "./components/SaveDialog";
@@ -83,6 +84,7 @@ function App() {
   const cookies = useStore((s) => s.cookies);
   const paletteOpen = useStore((s) => s.paletteOpen);
   const snippetOpen = useStore((s) => s.snippetOpen);
+  const curlImport = useStore((s) => s.curlImport !== null);
   const workspace = useStore((s) => s.workspace);
   const environment = useStore((s) => s.environment);
   const consoleOpen = useLayout((s) => s.consoleOpen);
@@ -182,6 +184,7 @@ function App() {
       {cookies && <CookiesDialog domain={cookies.domain} />}
       {paletteOpen && <CommandPalette />}
       {snippetOpen && <SnippetDialog />}
+      {curlImport && <CurlImportDialog />}
     </div>
   );
 }

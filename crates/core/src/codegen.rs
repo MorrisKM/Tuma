@@ -76,9 +76,11 @@ pub fn with_scripts(code: &str, scripts: &[Script], language: Language) -> Strin
 }
 
 /// The scripts [`with_scripts`] wrote above a command, labelled as there ("Request", "Collection Users"), and the
-/// command after its comments.
+/// command after its comments. Without those headings, comments that read as code are the request's script; others,
+/// such as a note on what the command does, are dropped.
 pub fn scripts_from_comments(text: &str) -> (Vec<Script>, &str) {
     let mut scripts: Vec<Script> = Vec::new();
+    let mut plain = String::new();
     let mut rest = text;
     while !rest.is_empty() {
         let (line, after) = rest.split_once('\n').unwrap_or((rest, ""));
@@ -104,13 +106,36 @@ pub fn scripts_from_comments(text: &str) -> (Vec<Script>, &str) {
                 .source
                 .push_str(content.strip_prefix("  ").unwrap_or(content));
             script.source.push('\n');
+        } else if !trimmed.starts_with("#!") {
+            plain.push_str(content);
+            plain.push('\n');
         }
         rest = after;
+    }
+    if scripts.is_empty() && plain.lines().any(reads_as_code) {
+        scripts.push(Script {
+            label: "request".to_string(),
+            source: plain.trim_start_matches('\n').to_string(),
+        });
     }
     for script in &mut scripts {
         script.source = script.source.trim_end().to_string();
     }
     (scripts, rest)
+}
+
+/// Whether a commented line looks like JavaScript rather than a note about the command.
+fn reads_as_code(line: &str) -> bool {
+    let line = line.trim();
+    line.ends_with(';')
+        || line.ends_with('{')
+        || line.contains("pm.")
+        || line.contains("console.")
+        || line.contains(" = ")
+        || line.contains("=>")
+        || ["const ", "let ", "var ", "if (", "function "]
+            .iter()
+            .any(|start| line.starts_with(start))
 }
 
 /// "collection Users" as "Collection Users".

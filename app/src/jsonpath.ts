@@ -54,3 +54,21 @@ export function select(root: unknown, path: string): unknown[] {
   }
   return current;
 }
+
+/** A text or number in a JSON value, and the path to it. */
+export interface JsonLeaf {
+  path: string;
+  value: string;
+}
+
+/** Every text and number in a JSON value, in order, as paths the checks' subset can read. */
+export function jsonLeaves(value: unknown, path = "$"): JsonLeaf[] {
+  if (typeof value === "string" || typeof value === "number") return [{ path, value: String(value) }];
+  if (Array.isArray(value)) return value.flatMap((item, i) => jsonLeaves(item, `${path}[${i}]`));
+  if (value && typeof value === "object") {
+    return Object.entries(value).flatMap(([key, item]) =>
+      jsonLeaves(item, /^[\w-]+$/.test(key) ? `${path}.${key}` : `${path}['${key}']`),
+    );
+  }
+  return [];
+}
