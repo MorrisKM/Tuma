@@ -133,6 +133,18 @@ pub enum Auth {
     OAuth1(OAuth1Auth),
     #[serde(rename = "oauth2")]
     OAuth2(OAuth2Auth),
+    /// Replaced by a bearer token before sending; see [`crate::request_token`].
+    RequestToken(RequestTokenAuth),
+}
+
+/// A bearer token read from the response of another saved request.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RequestTokenAuth {
+    /// The saved request to send, by its path in the workspace.
+    pub request: String,
+    /// The JSON path of the token in its response, such as `$.data.token`. Empty means the whole body.
+    pub path: String,
 }
 
 #[derive(

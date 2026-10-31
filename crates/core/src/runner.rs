@@ -546,6 +546,21 @@ async fn run(job: Job<'_>, send: bool) -> Execution {
     };
     let mut prepared = prepared;
     execution.unresolved = prepared.unresolved.clone();
+    let request_token = match crate::request_token::resolve(
+        &mut prepared.request.auth,
+        job.workspace,
+        job.environment,
+        job.secrets,
+        job.network.as_deref(),
+    )
+    .await
+    {
+        Ok(resolved) => resolved,
+        Err(e) => {
+            execution.response = Err(Failure::new("auth", e));
+            return execution;
+        }
+    };
     // OAuth 2.0: a stored, refreshed or new token, with the settings' variables already resolved.
     if let http::Auth::OAuth2(oauth) = &mut prepared.request.auth {
         match crate::oauth2::token_for(
@@ -632,11 +647,41 @@ async fn run(job: Job<'_>, send: bool) -> Execution {
     // The request
     let direct = http::Network::default();
     let network = job.network.as_deref().unwrap_or(&direct);
-    let result = if file.is_grpc() {
+    let mut result = if file.is_grpc() {
         call_grpc(&job, &file, &prepared.request).await
     } else {
         http::send_observed(&prepared.request, network, job.observer).await
     };
+    // A saved token that is refused has probably expired: get a new one and try once more.
+    if let (Some(resolved), Some(workspace), Ok(response)) =
+        (&request_token, job.workspace, &result)
+        && resolved.reused
+        && response.status == 401
+        && !file.is_grpc()
+    {
+        match crate::request_token::renew(
+            &resolved.settings,
+            workspace,
+            job.environment,
+            job.secrets,
+            job.network.as_deref(),
+        )
+        .await
+        {
+            Ok(token) => {
+                prepared.request.auth = http::Auth::Bearer { token };
+                result = http::send_observed(&prepared.request, network, job.observer).await;
+            }
+            Err(e) => {
+                execution.sent = Some(prepared.request);
+                execution.response = Err(Failure::new(
+                    "auth",
+                    format!("the saved token was refused and a new one could not be fetched: {e}"),
+                ));
+                return execution;
+            }
+        }
+    }
     execution.sent = Some(prepared.request.clone());
     if let Some(history) = job.history {
         let entry = Entry {
@@ -1145,6 +1190,15 @@ async fn resolve(
         None => workspace::prepare_standalone(file, job.overrides),
     };
     let mut request = prepared.request;
+    crate::request_token::resolve(
+        &mut request.auth,
+        job.workspace,
+        job.environment,
+        job.secrets,
+        job.network.as_deref(),
+    )
+    .await
+    .map_err(|e| Failure::new("auth", e))?;
     if let http::Auth::OAuth2(oauth) = &mut request.auth {
         let token = crate::oauth2::token_for(
             oauth,

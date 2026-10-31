@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import * as api from "../api";
 import { useStore } from "../store";
-import type { Auth, RequestFile, TokenStatus } from "../types";
+import { type JsonLeaf, jsonLeaves } from "../jsonpath";
+import type { Auth, RequestFile, TokenStatus, TreeNode } from "../types";
 import { VariableInput } from "./VariableInput";
 
 const TYPES: { id: Auth["type"] | "inherit"; label: string }[] = [
   { id: "inherit", label: "Inherit from parent" },
   { id: "none", label: "No auth" },
   { id: "bearer", label: "Bearer token" },
+  { id: "requestToken", label: "Token from another request" },
   { id: "basic", label: "Basic auth" },
   { id: "apiKey", label: "API key" },
   { id: "oauth2", label: "OAuth 2.0" },
@@ -21,6 +23,8 @@ function blank(type: Auth["type"]): Auth {
   switch (type) {
     case "bearer":
       return { type, token: "" };
+    case "requestToken":
+      return { type, request: "", path: "$.token" };
     case "basic":
     case "digest":
       return { type, username: "", password: "" };
@@ -173,6 +177,115 @@ function fields(auth: Auth): Field[] {
   }
 }
 
+/** Every saved request under these nodes, with where it is. */
+function savedRequests(nodes: TreeNode[], parents = ""): { path: string; label: string }[] {
+  return nodes.flatMap((n) =>
+    n.kind === "request"
+      ? [{ path: n.path, label: `${parents}${n.name}` }]
+      : savedRequests(n.children ?? [], `${parents}${n.name} / `),
+  );
+}
+
+/** Which saved request returns the token, and which part of its response is the token. */
+function RequestTokenFields({
+  auth,
+  onChange,
+  current,
+}: {
+  auth: Extract<Auth, { type: "requestToken" }>;
+  onChange: (auth: Auth) => void;
+  current: string | null;
+}) {
+  const tree = useStore((s) => s.tree);
+  const environment = useStore((s) => s.environment);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [found, setFound] = useState<JsonLeaf[] | null>(null);
+  const requests = savedRequests(tree).filter((r) => r.path !== current);
+
+  const sendIt = async () => {
+    setSending(true);
+    setError(null);
+    setFound(null);
+    try {
+      const body = await api.requestTokenBody(auth.request, environment);
+      try {
+        setFound(jsonLeaves(JSON.parse(body)));
+      } catch {
+        setError("The response isn't JSON. Leave the path empty to use the whole response as the token.");
+      }
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <>
+      <label>
+        <span>Request</span>
+        <select
+          value={auth.request}
+          onChange={(e) => {
+            setFound(null);
+            setError(null);
+            onChange({ ...auth, request: e.target.value });
+          }}
+        >
+          <option value="">Choose a saved request…</option>
+          {auth.request && !requests.some((r) => r.path === auth.request) && (
+            <option value={auth.request}>{auth.request} (not found)</option>
+          )}
+          {requests.map((r) => (
+            <option key={r.path} value={r.path}>
+              {r.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>Token in response</span>
+        <input
+          className="mono"
+          value={auth.path}
+          spellCheck={false}
+          placeholder="Whole response"
+          onChange={(e) => onChange({ ...auth, path: e.target.value })}
+        />
+      </label>
+      <div className="token-source-actions">
+        <button type="button" className="button" disabled={!auth.request || sending} onClick={() => void sendIt()}>
+          {sending ? "Sending…" : "Send it and choose from the response"}
+        </button>
+      </div>
+      {error && <p className="notice error">{error}</p>}
+      {found && found.length === 0 && <p className="hint">The response has no text or number values to use.</p>}
+      {found && found.length > 0 && (
+        <div className="token-source-values" role="listbox" aria-label="Values in the response">
+          {found.map((leaf) => (
+            <button
+              type="button"
+              key={leaf.path}
+              role="option"
+              aria-selected={leaf.path === auth.path}
+              className={leaf.path === auth.path ? "active" : ""}
+              onClick={() => onChange({ ...auth, path: leaf.path })}
+            >
+              <span className="mono">{leaf.path}</span>
+              <span className="mono muted">{leaf.value}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <p className="hint">
+        The value is sent as a bearer token and reused. This request is only sent, without its scripts, when there is
+        no saved token, when it changes, or when a saved token gets a 401.
+      </p>
+    </>
+  );
+}
+
 export function AuthForm({ auth, onChange, inheritHint, tokenFor }: Props) {
   const type = auth?.type ?? "inherit";
   const set = (key: string, value: unknown) => auth && onChange({ ...auth, [key]: value } as Auth);
@@ -199,6 +312,9 @@ export function AuthForm({ auth, onChange, inheritHint, tokenFor }: Props) {
           <span>Token</span>
           <VariableInput value={auth.token} spellCheck={false} onChange={(token) => onChange({ ...auth, token })} />
         </label>
+      )}
+      {auth?.type === "requestToken" && (
+        <RequestTokenFields auth={auth} onChange={onChange} current={tokenFor?.path ?? null} />
       )}
       {(auth?.type === "basic" || auth?.type === "digest") && (
         <>

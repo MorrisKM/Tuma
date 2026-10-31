@@ -407,6 +407,7 @@ pub fn run() {
             workspace::current_values,
             workspace::reset_current_values,
             runs::run_collection,
+            oauth::request_token_body,
             oauth::oauth2_status,
             oauth::oauth2_authorize,
             oauth::oauth2_tokens,

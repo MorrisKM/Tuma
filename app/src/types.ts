@@ -51,7 +51,9 @@ export type Auth =
       callback?: string;
       verifier?: string;
     }
-  | ({ type: "oauth2" } & OAuth2Settings);
+  | ({ type: "oauth2" } & OAuth2Settings)
+  /** A bearer token read from another saved request's response; `path` is a JSON path, empty for the whole body. */
+  | { type: "requestToken"; request: string; path: string };
 
 export type JwtAlgorithm =
   | "HS256" | "HS384" | "HS512" | "RS256" | "RS384" | "RS512" | "PS256" | "PS384" | "PS512" | "ES256" | "ES384";

@@ -13,8 +13,8 @@ pub use client::{Observer, StreamEvent, send, send_observed, send_with};
 pub(crate) use client::{connect_to, proxy_authorization, tunnel};
 pub use error::Error;
 pub use model::{
-    ApiKeyLocation, Auth, Body, Header, KeyValue, Part, Redirect, Request, Response, SentRequest,
-    Settings, Timing,
+    ApiKeyLocation, Auth, Body, Header, KeyValue, Part, Redirect, Request, RequestTokenAuth,
+    Response, SentRequest, Settings, Timing,
 };
 pub use network::Network;
 pub(crate) use prepare::prepare;

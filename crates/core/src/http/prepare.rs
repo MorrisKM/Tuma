@@ -206,6 +206,12 @@ fn apply_auth(
                 ));
             }
         },
+        Auth::RequestToken(a) => {
+            return Err(Error::Auth(format!(
+                "the token from \"{}\" was not fetched before sending",
+                a.request
+            )));
+        }
         Auth::Bearer { token } if !token.is_empty() => {
             headers.insert(AUTHORIZATION, header_value(&format!("Bearer {token}"))?);
         }

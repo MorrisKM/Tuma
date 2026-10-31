@@ -499,6 +499,8 @@ pub enum Auth {
     /// Tokens are kept on this machine (in the keychain), not in the file.
     #[serde(rename = "oauth2")]
     OAuth2(OAuth2Auth),
+    /// A bearer token read from another saved request's response, which is sent first.
+    RequestToken(http::RequestTokenAuth),
 }
 
 impl From<&Auth> for http::Auth {
@@ -521,6 +523,7 @@ impl From<&Auth> for http::Auth {
             Auth::Jwt(a) => http::Auth::Jwt(a),
             Auth::OAuth1(a) => http::Auth::OAuth1(a),
             Auth::OAuth2(a) => http::Auth::OAuth2(a),
+            Auth::RequestToken(a) => http::Auth::RequestToken(a),
         }
     }
 }
@@ -533,6 +536,7 @@ impl From<&http::Auth> for Auth {
             http::Auth::Jwt(a) => Auth::Jwt(a),
             http::Auth::OAuth1(a) => Auth::OAuth1(a),
             http::Auth::OAuth2(a) => Auth::OAuth2(a),
+            http::Auth::RequestToken(a) => Auth::RequestToken(a),
             http::Auth::None => Auth::None,
             http::Auth::Bearer { token } => Auth::Bearer { token },
             http::Auth::Basic { username, password } => Auth::Basic { username, password },

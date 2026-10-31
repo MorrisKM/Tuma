@@ -218,6 +218,8 @@ export const cookiesSet = (domain: string, raw: string, replacing: [string, stri
 export const cookiesRemove = (domain: string | null, path: string | null, name: string | null) =>
   invoke<void>("cookies_remove", { domain, path, name });
 
+export const requestTokenBody = (request: string, environment: string | null) =>
+  invoke<string>("request_token_body", { request, environment });
 export const oauth2Status = (request: RequestFile, path: string | null, environment: string | null) =>
   invoke<TokenStatus>("oauth2_status", { request, path, environment });
 /** Browser grants open the system browser and resolve after the login. */

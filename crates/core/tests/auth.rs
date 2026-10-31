@@ -36,6 +36,10 @@ struct State {
     /// code -> PKCE challenge.
     codes: HashMap<String, String>,
     issued: usize,
+    /// For tokens from a login request: how many were given, the one accepted, and whether logins fail.
+    logins: usize,
+    valid: String,
+    login_down: bool,
 }
 
 type Shared = Arc<Mutex<State>>;
@@ -180,6 +184,25 @@ async fn handle(
                 200,
                 json!({ "access_token": format!("tok-{}", s.issued), "token_type": "Bearer", "expires_in": 0, "refresh_token": "refresh-1" }),
             )
+        }
+        "/login" => {
+            let mut s = state.lock().unwrap();
+            if s.login_down {
+                reply(401, json!({}))
+            } else {
+                s.logins += 1;
+                let jwt = format!("login-{}", s.logins);
+                s.valid = jwt.clone();
+                reply(200, json!({ "data": { "session": { "jwt": jwt } } }))
+            }
+        }
+        "/guarded" => {
+            let valid = state.lock().unwrap().valid.clone();
+            if auth == format!("Bearer {valid}") {
+                reply(200, json!({ "token": valid }))
+            } else {
+                reply(401, json!({ "refused": auth }))
+            }
         }
         "/me" => match auth.strip_prefix("Bearer ") {
             Some(token) => reply(200, json!({ "token": token })),
@@ -437,4 +460,120 @@ async fn oauth2_browser_and_password_grants() {
         .await
         .unwrap_err();
     assert!(error.contains("loopback"), "{error}");
+}
+
+#[tokio::test]
+async fn a_token_from_another_requests_response() {
+    isolate();
+    let (base, state) = server().await;
+    let secrets = MemoryStore::default();
+    let dir = std::env::temp_dir().join(format!("tuma-auth-token-ws-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let ws = tuma_core::workspace::Workspace::create(&dir, "Auth").unwrap();
+    let login = RequestFile {
+        url: format!("{base}/login"),
+        ..Default::default()
+    };
+    let collection = ws.create_folder(None, "Api").unwrap();
+    let login_path = ws.create_request(&collection, "Login", &login).unwrap();
+
+    let request = |path: &str| RequestFile {
+        url: format!("{base}/guarded"),
+        auth: Some(files::Auth::RequestToken(
+            tuma_core::http::RequestTokenAuth {
+                request: login_path.clone(),
+                path: path.into(),
+            },
+        )),
+        ..Default::default()
+    };
+    let send = |request: RequestFile| {
+        let ws = &ws;
+        let secrets = &secrets;
+        async move {
+            runner::execute(Job {
+                workspace: Some(ws),
+                request: &request,
+                path: None,
+                context: None,
+                environment: None,
+                overrides: &[],
+                extra_checks: None,
+                secrets,
+                history: None,
+                source: "test",
+                allow_host: None,
+                scripting: Default::default(),
+                network: None,
+                observer: None,
+            })
+            .await
+        }
+    };
+    let jwt = "$.data.session.jwt";
+    let logins = || state.lock().unwrap().logins;
+    let token_of = |response: &tuma_core::http::Response| -> String {
+        let body: Value = serde_json::from_slice(&response.body).unwrap();
+        body["token"].as_str().unwrap_or_default().to_string()
+    };
+
+    // The first send logs in; the next reuses the token.
+    let done = send(request(jwt)).await;
+    assert_eq!(token_of(done.response.as_ref().unwrap()), "login-1");
+    let done = send(request(jwt)).await;
+    assert_eq!(token_of(done.response.as_ref().unwrap()), "login-1");
+    assert_eq!(logins(), 1);
+
+    // The token expires: a 401 gets a new one, and the request succeeds on the retry.
+    state.lock().unwrap().valid = "expired".into();
+    let done = send(request(jwt)).await;
+    let response = done.response.as_ref().unwrap();
+    assert_eq!(response.status, 200);
+    assert_eq!(token_of(response), "login-2");
+    assert_eq!(logins(), 2);
+
+    // Logging in fails while renewing: it says so.
+    state.lock().unwrap().valid = "expired".into();
+    state.lock().unwrap().login_down = true;
+    let done = send(request(jwt)).await;
+    let message = done.response.unwrap_err().message;
+    assert!(
+        message.contains("refused") && message.contains("401"),
+        "{message}"
+    );
+    state.lock().unwrap().login_down = false;
+
+    // The refused token was dropped, so this logs in up front.
+    let before = logins();
+    let done = send(request(jwt)).await;
+    assert_eq!(done.response.as_ref().unwrap().status, 200);
+    assert_eq!(logins(), before + 1);
+
+    // Changing the login request retires the saved token.
+    let before = logins();
+    let mut changed = login.clone();
+    changed.url = format!("{base}/login?user=other");
+    ws.write_request(&login_path, &changed).unwrap();
+    let done = send(request(jwt)).await;
+    assert_eq!(done.response.as_ref().unwrap().status, 200);
+    assert_eq!(logins(), before + 1);
+
+    // A missing path stops the send and says why.
+    let done = send(request("$.nope")).await;
+    assert!(
+        done.response
+            .unwrap_err()
+            .message
+            .contains("nothing at $.nope")
+    );
+
+    // A token request can't get its own token from a request, so a request can't wait on itself.
+    ws.write_request(&login_path, &request("$.other")).unwrap();
+    let done = send(request("$.other")).await;
+    assert!(
+        done.response
+            .unwrap_err()
+            .message
+            .contains("gets its own token")
+    );
 }
