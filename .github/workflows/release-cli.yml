@@ -1,0 +1,86 @@
+# Builds only the tuma CLI for a release's tag and attaches it to that release, then refreshes SHA256SUMS.txt.
+# For releases made by hand (docs/RELEASING.md), whose installers come from CI and don't carry the CLI.
+# Needs no signing key. Run it from the Actions tab with the tag, such as v1.4.0.
+
+name: Release CLI
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release's tag, such as v1.4.0"
+        required: true
+  push:
+    branches: [cli-assets]
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ inputs.tag || 'v1.4.0' }}
+
+jobs:
+  cli:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: cli-${{ matrix.target }}
+      - run: cargo build --release --locked -p tuma-cli --target ${{ matrix.target }}
+      - name: Package and upload
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          name="tuma-${TAG#v}-${{ matrix.target }}"
+          mkdir "$name"
+          cp LICENSE-MIT LICENSE-APACHE README.md "$name/"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp "target/${{ matrix.target }}/release/tuma.exe" "$name/"
+            7z a "$name.zip" "$name" > /dev/null
+            file="$name.zip"
+          else
+            cp "target/${{ matrix.target }}/release/tuma" "$name/"
+            tar czf "$name.tar.gz" "$name"
+            file="$name.tar.gz"
+          fi
+          gh release upload "$TAG" "$file" --clobber --repo "$GITHUB_REPOSITORY"
+
+  checksums:
+    needs: cli
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Refresh SHA256SUMS.txt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir assets
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir assets
+          (cd assets && rm -f SHA256SUMS SHA256SUMS.txt && sha256sum -- * > ../SHA256SUMS.txt)
+          cat SHA256SUMS.txt
+          gh release upload "$TAG" SHA256SUMS.txt --clobber --repo "$GITHUB_REPOSITORY"
