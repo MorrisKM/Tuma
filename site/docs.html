@@ -376,7 +376,12 @@
           </table>
           <div class="note warn">With <code>apt</code>, write <code>./</code> in front of the file name. Without it, apt looks for a package of that name in its repositories and fails with "Unsupported file given on commandline".</div>
           <p>Homebrew and winget packages are coming.</p>
-          <p>Every package includes the <code>tuma</code> command.</p>
+          <h3>The tuma command</h3>
+          <p>The <code>tuma</code> command (the CLI and MCP server) is a separate download in the <a href="index.html#download">download section</a> or the <a data-repo-path="/releases" href="https://github.com/MorrisKM/Tuma/releases">GitHub releases</a>, for Linux (x64, arm64), macOS (Apple Silicon, Intel) and Windows. Unpack it and put <code>tuma</code> on your PATH:</p>
+          <div class="code">tar xzf tuma-1.4.0-x86_64-unknown-linux-gnu.tar.gz
+sudo mv tuma-1.4.0-x86_64-unknown-linux-gnu/tuma /usr/local/bin/
+tuma --version<button class="copy">Copy</button></div>
+          <p>Or build it from source with <code>cargo install --path crates/cli</code>.</p>
           <h3>Build from source</h3>
           <p>You need Rust (stable), Node.js 20+, pnpm and the <a href="https://tauri.app/start/prerequisites/">Tauri system dependencies</a>.</p>
           <div class="code">git clone https://github.com/MorrisKM/Tuma.git
