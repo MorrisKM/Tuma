@@ -69,7 +69,14 @@ jobs:
           else
             gh release create "$TAG" --draft --verify-tag --title "Tuma $VERSION" --notes-file notes.md
           fi
-          echo "id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.tag_name == \"$TAG\") | .id")" >> "$GITHUB_OUTPUT"
+          # A new draft can take a moment to show up in the list; without its id the app builds upload nothing.
+          for attempt in 1 2 3 4 5 6; do
+            id="$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -1)"
+            [ -n "$id" ] && break
+            sleep 5
+          done
+          if [ -z "$id" ]; then echo "::error::Couldn't find the release for $TAG"; exit 1; fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
 
   app:
     needs: prepare
@@ -143,19 +150,30 @@ jobs:
             args="$args --config src-tauri/tauri.windows-signing.conf.json"
           fi
           echo "args=$args" >> "$GITHUB_OUTPUT"
-      - uses: tauri-apps/tauri-action@v0
+      - name: macOS signing and notarization settings
+        if: runner.os == 'macOS'
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          # Signs the update artifacts; the app checks them against the public key in its config.
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # macOS signing and notarization; without them the app is unsigned.
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Tauri signs whenever these are set, even to empty strings, so pass on only the ones that have values.
+          if [ -z "$APPLE_CERTIFICATE" ]; then echo "No APPLE_CERTIFICATE secret: the app will be unsigned."; exit 0; fi
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -n "${!name}" ]; then
+              { echo "$name<<EOF_$name"; echo "${!name}"; echo "EOF_$name"; } >> "$GITHUB_ENV"
+            fi
+          done
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          # Signs the update artifacts; the app checks them against the public key in its config.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: app
           releaseId: ${{ needs.prepare.outputs.release_id }}
