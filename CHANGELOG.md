@@ -3,6 +3,15 @@
 All notable changes to Tuma. Versions follow [Semantic Versioning](https://semver.org/): the workspace file format
 and the `tuma` command's options and `--json` output are the public interface.
 
+## 1.4.1 (2026-11-02)
+
+### Changed
+
+- The installers include the `tuma` command; 1.4.0's were built without it. The command is also its own
+  download for Linux, macOS and Windows.
+- Signed updates: from this version Tuma updates itself (Settings → Updates). Earlier versions have to install 1.4.1
+  by hand once.
+
 ## 1.4.0 (2026-10-31)
 
 ### Added
