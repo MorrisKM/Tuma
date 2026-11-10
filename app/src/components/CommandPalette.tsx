@@ -51,6 +51,12 @@ export function CommandPalette() {
         hint: "JSON",
         run: () => useStore.setState({ view: { kind: "json" } }),
       },
+      {
+        id: "markdown",
+        label: "Markdown: clean pasted Markdown, edit it and preview it",
+        hint: "Markdown",
+        run: () => useStore.setState({ view: { kind: "markdown" } }),
+      },
       { id: "code", label: "Copy as code (cURL, Python, JavaScript)", run: () => useStore.setState({ snippetOpen: true }) },
       {
         id: "curl",

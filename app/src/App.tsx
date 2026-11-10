@@ -10,6 +10,7 @@ import { SettingsView } from "./components/SettingsView";
 import { FolderEditor } from "./components/FolderEditor";
 import { DiffView } from "./components/DiffView";
 import { JsonView } from "./components/JsonView";
+import { MarkdownView } from "./components/MarkdownView";
 import { ScriptView } from "./components/ScriptView";
 import { MockView } from "./components/MockView";
 import { PerfView } from "./components/PerfView";
@@ -173,6 +174,7 @@ function App() {
         {view.kind === "mock" && <MockView key={view.id} id={view.id} />}
         {view.kind === "diff" && <DiffView />}
         {view.kind === "json" && <JsonView />}
+        {view.kind === "markdown" && <MarkdownView />}
         {view.kind === "script" && <ScriptView key={view.name} name={view.name} />}
         {view.kind === "perf" && <PerfView key={view.path} path={view.path} />}
         {consoleOpen && <ConsolePanel />}

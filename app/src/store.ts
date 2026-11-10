@@ -52,6 +52,8 @@ export type View =
   | { kind: "diff" }
   /** Checking, formatting and minifying pasted JSON. */
   | { kind: "json" }
+  /** Tidying, editing and previewing pasted Markdown. */
+  | { kind: "markdown" }
   /** A script from the Scripts or Shell page. */
   | { kind: "script"; name: string };
 
