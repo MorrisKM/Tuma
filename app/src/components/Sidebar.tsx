@@ -1,6 +1,7 @@
 import {
   BookOpen,
   Braces,
+  FileText,
   Bot,
   Check,
   ChevronDown,
@@ -130,6 +131,15 @@ function Rail() {
       >
         <Braces size={18} strokeWidth={1.75} />
         <span className="rail-label">JSON tools</span>
+      </button>
+      <button
+        className={`rail-button${view === "markdown" ? " active" : ""}`}
+        onClick={() => useStore.setState({ view: { kind: "markdown" } })}
+        aria-label="Markdown"
+        aria-pressed={view === "markdown"}
+      >
+        <FileText size={18} strokeWidth={1.75} />
+        <span className="rail-label">Markdown</span>
       </button>
       <div className="rail-spacer" />
       <button

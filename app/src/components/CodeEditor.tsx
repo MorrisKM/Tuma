@@ -2,6 +2,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab, isolateHistory } 
 import { html } from "@codemirror/lang-html";
 import { javascript } from "@codemirror/lang-javascript";
 import { json, jsonLanguage } from "@codemirror/lang-json";
+import { markdown } from "@codemirror/lang-markdown";
 import { xml } from "@codemirror/lang-xml";
 import { bracketMatching, foldGutter, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { highlightSelectionMatches, openSearchPanel, search, searchKeymap } from "@codemirror/search";
@@ -11,7 +12,7 @@ import { tags } from "@lezer/highlight";
 import { useEffect, useRef } from "react";
 import { jsonComments } from "../jsonc";
 
-export type Language = "json" | "xml" | "html" | "javascript" | "text";
+export type Language = "json" | "xml" | "html" | "javascript" | "markdown" | "text";
 
 /** Marks text set from outside the editor, which is not reported back as an edit. */
 export const external = Annotation.define<boolean>();
@@ -26,6 +27,7 @@ const languages: Record<Language, () => Extension> = {
   xml: () => xml(),
   html: () => html(),
   javascript: () => javascript(),
+  markdown: () => markdown(),
   text: () => [],
 };
 
@@ -36,6 +38,12 @@ const highlight = HighlightStyle.define([
   { tag: [tags.propertyName, tags.attributeName], color: "var(--syntax-property)" },
   { tag: [tags.keyword, tags.tagName, tags.typeName], color: "var(--syntax-keyword)" },
   { tag: [tags.comment], color: "var(--muted)", fontStyle: "italic" },
+  { tag: tags.heading, color: "var(--syntax-keyword)", fontWeight: "600" },
+  { tag: tags.strong, fontWeight: "700" },
+  { tag: tags.emphasis, fontStyle: "italic" },
+  { tag: [tags.link, tags.url], color: "var(--syntax-property)" },
+  { tag: tags.monospace, color: "var(--syntax-string)" },
+  { tag: [tags.processingInstruction, tags.contentSeparator, tags.quote], color: "var(--muted)" },
 ]);
 
 const theme = EditorView.theme({
@@ -69,18 +77,21 @@ interface Props {
    * afresh, so Ctrl+Z never brings back another document's text.
    */
   doc?: unknown;
+  /** Whether long lines wrap; otherwise they scroll sideways. */
+  wrap?: boolean;
 }
 
 /** A CodeMirror editor. With `readOnly` it is a viewer with search (Ctrl+F) and folding. */
-export function CodeEditor({ value, onChange, language = "text", readOnly = false, placeholder, extension, doc }: Props) {
+export function CodeEditor({ value, onChange, language = "text", readOnly = false, placeholder, extension, doc, wrap = true }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView>(null);
   const languageSlot = useRef(new Compartment());
   const extensionSlot = useRef(new Compartment());
+  const wrapSlot = useRef(new Compartment());
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
-  const latest = useRef({ language, extension, placeholder });
-  latest.current = { language, extension, placeholder };
+  const latest = useRef({ language, extension, placeholder, wrap });
+  latest.current = { language, extension, placeholder, wrap };
   const shown = useRef(doc);
 
   /** A new editor state: the text with no undo history. */
@@ -96,7 +107,7 @@ export function CodeEditor({ value, onChange, language = "text", readOnly = fals
         highlightSelectionMatches(),
         syntaxHighlighting(highlight),
         keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
-        EditorView.lineWrapping,
+        wrapSlot.current.of(latest.current.wrap ? EditorView.lineWrapping : []),
         // Read-only, but still focusable: otherwise Ctrl+F (search) and selection with the keyboard don't work.
         EditorState.readOnly.of(readOnly),
         latest.current.placeholder ? placeholderExt(latest.current.placeholder) : [],
@@ -124,9 +135,19 @@ export function CodeEditor({ value, onChange, language = "text", readOnly = fals
       shown.current = doc;
       v.setState(fresh(value));
     } else if (v.state.doc.toString() !== value) {
-      // The same document changed from outside, such as by Format: one step of its own for Ctrl+Z.
+      // The same document changed from outside, such as by Format: one step of its own for Ctrl+Z. Only the part
+      // that differs is replaced, so the scroll position and the caret stay where they are when they can.
+      const current = v.state.doc.toString();
+      let from = 0;
+      while (from < current.length && from < value.length && current[from] === value[from]) from++;
+      let to = current.length;
+      let end = value.length;
+      while (to > from && end > from && current[to - 1] === value[end - 1]) {
+        to--;
+        end--;
+      }
       v.dispatch({
-        changes: { from: 0, to: v.state.doc.length, insert: value },
+        changes: { from, to, insert: value.slice(from, end) },
         annotations: [external.of(true), isolateHistory.of("full")],
       });
     }
@@ -139,6 +160,10 @@ export function CodeEditor({ value, onChange, language = "text", readOnly = fals
   useEffect(() => {
     view.current?.dispatch({ effects: extensionSlot.current.reconfigure(extension ?? []) });
   }, [extension]);
+
+  useEffect(() => {
+    view.current?.dispatch({ effects: wrapSlot.current.reconfigure(wrap ? EditorView.lineWrapping : []) });
+  }, [wrap]);
 
   return <div className="code-editor" ref={host} />;
 }
