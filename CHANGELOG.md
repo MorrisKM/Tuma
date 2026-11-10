@@ -3,6 +3,29 @@
 All notable changes to Tuma. Versions follow [Semantic Versioning](https://semver.org/): the workspace file format
 and the `tuma` command's options and `--json` output are the public interface.
 
+## 1.5.0 (2026-11-10)
+
+### Added
+
+- A **Markdown** page, beside JSON tools in the rail and in the command palette (Ctrl+K): an editor and a live preview,
+  side by side or one at a time.
+  - Pasted Markdown is cleaned as it comes in (turn it off with **Clean on paste**), and **Clean** does the whole
+    text: line endings, invisible characters, non-breaking spaces, trailing spaces, `•` and other bullets, headings
+    without their space or blank lines around them, runs of blank lines, unclosed code blocks, and curly quotes in
+    code. Ctrl+Z brings back what was there.
+  - **Align left** brings indented text back to the edge, where it would otherwise show as code; nested lists keep
+    their nesting. **Join lines** joins lines broken in the middle of a sentence, as text from PDFs and emails often
+    is. **Word wrap** can be turned off.
+  - The preview can be edited too, and the Markdown follows: only the parts edited are rewritten, the rest keeps its
+    source as it was. Ctrl+click opens a link.
+  - With **Sync scroll**, scrolling either side scrolls the other to the same place.
+  - **Copy HTML** copies it rendered.
+
+### Fixed
+
+- The handles for resizing panes no longer flicker when the pointer passes over their edge, and light up only once
+  the pointer rests on them.
+
 ## 1.4.1 (2026-11-02)
 
 ### Changed
