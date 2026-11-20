@@ -130,6 +130,14 @@ function App() {
     void mocks.refresh();
     // A coding agent may change the open request's file (its scripts, its tests).
     const reload = setInterval(() => document.hasFocus() && void useStore.getState().reloadFromDisk(), 2500);
+    // Files added, renamed or removed in the workspace folder outside the app, such as folders and requests an agent
+    // creates: the sidebar, the environments, the open request (unless it has unsaved edits) and its variables follow.
+    const stopChanges = listen("workspace-changed", () => {
+      const s = useStore.getState();
+      void s.refresh();
+      void s.reloadFromDisk();
+      void s.loadScope();
+    });
     // Collection runs, whether or not the runner is on screen.
     const stopRuns = listen<{ runId: string; step: RunStep }>("run-step", ({ payload }) => logStep(payload.step));
     // The web view's own menu (Back, Reload, Inspect) only where text can be edited, for copy and paste.
@@ -150,6 +158,7 @@ function App() {
       void stopGrpc.then((f) => f());
       void stopRuns.then((f) => f());
       void stopMocks.then((f) => f());
+      void stopChanges.then((f) => f());
     };
   }, []);
 

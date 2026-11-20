@@ -93,6 +93,7 @@ fn remember(app: &tauri::AppHandle, root: Option<PathBuf>) {
         settings.recent.insert(0, root.clone());
         settings.recent.truncate(RECENT);
     }
+    crate::watch::watch(app, root.as_deref());
     settings.last_workspace = root;
     store(app, &settings);
 }
@@ -114,9 +115,10 @@ fn workspaces_dir_of(app: &tauri::AppHandle) -> PathBuf {
 /// Reopens the last workspace at startup, if there was one and it still exists.
 pub fn restore(app: &tauri::AppHandle) {
     if let Some(root) = load(app).last_workspace
-        && let Ok(workspace) = Workspace::open(root)
+        && let Ok(workspace) = Workspace::open(&root)
     {
         *app.state::<Open>().0.lock().unwrap() = Some(workspace);
+        crate::watch::watch(app, Some(&root));
     }
 }
 

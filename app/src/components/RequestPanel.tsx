@@ -16,8 +16,9 @@ import { GrpcMessage, GrpcProtos } from "./GrpcViews";
 import { MessageComposer } from "./WebSocketViews";
 import { ScriptsEditor } from "./ScriptsEditor";
 import { Tabs } from "./Tabs";
+import { renderMarkdown } from "../markdown";
 
-type Tab = "params" | "headers" | "body" | "auth" | "scripts" | "crypto" | "examples" | "settings";
+type Tab = "params" | "headers" | "body" | "auth" | "scripts" | "crypto" | "examples" | "notes" | "settings";
 
 const active = (rows: KeyValue[]) => rows.filter((r) => r.enabled && r.name).length;
 
@@ -49,10 +50,12 @@ export function RequestPanel() {
             count: (draft.crypto?.encrypt?.length ?? 0) + (draft.crypto?.decrypt?.length ?? 0),
           },
           { id: "examples", label: "Examples", count: draft.examples.length },
+          { id: "notes", label: "Notes", dot: !!draft.description.trim() },
           { id: "settings", label: "Settings" },
         ]}
       />
       <div className="panel-body">
+        {tab === "notes" && <NotesEditor />}
         {tab === "crypto" && <CryptoEditor key={draft.path ?? ""} />}
         {tab === "examples" && <ExamplesEditor />}
         {tab === "params" && <Params />}
@@ -71,6 +74,49 @@ export function RequestPanel() {
         {tab === "settings" && <SettingsEditor />}
       </div>
     </section>
+  );
+}
+
+/**
+ * Notes about the request, in Markdown: saved as its description, so they go in the YAML file and the generated docs.
+ */
+function NotesEditor() {
+  const description = useStore((s) => s.draft.description);
+  const path = useStore((s) => s.draft.path);
+  const [preview, setPreview] = useState(false);
+  return (
+    <div className="body-editor notes-editor">
+      <div className="toolbar">
+        <div className="segmented">
+          <button className={preview ? "" : "active"} onClick={() => setPreview(false)}>
+            Write
+          </button>
+          <button className={preview ? "active" : ""} onClick={() => setPreview(true)}>
+            Preview
+          </button>
+        </div>
+        <span className="muted small">Markdown. Saved with the request and used in its docs.</span>
+      </div>
+      {preview ? (
+        <div className="editor-frame markdown-preview-frame">
+          {description.trim() ? (
+            <div className="markdown-preview" dangerouslySetInnerHTML={{ __html: renderMarkdown(description) }} />
+          ) : (
+            <p className="hint">No notes yet.</p>
+          )}
+        </div>
+      ) : (
+        <div className="editor-frame">
+          <CodeEditor
+            value={description}
+            onChange={(description) => useStore.getState().update({ description })}
+            language="markdown"
+            placeholder="Notes about this request: what it's for, how to use it, what to watch out for…"
+            doc={path ?? ""}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 

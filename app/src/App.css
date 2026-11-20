@@ -1420,6 +1420,42 @@ select.method {
 
 /* Forms (auth, settings) */
 
+/* A password field with a button to show or hide its value. */
+.password-field {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.password-field > input {
+  width: 100%;
+  padding-right: 32px;
+}
+
+.password-eye {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.password-eye:hover,
+.password-eye[aria-pressed="true"] {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+
 .form {
   display: flex;
   flex-direction: column;
@@ -5651,4 +5687,24 @@ body.tree-dragging * {
 
 .markdown-view .check svg {
   color: var(--muted);
+}
+
+/* "3 of 12" beside the search field of an editor or viewer. */
+.cm-search-count {
+  display: inline-block;
+  min-width: 7em;
+  margin: 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+.cm-search-count:empty {
+  display: none;
+}
+
+.notes-editor .markdown-preview-frame {
+  flex: 1;
+  min-height: 0;
 }

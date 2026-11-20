@@ -25,6 +25,16 @@ import type {
 
 export const appVersion = () => invoke<string>("app_version");
 
+/** Adds an error the window caught to the crash log. Never throws: it runs while something has gone wrong. */
+export function reportError(kind: string, error: unknown) {
+  const message = error instanceof Error ? `${error.message}\n${error.stack ?? ""}` : String(error);
+  try {
+    invoke("report_error", { kind, message }).catch(() => {});
+  } catch {
+    // Not in the app (a browser preview): nowhere to write.
+  }
+}
+
 /** Rejects with a `RequestError`. `path` makes it inherit from its folders; `environment` supplies variables. */
 export const sendRequest = (id: string, request: RequestFile, path: string | null, environment: string | null) =>
   invoke<Response>("send_request", { id, request, path, environment });
