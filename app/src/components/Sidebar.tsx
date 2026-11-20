@@ -474,7 +474,13 @@ function TreeItem({ node, depth }: { node: TreeNode; depth: number }) {
         {renaming ? (
           <RenameInput name={node.name} onDone={(name) => void rename(node.path, name)} />
         ) : (
-          <span className={`tree-name${node.kind === "collection" ? " collection" : ""}`}>{node.name}</span>
+          <span
+            className={`tree-name${node.kind === "collection" ? " collection" : ""}`}
+            // The whole name, which a narrow sidebar cuts short.
+            title={isRequest ? node.name : `${node.name}\nDouble-click to rename`}
+          >
+            {node.name}
+          </span>
         )}
         {!isRequest && (
           <button

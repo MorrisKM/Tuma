@@ -1,4 +1,5 @@
 import { type InputHTMLAttributes, type TextareaHTMLAttributes, useLayoutEffect, useRef, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { createPortal } from "react-dom";
 import type { Choice } from "../headers";
 import { useStore } from "../store";
@@ -152,8 +153,10 @@ export function VariableInput({ value, onChange, onKeyDown, onBlur, onFocus, cho
   const [open, setOpen] = useState<Open | null>(null);
   const [focused, setFocused] = useState(false);
   const [hover, setHover] = useState<Hover | null>(null);
-  // Passwords stay in an <input>, which masks them.
+  // Passwords stay in an <input>, which masks them until shown with the eye button.
   const grows = !rest.type || rest.type === "text";
+  const password = rest.type === "password";
+  const [shown, setShown] = useState(false);
 
   // Focused, as tall as the wrapped value, within the limit; otherwise back to one line, scrolled to its start.
   useLayoutEffect(() => {
@@ -223,7 +226,7 @@ export function VariableInput({ value, onChange, onKeyDown, onBlur, onFocus, cho
 
   // A password field that holds only a {{variable}} (or one being typed) shows it, so the reference can be read;
   // a real password stays masked.
-  const type = rest.type === "password" && REFERENCE.test(value) ? "text" : rest.type;
+  const type = password && (shown || REFERENCE.test(value)) ? "text" : rest.type;
 
   const { type: _, ...textProps } = rest;
   const handlers = {
@@ -291,6 +294,22 @@ export function VariableInput({ value, onChange, onKeyDown, onBlur, onFocus, cho
           value={value}
           {...handlers}
         />
+      ) : password ? (
+        <span className="password-field">
+          <input {...rest} type={type} ref={input as React.RefObject<HTMLInputElement>} value={value} {...handlers} />
+          <button
+            type="button"
+            className="password-eye"
+            aria-label={shown ? "Hide the value" : "Show the value"}
+            aria-pressed={shown}
+            title={shown ? "Hide the value" : "Show the value"}
+            // Keeps the focus (and the caret) in the field.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setShown((s) => !s)}
+          >
+            {shown ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+        </span>
       ) : (
         <input {...rest} type={type} ref={input as React.RefObject<HTMLInputElement>} value={value} {...handlers} />
       )}

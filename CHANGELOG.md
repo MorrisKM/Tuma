@@ -3,6 +3,21 @@
 All notable changes to Tuma. Versions follow [Semantic Versioning](https://semver.org/): the workspace file format
 and the `tuma` command's options and `--json` output are the public interface.
 
+## 1.6.0 (2026-11-20)
+
+### Added
+
+- **Notes** on a request: a tab for writing about it in Markdown, with a preview. They are saved as the request's
+  description, so they go in its file and in the docs generated from the workspace.
+- Find (Ctrl+F) in a response, or in any editor, shows how many matches there are and which one is selected:
+  "3 of 12 matches".
+- Password fields have an eye button that shows what is in them.
+- The sidebar follows changes made to the workspace's folder outside the app, such as requests and folders a coding
+  agent saves over MCP, or a `git pull`, without reopening the workspace.
+- Hovering a collection, folder or request in the sidebar shows its full name.
+- A crash log: errors in the app and in its window are written to `crash.log` in the app's data folder
+  (`~/.local/share/dev.tuma.app` on Linux), so a crash leaves something to go on.
+
 ## 1.5.0 (2026-11-10)
 
 ### Added

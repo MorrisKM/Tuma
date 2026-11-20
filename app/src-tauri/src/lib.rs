@@ -1,5 +1,6 @@
 //! The desktop shell: Tauri commands that call into `tuma_core`. Keep logic out of here.
 
+mod crash;
 mod grpc;
 mod mocks;
 mod oauth;
@@ -10,6 +11,7 @@ mod settings;
 mod sockets;
 mod updates;
 mod visualizer;
+mod watch;
 mod workspace;
 
 use std::collections::HashMap;
@@ -337,11 +339,13 @@ fn history_clear(history: tauri::State<'_, History>) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    crash::install();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(updates::plugin())
         .manage(InFlight::default())
         .manage(workspace::Open::default())
+        .manage(watch::Watching::default())
         .manage(visualizer::Store::default())
         .manage(runs::Running::default())
         .manage(sockets::Sockets::default())
@@ -358,6 +362,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             app_version,
+            crash::report_error,
             send_request,
             cancel_request,
             history_list,

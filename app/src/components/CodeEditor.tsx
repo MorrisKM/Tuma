@@ -5,9 +5,16 @@ import { json, jsonLanguage } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { xml } from "@codemirror/lang-xml";
 import { bracketMatching, foldGutter, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { highlightSelectionMatches, openSearchPanel, search, searchKeymap } from "@codemirror/search";
+import {
+  getSearchQuery,
+  highlightSelectionMatches,
+  openSearchPanel,
+  search,
+  searchKeymap,
+  searchPanelOpen,
+} from "@codemirror/search";
 import { Annotation, Compartment, EditorState, type Extension } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers, placeholder as placeholderExt } from "@codemirror/view";
+import { EditorView, keymap, lineNumbers, placeholder as placeholderExt, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { useEffect, useRef } from "react";
 import { jsonComments } from "../jsonc";
@@ -81,6 +88,66 @@ interface Props {
   wrap?: boolean;
 }
 
+/** Counting stops here, so a search in a huge response stays quick. */
+const COUNT_LIMIT = 10_000;
+
+/** Shows "3 of 12" in the search panel: how many matches the search has, and which one is selected. */
+const searchCount = ViewPlugin.fromClass(
+  class {
+    label: HTMLElement | null = null;
+    constructor(view: EditorView) {
+      this.later(view);
+    }
+    update(update: ViewUpdate) {
+      const changed =
+        update.docChanged ||
+        update.selectionSet ||
+        getSearchQuery(update.state) !== getSearchQuery(update.startState) ||
+        searchPanelOpen(update.state) !== searchPanelOpen(update.startState);
+      if (changed) this.later(update.view);
+    }
+    /** After the update, when the search panel has been put in or taken out. */
+    later(view: EditorView) {
+      view.requestMeasure({ read: () => null, write: () => this.show(view) });
+    }
+    show(view: EditorView) {
+      const panel = view.dom.querySelector(".cm-search");
+      if (!panel || !searchPanelOpen(view.state)) return;
+      if (!this.label || !panel.contains(this.label)) {
+        this.label = document.createElement("span");
+        this.label.className = "cm-search-count";
+        this.label.setAttribute("aria-live", "polite");
+        // After the search field, so the count sits where the eye already is.
+        const field = panel.querySelector("input[main-field]");
+        if (field) field.after(this.label);
+        else panel.prepend(this.label);
+      }
+      this.label.textContent = count(view);
+    }
+    destroy() {
+      this.label?.remove();
+    }
+  },
+);
+
+function count(view: EditorView): string {
+  const query = getSearchQuery(view.state);
+  if (!query.search) return "";
+  if (!query.valid) return "Invalid";
+  const selection = view.state.selection.main;
+  const cursor = query.getCursor(view.state);
+  let total = 0;
+  let current = 0;
+  for (let next = cursor.next(); !next.done; next = cursor.next()) {
+    total++;
+    if (next.value.from === selection.from && next.value.to === selection.to) current = total;
+    if (total >= COUNT_LIMIT) return `${COUNT_LIMIT.toLocaleString()}+ matches`;
+  }
+  if (total === 0) return "No matches";
+  const all = `${total.toLocaleString()} ${total === 1 ? "match" : "matches"}`;
+  return current ? `${current.toLocaleString()} of ${all}` : all;
+}
+
 /** A CodeMirror editor. With `readOnly` it is a viewer with search (Ctrl+F) and folding. */
 export function CodeEditor({ value, onChange, language = "text", readOnly = false, placeholder, extension, doc, wrap = true }: Props) {
   const host = useRef<HTMLDivElement>(null);
@@ -104,6 +171,7 @@ export function CodeEditor({ value, onChange, language = "text", readOnly = fals
         history(),
         bracketMatching(),
         search({ top: true }),
+        searchCount,
         highlightSelectionMatches(),
         syntaxHighlighting(highlight),
         keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
@@ -173,6 +241,7 @@ export function viewerExtensions(language: Language, editable = false): Extensio
   return [
     lineNumbers(),
     search({ top: true }),
+    searchCount,
     highlightSelectionMatches(),
     syntaxHighlighting(highlight),
     editable ? history() : [],
